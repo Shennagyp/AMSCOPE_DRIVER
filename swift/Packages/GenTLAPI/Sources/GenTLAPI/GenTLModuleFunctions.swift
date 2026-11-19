@@ -28,7 +28,7 @@ public protocol GenTLInterfaceFunctions: Sendable {
     func IFGetDeviceID(_ hIF: IF_HANDLE, index: UInt32) throws -> String
     func IFUpdateDeviceList(_ hIF: IF_HANDLE, timeout: UInt64) throws -> Bool
     func IFGetDeviceInfo(_ hIF: IF_HANDLE, deviceID: String, command: Int32) throws -> GenTLInfoValue
-    func IFOpenDevice(_ hIF: IF_HANDLE, deviceID: String, accessFlags: UInt32) throws -> DEV_HANDLE
+    func IFOpenDevice(_ hIF: IF_HANDLE, deviceID: String, accessFlags: Int32) throws -> DEV_HANDLE
     func IFGetParentTL(_ hIF: IF_HANDLE) throws -> TL_HANDLE
 }
 
@@ -58,9 +58,9 @@ public protocol GenTLDataStreamFunctions: Sendable {
     ) throws -> BUFFER_HANDLE
 
     func DSQueueBuffer(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws
-    func DSFlushQueue(_ hDS: DS_HANDLE, operation: UInt32) throws
-    func DSStartAcquisition(_ hDS: DS_HANDLE, flags: UInt32, numberToAcquire: UInt64) throws
-    func DSStopAcquisition(_ hDS: DS_HANDLE, flags: UInt32) throws
+    func DSFlushQueue(_ hDS: DS_HANDLE, operation: Int32) throws
+    func DSStartAcquisition(_ hDS: DS_HANDLE, flags: Int32, numberToAcquire: UInt64) throws
+    func DSStopAcquisition(_ hDS: DS_HANDLE, flags: Int32) throws
     func DSGetInfo(_ hDS: DS_HANDLE, command: Int32) throws -> GenTLInfoValue
     func DSGetBufferID(_ hDS: DS_HANDLE, index: UInt32) throws -> BUFFER_HANDLE
     func DSGetBufferInfo(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, command: Int32) throws -> GenTLInfoValue
@@ -81,7 +81,7 @@ public protocol GenTLPortFunctions: Sendable {
 
 /// Signaling/event functions (GenTL 1.6, section 6.3.7).
 public protocol GenTLSignalingFunctions: Sendable {
-    func GCRegisterEvent(_ source: EVENTSRC_HANDLE, eventType: UInt32) throws -> EVENT_HANDLE
+    func GCRegisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws -> EVENT_HANDLE
     func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: UInt32) throws
     func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data
     func EventGetDataInfo(_ event: EVENT_HANDLE, inputData: Data, command: Int32) throws -> GenTLInfoValue
