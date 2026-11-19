@@ -1279,6 +1279,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         var size = 0
         let query = functions.eventGetData(eventPointer, nil, &size, timeout)
         try checkInfoSizeQuery(query, size: size)
+        if size == 0 {
+            return Data()
+        }
 
         var data = Data(count: size)
         var actualSize = size
