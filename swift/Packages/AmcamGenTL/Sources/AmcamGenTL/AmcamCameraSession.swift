@@ -98,6 +98,10 @@ public final class AmcamCameraSession: @unchecked Sendable {
         defer { controlLock.unlock() }
         lock.lock()
         guard handle != nil else { lock.unlock(); throw AmcamCameraError.sessionClosed }
+        guard callbackContext == nil else {
+            lock.unlock()
+            throw AmcamCameraError.transitionInProgress
+        }
         guard !streaming, !starting, !stopping else { lock.unlock(); throw AmcamCameraError.alreadyStreaming }
 
         let (pixels, overflow1) = width.multipliedReportingOverflow(by: height)
