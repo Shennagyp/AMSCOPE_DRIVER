@@ -541,19 +541,36 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         buffer.isAcquiring = true
 
         let frameBytes = frame.bytes.count
+        let (minimumBytesPerRow, rowSizeOverflow) =
+            frame.width.multipliedReportingOverflow(by: 3)
+        let (minimumImageBytes, imageSizeOverflow) =
+            frame.bytesPerRow.multipliedReportingOverflow(by: frame.height)
+
+        let geometryIsValid =
+            frame.width > 0 &&
+            frame.height > 0 &&
+            !rowSizeOverflow &&
+            !imageSizeOverflow &&
+            frame.bytesPerRow >= minimumBytesPerRow &&
+            minimumImageBytes >= 0 &&
+            frameBytes >= minimumImageBytes
+
         buffer.dataLargerThanBuffer = frameBytes > buffer.size
-        guard frameBytes <= buffer.size,
-              frame.width > 0,
-              frame.height > 0,
-              frame.bytesPerRow >= frame.width * 3,
-              frameBytes >= frame.bytesPerRow * frame.height else {
-            buffer.isAcquiring = false
+        buffer.width = frame.width > 0 ? frame.width : 0
+        buffer.height = frame.height > 0 ? frame.height : 0
+        buffer.sequence = UInt64(
+            frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1)
+        )
+        buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
+
+        guard !buffer.dataLargerThanBuffer, geometryIsValid else {
             buffer.isIncomplete = true
             buffer.newData = true
             buffer.sizeFilled = 0
-            outputQueue.append(raw)
-            publishBufferEvent(buffer)
+
+            let mustStop = completeBufferDelivery(buffer, rawHandle: raw)
             condition.unlock()
+            scheduleFiniteStopIfNeeded(mustStop)
             return
         }
 
@@ -562,29 +579,39 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 buffer.memory.copyMemory(from: base, byteCount: frameBytes)
             }
         }
-        buffer.width = frame.width
-        buffer.height = frame.height
         buffer.sizeFilled = frameBytes
-        buffer.sequence = UInt64(frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1))
-        buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
         buffer.isIncomplete = false
         buffer.newData = true
+
+        let mustStop = completeBufferDelivery(buffer, rawHandle: raw)
+        condition.unlock()
+        scheduleFiniteStopIfNeeded(mustStop)
+    }
+
+    /// Must be called while the stream condition is locked.
+    /// Incomplete buffers are still completed deliveries and count toward a
+    /// finite acquisition request.
+    private func completeBufferDelivery(
+        _ buffer: AmcamBufferRecord,
+        rawHandle: UInt
+    ) -> Bool {
         buffer.isAcquiring = false
-        outputQueue.append(raw)
+        outputQueue.append(rawHandle)
         numDelivered &+= 1
         numStarted &+= 1
         publishBufferEvent(buffer)
 
         let mustStop = finiteAcquisitionCount.map { numDelivered >= $0 } ?? false
-        if mustStop && !finiteStopScheduled {
+        if mustStop {
             finiteStopScheduled = true
         }
-        condition.unlock()
+        return mustStop
+    }
 
-        if mustStop {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.stopAfterFiniteAcquisition()
-            }
+    private func scheduleFiniteStopIfNeeded(_ mustStop: Bool) {
+        guard mustStop else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.stopAfterFiniteAcquisition()
         }
     }
 
