@@ -96,6 +96,22 @@ final class AmcamEventRecord: @unchecked Sendable {
         condition.unlock()
     }
 
+    /// Removes New Buffer notifications for buffers no longer present in the
+    /// output queue. Payloads start with the opaque BUFFER_HANDLE pointer.
+    func removeBufferEvents(for handles: Set<UInt>) {
+        guard !handles.isEmpty else { return }
+        condition.lock()
+        defer { condition.unlock() }
+        dataQueue.removeAll { payload in
+            guard payload.count >= MemoryLayout<UInt>.size else { return false }
+            let rawHandle = payload.withUnsafeBytes {
+                $0.loadUnaligned(as: UInt.self)
+            }
+            return handles.contains(rawHandle)
+        }
+        condition.broadcast()
+    }
+
     func kill() {
         condition.lock()
         killed = true
@@ -110,7 +126,11 @@ final class AmcamEventRecord: @unchecked Sendable {
         case 0: return .int32(eventType) // EVENT_EVENT_TYPE
         case 1: return .uint64(UInt64(dataQueue.count)) // EVENT_NUM_IN_QUEUE
         case 2: return .uint64(firedCount) // EVENT_NUM_FIRED
-        case 3: return .uint64(2 * UInt64(MemoryLayout<UInt>.size)) // EVENT_SIZE_MAX
+        case 3:
+            let maximumSize = eventType == GenTLEventType.newBuffer.rawValue
+                ? 2 * UInt64(MemoryLayout<UInt>.size)
+                : 0
+            return .uint64(maximumSize) // EVENT_SIZE_MAX
         case 4: return .uint64(0) // No event-specific info payload currently exposed.
         default: throw GC_ERROR.invalidParameter
         }
@@ -190,6 +210,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
         guard !buffer.isQueued, !buffer.isAcquiring else { throw GC_ERROR.resourceInUse }
         outputQueue.removeAll { $0 == handle.rawValue }
+        removeBufferEvents(for: [handle.rawValue])
         prepareForInput(buffer)
         inputQueue.append(handle.rawValue)
     }
@@ -230,6 +251,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             }
             inputQueue.removeAll()
         case 1: // ACQ_QUEUE_OUTPUT_DISCARD
+            let discardedHandles = Set(outputQueue)
+            removeBufferEvents(for: discardedHandles)
             for raw in outputQueue {
                 if let buffer = buffers[raw] {
                     buffer.isQueued = false
@@ -238,6 +261,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             }
             outputQueue.removeAll()
         case 2: // ACQ_QUEUE_ALL_TO_INPUT
+            let discardedOutputHandles = Set(outputQueue)
+            removeBufferEvents(for: discardedOutputHandles)
             let all = announcedOrder
             inputQueue = all
             outputQueue.removeAll()
@@ -253,6 +278,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 inputQueue.append(raw)
             }
         case 4: // ACQ_QUEUE_ALL_DISCARD
+            let discardedOutputHandles = Set(outputQueue)
+            removeBufferEvents(for: discardedOutputHandles)
             for raw in inputQueue + outputQueue {
                 if let buffer = buffers[raw] {
                     buffer.isQueued = false
@@ -373,6 +400,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         announcedOrder.removeAll { $0 == handle.rawValue }
         inputQueue.removeAll { $0 == handle.rawValue }
         outputQueue.removeAll { $0 == handle.rawValue }
+        removeBufferEvents(for: [handle.rawValue])
 
         // GenTL transfers consumer-allocated memory back through ppBuffer.
         // Producer-allocated memory must be freed here and ppBuffer returned NULL.
