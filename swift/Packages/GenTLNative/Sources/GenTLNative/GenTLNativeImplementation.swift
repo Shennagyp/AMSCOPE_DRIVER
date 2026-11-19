@@ -816,7 +816,10 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             var entries: [PORT_REGISTER_STACK_ENTRY] = []
             entries.reserveCapacity(requests.count)
             for request in requests {
-                guard !request.data.isEmpty else { throw GC_ERROR.invalidParameter }
+                guard !request.data.isEmpty,
+                      request.data.count <= 64 * 1024 * 1024 else {
+                    throw GC_ERROR.invalidParameter
+                }
                 let memory = UnsafeMutableRawPointer.allocate(
                     byteCount: request.data.count,
                     alignment: 8
@@ -1166,7 +1169,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
         try withLock {
-            guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidParameter }
+            guard size > 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidParameter }
             let port = try pointer(hPort)
             var data = Data(count: size)
             var actualSize = size
@@ -1182,6 +1185,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws {
         try withLock {
+            guard !data.isEmpty, data.count <= 64 * 1024 * 1024 else {
+                throw GC_ERROR.invalidParameter
+            }
             let port = try pointer(hPort)
             var size = data.count
             let result = data.withUnsafeBytes { input in
