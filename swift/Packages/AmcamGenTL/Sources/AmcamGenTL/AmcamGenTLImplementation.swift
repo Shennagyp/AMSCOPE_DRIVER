@@ -729,9 +729,17 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func EventFlush(_ event: EVENT_HANDLE) throws {
         lock.lock()
         let record = events[event.rawValue]
+        let stream: AmcamDataStreamRecord?
+        if let record, case .dataStream(let streamHandle) = record.source {
+            stream = dataStreams[streamHandle.rawValue]
+        } else {
+            stream = nil
+        }
         lock.unlock()
+
         guard let record else { throw GC_ERROR.invalidHandle }
-        record.flush()
+        guard let stream else { throw GC_ERROR.invalidHandle }
+        stream.flushEvent(record)
     }
 
     public func EventKill(_ event: EVENT_HANDLE) throws {
