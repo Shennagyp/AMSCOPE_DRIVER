@@ -102,6 +102,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 6: return .string(sdkLibraryURL.path)
         case 7: return .string("AmScope Amcam")
         case 8: return .int32(1) // UTF-8
+        case 9: return .uint32(1) // TL_INFO_GENTL_VER_MAJOR
+        case 10: return .uint32(6) // TL_INFO_GENTL_VER_MINOR
         default: throw GC_ERROR.invalidParameter
         }
     }
