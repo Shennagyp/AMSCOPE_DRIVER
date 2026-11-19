@@ -794,7 +794,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         let payloadIsComplete = geometryIsValid && layout?.payloadSize == frameBytes
         let expectedDataSize = layout?.payloadSize ?? frameBytes
 
-        buffer.dataLargerThanBuffer = expectedDataSize > buffer.size
+        buffer.dataLargerThanBuffer = max(expectedDataSize, frameBytes) > buffer.size
         buffer.width = geometryIsValid ? frame.width : 0
         buffer.height = geometryIsValid ? frame.height : 0
         buffer.dataSize = expectedDataSize
