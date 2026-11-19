@@ -20,6 +20,14 @@ This is the sole application-facing camera API. It is not a second vendor-neutra
 
 The Swift surface uses typed opaque handles and Swift values while preserving GenTL function names, module ownership, error codes and lifecycle semantics. It is not itself a C ABI and is not a GenTL Producer.
 
+## Router lifecycle
+
+`GenTLRouter` creates one initialized GenTL System context per registered backend and reuses it across discovery refreshes. Interface handles are opened once per interface ID and retained with the context, so a refresh does not reload the same `.cti` or reopen a Producer's module hierarchy while earlier candidates or sessions still exist.
+
+Candidates and opened device sessions retain their provider context. Device sessions close their Device modules before the final context release closes Interfaces, the System, and the GenTL library. If a child handle cannot be closed, the Producer library is deliberately retained rather than unloaded underneath live native handles.
+
+Manual registration also canonicalizes CTI and Amcam SDK paths. The same library cannot be registered twice under different backend IDs through the native/Amcam registration methods.
+
 ## Compatibility rules
 
 - The API surface follows the GenTL 1.6 header.
