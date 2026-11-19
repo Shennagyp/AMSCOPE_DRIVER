@@ -76,11 +76,10 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
             try fail(.resourceInUse, "Close all Amcam systems, interfaces, devices, streams and events before GCCloseLib.")
         }
 
+        // All module and event handles must already have been closed.
         driver = nil
         discoveredDevices.removeAll(keepingCapacity: false)
         portOwners.removeAll(keepingCapacity: false)
-        events.values.forEach { $0.kill() }
-        events.removeAll()
         interfaceOpen = false
         systemOpen = false
         initialized = false
