@@ -182,17 +182,28 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     private var finiteAcquisitionCount: UInt64?
     private var finiteStopScheduled = false
 
-    init(handle: DS_HANDLE, deviceHandle: DEV_HANDLE, session: AmcamCameraSession) {
+    init(handle: DS_HANDLE, deviceHandle: DEV_HANDLE, session: AmcamCameraSession) throws {
         self.handle = handle
         self.deviceHandle = deviceHandle
         self.session = session
-        if let resolution = session.currentResolution() {
-            let (pixels, overflow1) = resolution.width.multipliedReportingOverflow(by: resolution.height)
-            let (bytes, overflow2) = pixels.multipliedReportingOverflow(by: 3)
-            if !overflow1 && !overflow2 && bytes > 0 {
-                payloadSize = bytes
-            }
+
+        let dimensions = session.currentDimensions()
+        let (pixels, pixelOverflow) =
+            dimensions.width.multipliedReportingOverflow(by: dimensions.height)
+        let (payloadBytes, payloadOverflow) = pixels.multipliedReportingOverflow(by: 3)
+        let (sdkBytes, sdkOverflow) = pixels.multipliedReportingOverflow(by: 4)
+
+        guard dimensions.width > 0,
+              dimensions.height > 0,
+              !pixelOverflow,
+              !payloadOverflow,
+              !sdkOverflow,
+              payloadBytes > 0,
+              sdkBytes <= 512 * 1024 * 1024 else {
+            throw GC_ERROR.resourceExhausted
         }
+
+        payloadSize = payloadBytes
     }
 
     func addEvent(_ event: AmcamEventRecord) {
@@ -201,10 +212,21 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         events[event.eventType, default: []].append(event)
     }
 
-    func removeEvent(_ event: AmcamEventRecord) {
+    /// Unregisters a stream event. Pending New Buffer notifications are discarded,
+    /// and buffers still in the output queue become unqueued as required by GenTL.
+    func unregisterEvent(_ event: AmcamEventRecord) {
         condition.lock()
         defer { condition.unlock() }
         events[event.eventType]?.removeAll { $0.handle == event.handle }
+        event.unregister()
+
+        guard event.eventType == GenTLEventType.newBuffer.rawValue else { return }
+        let pendingHandles = outputQueue
+        outputQueue.removeAll()
+        for rawHandle in pendingHandles {
+            buffers[rawHandle]?.isQueued = false
+        }
+        condition.broadcast()
     }
 
     /// GenTL EventFlush on a New Buffer event discards its data queue and the
@@ -282,26 +304,37 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         condition.lock()
         defer { condition.unlock() }
 
-        // Flush mutates input/output ownership. The callback may be concurrently
-        // consuming the input pool, so require the acquisition engine to be stopped.
-        guard !isGrabbing else { throw GC_ERROR.busy }
+        // The stream condition serializes this pool transition with frame delivery.
+
+        switch operation {
+        guard (0...4).contains(operation) else { throw GC_ERROR.invalidParameter }
+
+        // GenTL DSFlushQueue clears stream event data before applying the queue
+        // transition. Operations that leave buffers in the output queue rebuild
+        // their New Buffer notifications after the transition.
+        for event in events.values.flatMap({ $0 }) {
+            event.flush()
+        }
 
         switch operation {
         case 0: // ACQ_QUEUE_INPUT_TO_OUTPUT
-            // GenTL defines this as making input-pool buffers available on output.
-            // Amcam cannot manufacture image data, so return empty buffers as incomplete.
+            // Buffers moved from input to output are returned as incomplete,
+            // newData=false deliveries. Re-notify all output buffers because
+            // the DSFlushQueue call discarded previous event data.
             for raw in inputQueue {
                 guard let buffer = buffers[raw] else { continue }
                 buffer.isIncomplete = true
                 buffer.newData = false
                 buffer.sizeFilled = 0
                 outputQueue.append(raw)
-                publishBufferEvent(buffer)
             }
             inputQueue.removeAll()
+            for raw in outputQueue {
+                if let buffer = buffers[raw] {
+                    publishBufferEvent(buffer)
+                }
+            }
         case 1: // ACQ_QUEUE_OUTPUT_DISCARD
-            let discardedHandles = Set(outputQueue)
-            removeBufferEvents(for: discardedHandles)
             for raw in outputQueue {
                 if let buffer = buffers[raw] {
                     buffer.isQueued = false
@@ -310,8 +343,6 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             }
             outputQueue.removeAll()
         case 2: // ACQ_QUEUE_ALL_TO_INPUT
-            let discardedOutputHandles = Set(outputQueue)
-            removeBufferEvents(for: discardedOutputHandles)
             let all = announcedOrder
             inputQueue = all
             outputQueue.removeAll()
@@ -326,9 +357,14 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 prepareForInput(buffer)
                 inputQueue.append(raw)
             }
+            // Existing output buffers remain pending delivery, so rebuild their
+            // notifications after the event queues were cleared.
+            for raw in outputQueue {
+                if let buffer = buffers[raw] {
+                    publishBufferEvent(buffer)
+                }
+            }
         case 4: // ACQ_QUEUE_ALL_DISCARD
-            let discardedOutputHandles = Set(outputQueue)
-            removeBufferEvents(for: discardedOutputHandles)
             for raw in inputQueue + outputQueue {
                 if let buffer = buffers[raw] {
                     buffer.isQueued = false
@@ -419,16 +455,31 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     }
 
     func close() throws {
+        // DSClose must stop acquisition and unregister stream events before it
+        // revokes every announced buffer. Do not hold the stream condition while
+        // stopping the SDK: the SDK may be waiting for a callback to return.
+        condition.lock()
+        while finiteStopScheduled {
+            condition.wait()
+        }
+        condition.unlock()
+
+        try session.stopIfNeeded()
+
         condition.lock()
         defer { condition.unlock() }
 
-        guard !isGrabbing else { throw GC_ERROR.busy }
-        guard events.values.allSatisfy({ $0.isEmpty }) else {
-            throw GC_ERROR.resourceInUse
+        isGrabbing = false
+        finiteAcquisitionCount = nil
+        finiteStopScheduled = false
+
+        for event in events.values.flatMap({ $0 }) {
+            event.unregister()
         }
+        events.removeAll()
 
         // GenTL DSClose revokes all remaining announced buffers. The producer
-        // frees buffers it allocated; consumer-owned memory remains caller-owned.
+        // frees producer-allocated memory; consumer-owned memory remains caller-owned.
         for buffer in buffers.values where buffer.allocatedByProvider {
             buffer.releaseMemoryIfOwned()
         }
@@ -436,6 +487,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         announcedOrder.removeAll()
         inputQueue.removeAll()
         outputQueue.removeAll()
+        condition.broadcast()
     }
 
     func revoke(_ handle: BUFFER_HANDLE) throws -> GenTLRevokedBuffer {
