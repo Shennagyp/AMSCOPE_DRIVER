@@ -14,6 +14,7 @@ final class AmcamBufferRecord: @unchecked Sendable {
     var newData = false
     var dataLargerThanBuffer = false
     var sizeFilled = 0
+    var dataSize = 0
     var width: Int = 0
     var height: Int = 0
     var sequence: UInt64 = 0
@@ -297,6 +298,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         buffer.newData = false
         buffer.dataLargerThanBuffer = false
         buffer.sizeFilled = 0
+        buffer.dataSize = 0
         buffer.width = 0
         buffer.height = 0
         buffer.sequence = 0
@@ -626,10 +628,12 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 24: return .uint64(0) // No chunk layout identifier.
         case 25: return .string("") // Not a file payload.
         case 26: return .int32(0) // Pixel endianness is not applicable to RGB8.
-        case 27: return .size(buffer.sizeFilled) // DATA_SIZE.
+        case 27: return .size(buffer.dataSize) // DATA_SIZE.
         case 28:
-            let (nanoseconds, overflow) = buffer.timestampMicroseconds.multipliedReportingOverflow(by: 1_000)
-            return .uint64(overflow ? 0 : nanoseconds)
+            let (nanoseconds, overflow) =
+                buffer.timestampMicroseconds.multipliedReportingOverflow(by: 1_000)
+            guard !overflow else { throw GC_ERROR.invalidValue }
+            return .uint64(nanoseconds)
         case 29: return .bool8(buffer.dataLargerThanBuffer)
         case 30: return .bool8(false) // No chunk data.
         case 31: return .bool8(false) // Amcam buffers are not composite.
@@ -685,7 +689,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 1: return .size(buffer.size) // SIZE
         case 2: return .bool8(buffer.isIncomplete) // IS_INCOMPLETE
         case 3: return .size(buffer.sizeFilled) // SIZE_FILLED
-        case 4: return .size(buffer.sizeFilled) // DATA_SIZE
+        case 4: return .size(buffer.dataSize) // DATA_SIZE
         default: throw GC_ERROR.invalidParameter
         }
     }
@@ -732,14 +736,22 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             return
         }
 
-        guard let raw = inputQueue.first, let buffer = buffers[raw] else {
+        guard let raw = inputQueue.first else {
+            numUnderrun &+= 1
+            condition.unlock()
+            return
+        }
+        guard let buffer = buffers[raw] else {
+            inputQueue.removeFirst()
             numUnderrun &+= 1
             condition.unlock()
             return
         }
 
         inputQueue.removeFirst()
-        buffer.isQueued = false
+        // IS_QUEUED remains true while the buffer is being filled; the buffer
+        // leaves the queued state only when EventGetData delivers its handle.
+        buffer.isQueued = true
         buffer.isAcquiring = true
         numStarted &+= 1
 
@@ -759,16 +771,15 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             frameBytes >= minimumImageBytes
 
         buffer.dataLargerThanBuffer = frameBytes > buffer.size
-        buffer.width = 0
-        buffer.height = 0
+        buffer.width = geometryIsValid ? frame.width : 0
+        buffer.height = geometryIsValid ? frame.height : 0
+        buffer.dataSize = geometryIsValid ? minimumImageBytes : frameBytes
         buffer.sequence = UInt64(
             frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1)
         )
         buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
 
         guard !buffer.dataLargerThanBuffer, geometryIsValid else {
-            // The delivered buffer contains no valid image part; do not expose
-            // dimensions from a rejected frame as if they described its payload.
             buffer.isIncomplete = true
             buffer.newData = true
             buffer.sizeFilled = 0
@@ -784,8 +795,6 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 buffer.memory.copyMemory(from: base, byteCount: frameBytes)
             }
         }
-        buffer.width = frame.width
-        buffer.height = frame.height
         buffer.sizeFilled = frameBytes
         buffer.isIncomplete = false
         buffer.newData = true
