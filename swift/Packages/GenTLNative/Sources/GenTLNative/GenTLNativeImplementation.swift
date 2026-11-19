@@ -167,7 +167,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let devGetNumDataStreams: DevGetNumDataStreamsFunction
         let devGetDataStreamID: DevGetDataStreamIDFunction
         let devOpenDataStream: DevOpenDataStreamFunction
-        let devGetInfo: IFGetDeviceInfoFunction
+        let devGetInfo: ModuleInfoFunction
         let devGetParentIF: DevGetParentIFFunction
         let devClose: DevCloseFunction
 
@@ -179,7 +179,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let dsStopAcquisition: DSStopAcquisitionFunction
         let dsGetInfo: ModuleInfoFunction
         let dsGetBufferID: DSGetBufferIDFunction
-        let dsGetBufferInfo: IFGetDeviceInfoFunction
+        let dsGetBufferInfo: ModuleInfoFunction
         let dsRevokeBuffer: DSRevokeBufferFunction
         let dsGetParentDev: DSGetParentDevFunction
         let dsClose: DSCloseFunction
@@ -189,7 +189,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let gcGetPortURL: GCGetPortURLFunction
         let gcGetNumPortURLs: GCGetNumPortURLsFunction
         let gcGetPortURLInfo: GCGetPortURLInfoFunction
-        let gcGetPortInfo: IFGetDeviceInfoFunction
+        let gcGetPortInfo: ModuleInfoFunction
 
         let gcRegisterEvent: GCRegisterEventFunction
         let gcUnregisterEvent: GCUnregisterEventFunction
@@ -248,7 +248,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             devGetNumDataStreams: load("DevGetNumDataStreams", as: DevGetNumDataStreamsFunction.self),
             devGetDataStreamID: load("DevGetDataStreamID", as: DevGetDataStreamIDFunction.self),
             devOpenDataStream: load("DevOpenDataStream", as: DevOpenDataStreamFunction.self),
-            devGetInfo: load("DevGetInfo", as: IFGetDeviceInfoFunction.self),
+            devGetInfo: load("DevGetInfo", as: ModuleInfoFunction.self),
             devGetParentIF: load("DevGetParentIF", as: DevGetParentIFFunction.self),
             devClose: load("DevClose", as: DevCloseFunction.self),
 
@@ -260,7 +260,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             dsStopAcquisition: load("DSStopAcquisition", as: DSStopAcquisitionFunction.self),
             dsGetInfo: load("DSGetInfo", as: ModuleInfoFunction.self),
             dsGetBufferID: load("DSGetBufferID", as: DSGetBufferIDFunction.self),
-            dsGetBufferInfo: load("DSGetBufferInfo", as: IFGetDeviceInfoFunction.self),
+            dsGetBufferInfo: load("DSGetBufferInfo", as: ModuleInfoFunction.self),
             dsRevokeBuffer: load("DSRevokeBuffer", as: DSRevokeBufferFunction.self),
             dsGetParentDev: load("DSGetParentDev", as: DSGetParentDevFunction.self),
             dsClose: load("DSClose", as: DSCloseFunction.self),
@@ -270,7 +270,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             gcGetPortURL: load("GCGetPortURL", as: GCGetPortURLFunction.self),
             gcGetNumPortURLs: load("GCGetNumPortURLs", as: GCGetNumPortURLsFunction.self),
             gcGetPortURLInfo: load("GCGetPortURLInfo", as: GCGetPortURLInfoFunction.self),
-            gcGetPortInfo: load("GCGetPortInfo", as: IFGetDeviceInfoFunction.self),
+            gcGetPortInfo: load("GCGetPortInfo", as: ModuleInfoFunction.self),
 
             gcRegisterEvent: load("GCRegisterEvent", as: GCRegisterEventFunction.self),
             gcUnregisterEvent: load("GCUnregisterEvent", as: GCUnregisterEventFunction.self),
@@ -638,7 +638,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             return try readInfo { type, output, size in
-                functions.dsGetBufferInfo(stream, bufferHandle, command, type, output, size)
+                functions.dsGetBufferInfo(stream, command, type, output, size)
             }
         }
     }
@@ -673,10 +673,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     public func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
         try withLock {
             guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidParameter }
+            let port = try pointer(hPort)
             var data = Data(count: size)
             var actualSize = size
             let result = data.withUnsafeMutableBytes { output in
-                functions.gcReadPort(try! pointer(hPort), address, output.baseAddress, &actualSize)
+                functions.gcReadPort(port, address, output.baseAddress, &actualSize)
             }
             try check(result)
             guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
@@ -687,9 +688,10 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws {
         try withLock {
+            let port = try pointer(hPort)
             var size = data.count
             let result = data.withUnsafeBytes { input in
-                functions.gcWritePort(try! pointer(hPort), address, input.baseAddress, &size)
+                functions.gcWritePort(port, address, input.baseAddress, &size)
             }
             try check(result)
         }
@@ -865,8 +867,8 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
         var data = Data(count: size)
         var actualSize = size
-        let result = data.withUnsafeMutableBytes { output in
-            call(&dataType, output.baseAddress, &actualSize)
+        let result = try data.withUnsafeMutableBytes { output in
+            try call(&dataType, output.baseAddress, &actualSize)
         }
         try check(result)
         guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
