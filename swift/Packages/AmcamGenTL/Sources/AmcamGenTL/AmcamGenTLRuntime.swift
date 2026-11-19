@@ -166,8 +166,14 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         condition.lock()
         defer { condition.unlock() }
         guard !event.isUnregistered else { throw GC_ERROR.invalidHandle }
-        event.pendingAbortCount += 1
-        condition.broadcast()
+
+        // EventKill aborts one currently active EventGetData call. It must not
+        // leave a cancellation token behind when there is no blocked reader,
+        // otherwise the next unrelated read would fail spuriously.
+        if event.activeReaders > event.pendingAbortCount {
+            event.pendingAbortCount += 1
+            condition.broadcast()
+        }
     }
 
     func eventInfo(_ event: AmcamEventRecord, command: Int32) throws -> GenTLInfoValue {
