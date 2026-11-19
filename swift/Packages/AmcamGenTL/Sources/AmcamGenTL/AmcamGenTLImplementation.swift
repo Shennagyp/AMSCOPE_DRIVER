@@ -696,9 +696,23 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
         lock.lock()
         let record = events[event.rawValue]
+        let stream: AmcamDataStreamRecord?
+        if let record, case .dataStream(let streamHandle) = record.source {
+            stream = dataStreams[streamHandle.rawValue]
+        } else {
+            stream = nil
+        }
         lock.unlock()
+
         guard let record else { throw GC_ERROR.invalidHandle }
-        return try record.next(timeoutMilliseconds: timeout)
+        let payload = try record.next(timeoutMilliseconds: timeout)
+
+        if record.eventType == GenTLEventType.newBuffer.rawValue {
+            guard let stream else { throw GC_ERROR.invalidHandle }
+            try stream.deliverNewBufferEvent(payload)
+        }
+
+        return payload
     }
 
     public func EventGetDataInfo(
