@@ -106,12 +106,18 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         lock.lock()
-        guard handle != nil else { lock.unlock(); throw AmcamCameraError.sessionClosed }
+        guard let activeHandle = handle else {
+            lock.unlock()
+            throw AmcamCameraError.sessionClosed
+        }
         guard callbackContext == nil else {
             lock.unlock()
             throw AmcamCameraError.transitionInProgress
         }
-        guard !streaming, !starting, !stopping else { lock.unlock(); throw AmcamCameraError.alreadyStreaming }
+        guard !streaming, !starting, !stopping else {
+            lock.unlock()
+            throw AmcamCameraError.alreadyStreaming
+        }
 
         let (pixels, overflow1) = width.multipliedReportingOverflow(by: height)
         let (capacity, overflow2) = pixels.multipliedReportingOverflow(by: 4)
@@ -130,7 +136,6 @@ public final class AmcamCameraSession: @unchecked Sendable {
         callbackContext = retained
         starting = true
         streaming = true
-        let activeHandle = handle!
         lock.unlock()
 
         // Do not hold the session lock while invoking the SDK: it may deliver a callback
