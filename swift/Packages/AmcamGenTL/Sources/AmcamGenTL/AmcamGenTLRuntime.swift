@@ -12,6 +12,7 @@ final class AmcamBufferRecord: @unchecked Sendable {
     var isAcquiring = false
     var isIncomplete = false
     var newData = false
+    var dataLargerThanBuffer = false
     var sizeFilled = 0
     var width: Int = 0
     var height: Int = 0
@@ -189,11 +190,21 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
         guard !buffer.isQueued, !buffer.isAcquiring else { throw GC_ERROR.resourceInUse }
         outputQueue.removeAll { $0 == handle.rawValue }
+        prepareForInput(buffer)
+        inputQueue.append(handle.rawValue)
+    }
+
+    private func prepareForInput(_ buffer: AmcamBufferRecord) {
         buffer.isQueued = true
+        buffer.isAcquiring = false
         buffer.isIncomplete = false
         buffer.newData = false
+        buffer.dataLargerThanBuffer = false
         buffer.sizeFilled = 0
-        inputQueue.append(handle.rawValue)
+        buffer.width = 0
+        buffer.height = 0
+        buffer.sequence = 0
+        buffer.timestampMicroseconds = 0
     }
 
     func flush(operation: Int32) throws {
@@ -228,19 +239,13 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             outputQueue.removeAll()
             for raw in all {
                 guard let buffer = buffers[raw] else { continue }
-                buffer.isQueued = true
-                buffer.newData = false
-                buffer.isIncomplete = false
-                buffer.sizeFilled = 0
+                prepareForInput(buffer)
             }
         case 3: // ACQ_QUEUE_UNQUEUED_TO_INPUT
             let queued = Set(inputQueue + outputQueue)
             for raw in announcedOrder where !queued.contains(raw) {
                 guard let buffer = buffers[raw] else { continue }
-                buffer.isQueued = true
-                buffer.newData = false
-                buffer.isIncomplete = false
-                buffer.sizeFilled = 0
+                prepareForInput(buffer)
                 inputQueue.append(raw)
             }
         case 4: // ACQ_QUEUE_ALL_DISCARD
@@ -385,6 +390,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 8: return .bool8(isGrabbing)
         case 9: return .bool8(true)
         case 10: return .string("AMCAM")
+        case 11: return .uint64(0) // Amcam does not expose chunk payloads.
         case 12: return .uint64(1) // Minimum announced buffers: one.
         case 13: return .uint64(1) // Byte alignment.
         default: throw GC_ERROR.notAvailable
@@ -417,8 +423,17 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
         case 21: return .uint64(4) // PFNC 32-bit namespace.
         case 22: return .uint64(UInt64(buffer.height))
-        case 23, 24, 25, 26, 27, 28, 29, 30, 31:
-            return .uint64(0)
+        case 23: return .uint64(0) // No chunk payload.
+        case 24: return .uint64(0) // No chunk layout identifier.
+        case 25: return .string("") // Not a file payload.
+        case 26: return .int32(0) // Pixel endianness is not applicable to RGB8.
+        case 27: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE.
+        case 28:
+            let (nanoseconds, overflow) = buffer.timestampMicroseconds.multipliedReportingOverflow(by: 1_000)
+            return .uint64(overflow ? 0 : nanoseconds)
+        case 29: return .bool8(buffer.dataLargerThanBuffer)
+        case 30: return .bool8(false) // No chunk data.
+        case 31: return .bool8(false) // Amcam buffers are not composite.
         default:
             throw GC_ERROR.invalidParameter
         }
@@ -526,6 +541,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         buffer.isAcquiring = true
 
         let frameBytes = frame.bytes.count
+        buffer.dataLargerThanBuffer = frameBytes > buffer.size
         guard frameBytes <= buffer.size,
               frame.width > 0,
               frame.height > 0,
