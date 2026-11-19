@@ -87,7 +87,27 @@ public enum GenTLProducerCatalog {
                     )
                     continue
                 }
-                producersByPath[path.path] = path
+
+                do {
+                    let values = try path.resourceValues(forKeys: [.isRegularFileKey])
+                    guard values.isRegularFile == true else {
+                        issues.append(
+                            GenTLProducerSearchIssue(
+                                path: path.path,
+                                message: "An explicit .cti producer path must refer to a regular file."
+                            )
+                        )
+                        continue
+                    }
+                    producersByPath[path.path] = path
+                } catch {
+                    issues.append(
+                        GenTLProducerSearchIssue(
+                            path: path.path,
+                            message: "Could not inspect explicit .cti producer file: \(error.localizedDescription)"
+                        )
+                    )
+                }
                 continue
             }
 
@@ -103,11 +123,21 @@ public enum GenTLProducerCatalog {
                         continue
                     }
 
-                    let values = try child.resourceValues(forKeys: [.isRegularFileKey])
-                    guard values.isRegularFile == true else { continue }
-
                     let normalized = child.standardizedFileURL.resolvingSymlinksInPath()
-                    producersByPath[normalized.path] = normalized
+                    do {
+                        let values = try normalized.resourceValues(forKeys: [.isRegularFileKey])
+                        guard values.isRegularFile == true else { continue }
+                        producersByPath[normalized.path] = normalized
+                    } catch {
+                        // One broken or unreadable entry must not prevent valid
+                        // Producers elsewhere in the same directory being found.
+                        issues.append(
+                            GenTLProducerSearchIssue(
+                                path: child.path,
+                                message: "Could not inspect .cti entry: \(error.localizedDescription)"
+                            )
+                        )
+                    }
                 }
             } catch {
                 issues.append(
