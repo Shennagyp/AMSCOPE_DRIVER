@@ -365,11 +365,13 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         guard record.dataStreamHandle == nil else { try fail(.resourceInUse) }
 
         let handle = DS_HANDLE(rawValue: allocateHandle())
-        let stream = try AmcamDataStreamRecord(
-            handle: handle,
-            deviceHandle: hDevice,
-            session: record.session
-        )
+        let stream = try recordErrors {
+            try AmcamDataStreamRecord(
+                handle: handle,
+                deviceHandle: hDevice,
+                session: record.session
+            )
+        }
         dataStreams[handle.rawValue] = stream
         record.dataStreamHandle = handle
         return handle
@@ -414,15 +416,17 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> BUFFER_HANDLE {
         lock.lock()
         defer { lock.unlock() }
-        let stream = try streamRecord(hDS)
+        let stream = try recordErrors { try streamRecord(hDS) }
         let handle = BUFFER_HANDLE(rawValue: allocateHandle())
-        try stream.announce(
-            handle: handle,
-            memory: memory.baseAddress,
-            size: memory.size,
-            privateData: privateData,
-            allocatedByProvider: false
-        )
+        try recordErrors {
+            try stream.announce(
+                handle: handle,
+                memory: memory.baseAddress,
+                size: memory.size,
+                privateData: privateData,
+                allocatedByProvider: false
+            )
+        }
         return handle
     }
 
@@ -433,20 +437,22 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> BUFFER_HANDLE {
         lock.lock()
         defer { lock.unlock() }
-        let stream = try streamRecord(hDS)
+        let stream = try recordErrors { try streamRecord(hDS) }
         guard size > 0, size <= 1_073_741_824 else { try fail(.invalidParameter) }
 
         let pointer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
         pointer.initializeMemory(as: UInt8.self, repeating: 0, count: size)
         let handle = BUFFER_HANDLE(rawValue: allocateHandle())
         do {
-            try stream.announce(
-                handle: handle,
-                memory: pointer,
-                size: size,
-                privateData: privateData,
-                allocatedByProvider: true
-            )
+            try recordErrors {
+                try stream.announce(
+                    handle: handle,
+                    memory: pointer,
+                    size: size,
+                    privateData: privateData,
+                    allocatedByProvider: true
+                )
+            }
         } catch {
             pointer.deallocate()
             throw error
@@ -457,13 +463,13 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func DSQueueBuffer(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws {
         lock.lock()
         defer { lock.unlock() }
-        try streamRecord(hDS).queue(buffer)
+        try recordErrors { try streamRecord(hDS).queue(buffer) }
     }
 
     public func DSFlushQueue(_ hDS: DS_HANDLE, operation: Int32) throws {
         lock.lock()
         defer { lock.unlock() }
-        try streamRecord(hDS).flush(operation: operation)
+        try recordErrors { try streamRecord(hDS).flush(operation: operation) }
     }
 
     public func DSStartAcquisition(
@@ -474,7 +480,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard flags == 0 else { try fail(.notImplemented) }
-        try streamRecord(hDS).start(numberToAcquire: numberToAcquire)
+        try recordErrors { try streamRecord(hDS).start(numberToAcquire: numberToAcquire) }
     }
 
     public func DSStopAcquisition(_ hDS: DS_HANDLE, flags: Int32) throws {
@@ -483,19 +489,19 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         // Amcam_Stop provides the SDK's orderly stop operation. It does not
         // expose a distinct immediate-kill semantic.
         guard flags == 0 else { try fail(.notImplemented) }
-        try streamRecord(hDS).stop()
+        try recordErrors { try streamRecord(hDS).stop() }
     }
 
     public func DSGetInfo(_ hDS: DS_HANDLE, command: Int32) throws -> GenTLInfoValue {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).info(command: command)
+        return try recordErrors { try streamRecord(hDS).info(command: command) }
     }
 
     public func DSGetBufferID(_ hDS: DS_HANDLE, index: UInt32) throws -> BUFFER_HANDLE {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).bufferID(index: index)
+        return try recordErrors { try streamRecord(hDS).bufferID(index: index) }
     }
 
     public func DSGetBufferInfo(
@@ -505,7 +511,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> GenTLInfoValue {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).bufferInfo(buffer, command: command)
+        return try recordErrors { try streamRecord(hDS).bufferInfo(buffer, command: command) }
     }
 
     public func DSRevokeBuffer(
@@ -514,19 +520,19 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> GenTLRevokedBuffer {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).revoke(buffer)
+        return try recordErrors { try streamRecord(hDS).revoke(buffer) }
     }
 
     public func DSGetParentDev(_ hDS: DS_HANDLE) throws -> DEV_HANDLE {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).deviceHandle
+        return try recordErrors { try streamRecord(hDS).deviceHandle }
     }
 
     public func DSClose(_ hDS: DS_HANDLE) throws {
         lock.lock()
         defer { lock.unlock() }
-        let stream = try streamRecord(hDS)
+        let stream = try recordErrors { try streamRecord(hDS) }
 
         let streamEvents = events.filter { _, record in
             record.source == .dataStream(hDS)
@@ -536,7 +542,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
             events.removeValue(forKey: eventHandle)
         }
 
-        try stream.close()
+        try recordErrors { try stream.close() }
         dataStreams.removeValue(forKey: hDS.rawValue)
         if let record = openDevices[stream.deviceHandle.rawValue] {
             record.dataStreamHandle = nil
@@ -563,7 +569,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> UInt32 {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).numberOfBufferParts(buffer)
+        return try recordErrors { try streamRecord(hDS).numberOfBufferParts(buffer) }
     }
 
     public func DSGetBufferPartInfo(
@@ -575,7 +581,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard partIndex == 0 else { try fail(.invalidIndex) }
-        return try streamRecord(hDS).bufferPartInfo(buffer, command: command)
+        return try recordErrors { try streamRecord(hDS).bufferPartInfo(buffer, command: command) }
     }
 
     public func DSAnnounceCompositeBuffer(
@@ -598,7 +604,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).bufferInfoStacked(buffer, commands: commands)
+        return try recordErrors { try streamRecord(hDS).bufferInfoStacked(buffer, commands: commands) }
     }
 
     public func DSGetBufferPartInfoStacked(
@@ -608,7 +614,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).bufferPartInfoStacked(buffer, requests: requests)
+        return try recordErrors { try streamRecord(hDS).bufferPartInfoStacked(buffer, requests: requests) }
     }
 
     public func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 {
@@ -635,7 +641,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> UInt32 {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).bufferSegmentCount(buffer)
+        return try recordErrors { try streamRecord(hDS).bufferSegmentCount(buffer) }
     }
 
     public func DSGetBufferSegmentInfo(
@@ -647,7 +653,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard segmentIndex == 0 else { try fail(.invalidIndex) }
-        return try streamRecord(hDS).bufferSegmentInfo(buffer, command: command)
+        return try recordErrors { try streamRecord(hDS).bufferSegmentInfo(buffer, command: command) }
     }
 
     // MARK: Signaling
@@ -719,7 +725,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.unlock()
 
         guard let record, let stream else { try fail(.invalidHandle) }
-        return try stream.nextEventData(record, timeoutMilliseconds: timeout)
+        return try recordErrors { try stream.nextEventData(record, timeoutMilliseconds: timeout) }
     }
 
     public func EventGetDataInfo(
@@ -751,7 +757,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.unlock()
 
         guard let record, let stream else { try fail(.invalidHandle) }
-        return try stream.eventInfo(record, command: command)
+        return try recordErrors { try stream.eventInfo(record, command: command) }
     }
 
     public func EventFlush(_ event: EVENT_HANDLE) throws {
@@ -766,7 +772,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.unlock()
 
         guard let record, let stream else { try fail(.invalidHandle) }
-        try stream.flushEvent(record)
+        try recordErrors { try stream.flushEvent(record) }
     }
 
     public func EventKill(_ event: EVENT_HANDLE) throws {
@@ -781,7 +787,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.unlock()
 
         guard let record, let stream else { try fail(.invalidHandle) }
-        try stream.abortOneEventRead(record)
+        try recordErrors { try stream.abortOneEventRead(record) }
     }
 
     // MARK: Unsupported physical-port mapping
