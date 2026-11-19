@@ -6,6 +6,8 @@ This document describes the current behavior of the two implementations of the s
 
 The public Swift protocol follows the GenTL 1.6 function groups and uses typed opaque handles, Swift values and `throws` for GenTL errors. The function names and module boundaries are GenTL-shaped; the Swift protocol is not a C ABI and is not a GenTL Producer.
 
+The Swift `genTLVersion` property identifies the revision represented by this API surface. It does not claim that every loaded `.cti` Producer implements all functions in that revision. The native backend resolves later-revision entry points opportunistically, and the Producer's own supported revision is read from `GCGetInfo`/`TL_INFO_GENTL_VER_MAJOR` and `TL_INFO_GENTL_VER_MINOR` where available.
+
 ## GenTLNative
 
 `GenTLNativeImplementation` forwards the GenTL function calls to a manufacturer-supplied `.cti` Producer.
@@ -28,7 +30,7 @@ Actual camera capability and compatibility still depend on the selected `.cti` P
 | Interface discovery | One SDK-managed interface |
 | Device discovery/open/close | Implemented; exclusive read/write open only |
 | Device serial number | Not reported; SDK enumeration ID is opaque and is not assumed to be a serial number |
-| Device timestamp clock | 1 MHz when Amcam FrameInfoV2 timestamps are available; timestamps are microseconds |
+| Device timestamp clock | 1 MHz; FrameInfoV2 timestamps are in microseconds when its timestamp-valid flag is set |
 | Device access status | Unknown before this backend opens the camera; open-read/write while owned |
 | Data Stream | One stream per open camera |
 | Buffer announcement/allocation | Implemented |
