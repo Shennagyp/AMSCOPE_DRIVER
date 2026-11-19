@@ -6,6 +6,8 @@ This document describes the current behavior of the two implementations of the s
 
 The public Swift protocol follows the GenTL 1.6 function groups and uses typed opaque handles, Swift values and `throws` for GenTL errors. The function names and module boundaries are GenTL-shaped; the Swift protocol is not a C ABI and is not a GenTL Producer.
 
+The Swift protocol grouping follows GenTL module ownership: register-stack operations belong to the Port module (GenTL 1.1), while chunk/multipart/flow/segment methods are Data Stream extensions (GenTL 1.3–1.6).
+
 The Swift `genTLVersion` property identifies the revision represented by this API surface. It does not claim that every loaded `.cti` Producer implements all functions in that revision. The native backend resolves later-revision entry points opportunistically, and the Producer's own supported revision is read from `GCGetInfo`/`TL_INFO_GENTL_VER_MAJOR` and `TL_INFO_GENTL_VER_MINOR` where available.
 
 ## GenTLNative
