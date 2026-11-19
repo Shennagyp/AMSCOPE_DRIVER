@@ -106,10 +106,7 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     }
 
     public func open(accessFlags: Int32) throws -> GenTLDeviceSession {
-        guard !context.isClosed else {
-            throw GenTLRouterError.providerContextUnavailable(backendID)
-        }
-        let handle = try api.IFOpenDevice(
+        let handle = try context.openDevice(
             interfaceHandle,
             deviceID: deviceID,
             accessFlags: accessFlags
@@ -164,6 +161,31 @@ private final class GenTLProviderContext: @unchecked Sendable {
         defer { lock.unlock() }
         guard !closed else { return nil }
         return interfaceHandlesByID[id]
+    }
+
+    func openDevice(
+        _ interfaceHandle: IF_HANDLE,
+        deviceID: String,
+        accessFlags: Int32
+    ) throws -> DEV_HANDLE {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed else {
+            throw GenTLRouterError.providerContextUnavailable(backendID)
+        }
+        let deviceHandle = try api.IFOpenDevice(
+            interfaceHandle,
+            deviceID: deviceID,
+            accessFlags: accessFlags
+        )
+        guard deviceHandle.isValid else { throw GC_ERROR.invalidHandle }
+        return deviceHandle
+    }
+
+    func closeDevice(_ deviceHandle: DEV_HANDLE) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try api.DevClose(deviceHandle)
     }
 
     /// Refreshes discovery while reusing this backend's already-open System
@@ -284,7 +306,7 @@ public final class GenTLDeviceSession: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard !isClosed else { return }
-        try api.DevClose(deviceHandle)
+        try context.closeDevice(deviceHandle)
         isClosed = true
     }
 
