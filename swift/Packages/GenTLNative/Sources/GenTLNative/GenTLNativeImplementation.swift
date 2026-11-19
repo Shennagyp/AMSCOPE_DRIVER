@@ -1244,11 +1244,21 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         eventType: Int32
     ) throws -> EVENT_HANDLE {
         try withLock {
+            guard !registeredEventsByHandle.values.contains(where: {
+                $0.source == source && $0.eventType == eventType
+            }) else {
+                throw GC_ERROR.resourceInUse
+            }
+
             var event: UnsafeMutableRawPointer?
             try check(functions.gcRegisterEvent(try eventSourcePointer(source), eventType, &event))
             guard let event else { throw GC_ERROR.invalidHandle }
             let handle = EVENT_HANDLE(rawValue: UInt(bitPattern: event))
             guard registeredEventsByHandle[handle.rawValue] == nil else {
+                // A Producer returning an already-live event handle violates
+                // handle uniqueness. Undo the just-issued registration before
+                // reporting the invalid Producer behavior.
+                try? functions.gcUnregisterEvent(try eventSourcePointer(source), eventType)
                 throw GC_ERROR.resourceInUse
             }
             registeredEventsByHandle[handle.rawValue] = RegisteredEvent(
