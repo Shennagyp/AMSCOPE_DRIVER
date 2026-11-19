@@ -138,6 +138,43 @@ private typealias EventGetInfoFunction = @convention(c) (
 ) -> Int32
 private typealias EventSimpleFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
 
+private typealias GCReadPortStackedFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<PORT_REGISTER_STACK_ENTRY>?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias GCWritePortStackedFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<PORT_REGISTER_STACK_ENTRY>?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias DSGetBufferChunkDataFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<SINGLE_CHUNK_DATA>?,
+    UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias DSGetNumBufferPartsFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
+) -> Int32
+private typealias DSGetBufferPartInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UInt32, Int32,
+    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias DSAnnounceCompositeBufferFunction = @convention(c) (
+    UnsafeMutableRawPointer?, Int, UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
+    UnsafeMutablePointer<Int>?, UnsafeMutableRawPointer?,
+    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DSGetNumFlowsFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
+) -> Int32
+private typealias DSGetFlowInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UInt32, Int32, UnsafeMutablePointer<Int32>?,
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias DSGetNumBufferSegmentsFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
+) -> Int32
+private typealias DSGetBufferSegmentInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UInt32, Int32,
+    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+
 /// GenTL Consumer implementation backed by a manufacturer-supplied .cti Producer.
 ///
 /// The implementation owns one loaded CTI library. Handles returned by the
@@ -202,6 +239,17 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let eventGetInfo: EventGetInfoFunction
         let eventFlush: EventSimpleFunction
         let eventKill: EventSimpleFunction
+
+        let gcReadPortStacked: GCReadPortStackedFunction
+        let gcWritePortStacked: GCWritePortStackedFunction
+        let dsGetBufferChunkData: DSGetBufferChunkDataFunction
+        let dsGetNumBufferParts: DSGetNumBufferPartsFunction
+        let dsGetBufferPartInfo: DSGetBufferPartInfoFunction
+        let dsAnnounceCompositeBuffer: DSAnnounceCompositeBufferFunction
+        let dsGetNumFlows: DSGetNumFlowsFunction
+        let dsGetFlowInfo: DSGetFlowInfoFunction
+        let dsGetNumBufferSegments: DSGetNumBufferSegmentsFunction
+        let dsGetBufferSegmentInfo: DSGetBufferSegmentInfoFunction
     }
 
     private let library: GenTLProducerLibrary
@@ -282,7 +330,18 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             eventGetDataInfo: load("EventGetDataInfo", as: EventGetDataInfoFunction.self),
             eventGetInfo: load("EventGetInfo", as: EventGetInfoFunction.self),
             eventFlush: load("EventFlush", as: EventSimpleFunction.self),
-            eventKill: load("EventKill", as: EventSimpleFunction.self)
+            eventKill: load("EventKill", as: EventSimpleFunction.self),
+
+            gcReadPortStacked: load("GCReadPortStacked", as: GCReadPortStackedFunction.self),
+            gcWritePortStacked: load("GCWritePortStacked", as: GCWritePortStackedFunction.self),
+            dsGetBufferChunkData: load("DSGetBufferChunkData", as: DSGetBufferChunkDataFunction.self),
+            dsGetNumBufferParts: load("DSGetNumBufferParts", as: DSGetNumBufferPartsFunction.self),
+            dsGetBufferPartInfo: load("DSGetBufferPartInfo", as: DSGetBufferPartInfoFunction.self),
+            dsAnnounceCompositeBuffer: load("DSAnnounceCompositeBuffer", as: DSAnnounceCompositeBufferFunction.self),
+            dsGetNumFlows: load("DSGetNumFlows", as: DSGetNumFlowsFunction.self),
+            dsGetFlowInfo: load("DSGetFlowInfo", as: DSGetFlowInfoFunction.self),
+            dsGetNumBufferSegments: load("DSGetNumBufferSegments", as: DSGetNumBufferSegmentsFunction.self),
+            dsGetBufferSegmentInfo: load("DSGetBufferSegmentInfo", as: DSGetBufferSegmentInfoFunction.self)
         )
     }
 
@@ -670,6 +729,251 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func DSClose(_ hDS: DS_HANDLE) throws {
         try withLock { try check(functions.dsClose(try pointer(hDS))) }
+    }
+
+    // MARK: GenTL 1.6 Advanced Data Functions
+
+    public func GCReadPortStacked(
+        _ hPort: PORT_HANDLE,
+        requests: [GenTLPortReadRequest]
+    ) throws -> [Data] {
+        try withLock {
+            guard !requests.isEmpty else { return [] }
+            let port = try pointer(hPort)
+            var allocations: [UnsafeMutableRawPointer] = []
+            defer { allocations.forEach { $0.deallocate() } }
+
+            var entries: [PORT_REGISTER_STACK_ENTRY] = []
+            entries.reserveCapacity(requests.count)
+            for request in requests {
+                guard request.size > 0, request.size <= 64 * 1024 * 1024 else {
+                    throw GC_ERROR.invalidParameter
+                }
+                let memory = UnsafeMutableRawPointer.allocate(byteCount: request.size, alignment: 8)
+                memory.initializeMemory(as: UInt8.self, repeating: 0, count: request.size)
+                allocations.append(memory)
+                var entry = PORT_REGISTER_STACK_ENTRY()
+                entry.Address = request.address
+                entry.pBuffer = memory
+                entry.Size = request.size
+                entries.append(entry)
+            }
+
+            var count = entries.count
+            let result = entries.withUnsafeMutableBufferPointer {
+                functions.gcReadPortStacked(port, $0.baseAddress, &count)
+            }
+            try check(result)
+            guard count == requests.count else { throw GC_ERROR.invalidValue }
+
+            return zip(requests, allocations).map { request, memory in
+                Data(bytes: memory, count: request.size)
+            }
+        }
+    }
+
+    public func GCWritePortStacked(
+        _ hPort: PORT_HANDLE,
+        requests: [GenTLPortWriteRequest]
+    ) throws {
+        try withLock {
+            guard !requests.isEmpty else { return }
+            let port = try pointer(hPort)
+            var allocations: [UnsafeMutableRawPointer] = []
+            defer { allocations.forEach { $0.deallocate() } }
+
+            var entries: [PORT_REGISTER_STACK_ENTRY] = []
+            entries.reserveCapacity(requests.count)
+            for request in requests {
+                guard !request.data.isEmpty else { throw GC_ERROR.invalidParameter }
+                let memory = UnsafeMutableRawPointer.allocate(
+                    byteCount: request.data.count,
+                    alignment: 8
+                )
+                request.data.withUnsafeBytes { source in
+                    if let base = source.baseAddress {
+                        memory.copyMemory(from: base, byteCount: request.data.count)
+                    }
+                }
+                allocations.append(memory)
+                var entry = PORT_REGISTER_STACK_ENTRY()
+                entry.Address = request.address
+                entry.pBuffer = memory
+                entry.Size = request.data.count
+                entries.append(entry)
+            }
+
+            var count = entries.count
+            let result = entries.withUnsafeMutableBufferPointer {
+                functions.gcWritePortStacked(port, $0.baseAddress, &count)
+            }
+            try check(result)
+            guard count == requests.count else { throw GC_ERROR.invalidValue }
+        }
+    }
+
+    public func DSGetBufferChunkData(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> [GenTLChunkData] {
+        try withLock {
+            let stream = try pointer(hDS)
+            let bufferHandle = try pointer(buffer)
+            var count = 0
+            let query = functions.dsGetBufferChunkData(stream, bufferHandle, nil, &count)
+            try checkInfoSizeQuery(query, size: count)
+            guard count <= 1_000_000 else { throw GC_ERROR.invalidValue }
+            guard count > 0 else { return [] }
+
+            let memory = UnsafeMutableRawPointer.allocate(
+                byteCount: MemoryLayout<SINGLE_CHUNK_DATA>.stride * count,
+                alignment: MemoryLayout<SINGLE_CHUNK_DATA>.alignment
+            )
+            memory.initializeMemory(
+                as: UInt8.self,
+                repeating: 0,
+                count: MemoryLayout<SINGLE_CHUNK_DATA>.stride * count
+            )
+            defer { memory.deallocate() }
+
+            let chunks = memory.bindMemory(to: SINGLE_CHUNK_DATA.self, capacity: count)
+            var actualCount = count
+            try check(functions.dsGetBufferChunkData(stream, bufferHandle, chunks, &actualCount))
+            guard actualCount >= 0, actualCount <= count else { throw GC_ERROR.invalidValue }
+
+            return (0..<actualCount).map { index in
+                GenTLChunkData(
+                    chunkID: chunks[index].ChunkID,
+                    offset: Int64(chunks[index].ChunkOffset),
+                    length: chunks[index].ChunkLength
+                )
+            }
+        }
+    }
+
+    public func DSGetNumBufferParts(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> UInt32 {
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.dsGetNumBufferParts(try pointer(hDS), try pointer(buffer), &count))
+            return count
+        }
+    }
+
+    public func DSGetBufferPartInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        partIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            let stream = try pointer(hDS)
+            let bufferHandle = try pointer(buffer)
+            return try readInfo { type, output, size in
+                functions.dsGetBufferPartInfo(
+                    stream, bufferHandle, partIndex, command, type, output, size
+                )
+            }
+        }
+    }
+
+    public func DSAnnounceCompositeBuffer(
+        _ hDS: DS_HANDLE,
+        segments: [GenTLCompositeBufferSegment],
+        privateData: UnsafeMutableRawPointer?
+    ) throws -> BUFFER_HANDLE {
+        try withLock {
+            guard !segments.isEmpty else { throw GC_ERROR.invalidParameter }
+            let stream = try pointer(hDS)
+            var pointers = segments.map { Optional($0.memory.baseAddress) }
+            var sizes = segments.map { $0.memory.size }
+            var resultBuffer: UnsafeMutableRawPointer?
+
+            let result = pointers.withUnsafeMutableBufferPointer { pointerBuffer in
+                sizes.withUnsafeMutableBufferPointer { sizeBuffer in
+                    functions.dsAnnounceCompositeBuffer(
+                        stream,
+                        segments.count,
+                        pointerBuffer.baseAddress,
+                        sizeBuffer.baseAddress,
+                        privateData,
+                        &resultBuffer
+                    )
+                }
+            }
+            try check(result)
+            guard let resultBuffer else { throw GC_ERROR.invalidBuffer }
+            return BUFFER_HANDLE(rawValue: UInt(bitPattern: resultBuffer))
+        }
+    }
+
+    public func DSGetBufferInfoStacked(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue] {
+        try commands.map { try DSGetBufferInfo(hDS, buffer: buffer, command: $0) }
+    }
+
+    public func DSGetBufferPartInfoStacked(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        partIndex: UInt32,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue] {
+        try commands.map {
+            try DSGetBufferPartInfo(hDS, buffer: buffer, partIndex: partIndex, command: $0)
+        }
+    }
+
+    public func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 {
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.dsGetNumFlows(try pointer(hDS), &count))
+            return count
+        }
+    }
+
+    public func DSGetFlowInfo(
+        _ hDS: DS_HANDLE,
+        flowIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, output, size in
+                functions.dsGetFlowInfo(try pointer(hDS), flowIndex, command, type, output, size)
+            }
+        }
+    }
+
+    public func DSGetNumBufferSegments(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> UInt32 {
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.dsGetNumBufferSegments(try pointer(hDS), try pointer(buffer), &count))
+            return count
+        }
+    }
+
+    public func DSGetBufferSegmentInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        segmentIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            let stream = try pointer(hDS)
+            let bufferHandle = try pointer(buffer)
+            return try readInfo { type, output, size in
+                functions.dsGetBufferSegmentInfo(
+                    stream, bufferHandle, segmentIndex, command, type, output, size
+                )
+            }
+        }
     }
 
     // MARK: Port / Register Access
