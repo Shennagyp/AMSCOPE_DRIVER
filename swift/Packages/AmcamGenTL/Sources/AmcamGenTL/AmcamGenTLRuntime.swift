@@ -306,7 +306,6 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
         // The stream condition serializes this pool transition with frame delivery.
 
-        switch operation {
         guard (0...4).contains(operation) else { throw GC_ERROR.invalidParameter }
 
         // GenTL DSFlushQueue clears stream event data before applying the queue
