@@ -208,7 +208,12 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         condition.lock()
         defer { condition.unlock() }
         guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
-        guard !buffer.isQueued, !buffer.isAcquiring else { throw GC_ERROR.resourceInUse }
+        guard !buffer.isAcquiring,
+              !inputQueue.contains(handle.rawValue) else {
+            throw GC_ERROR.resourceInUse
+        }
+        // A buffer in the output queue is still queued; DSQueueBuffer is the
+        // operation that transfers it back into the input pool.
         outputQueue.removeAll { $0 == handle.rawValue }
         removeBufferEvents(for: [handle.rawValue])
         prepareForInput(buffer)
@@ -242,7 +247,6 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             // Amcam cannot manufacture image data, so return empty buffers as incomplete.
             for raw in inputQueue {
                 guard let buffer = buffers[raw] else { continue }
-                buffer.isQueued = false
                 buffer.isIncomplete = true
                 buffer.newData = false
                 buffer.sizeFilled = 0
@@ -598,6 +602,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         inputQueue.removeFirst()
         buffer.isQueued = false
         buffer.isAcquiring = true
+        numStarted &+= 1
 
         let frameBytes = frame.bytes.count
         let (minimumBytesPerRow, rowSizeOverflow) =
@@ -655,9 +660,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         rawHandle: UInt
     ) -> Bool {
         buffer.isAcquiring = false
+        buffer.isQueued = true
         outputQueue.append(rawHandle)
         numDelivered &+= 1
-        numStarted &+= 1
         publishBufferEvent(buffer)
 
         let mustStop = finiteAcquisitionCount.map { numDelivered >= $0 } ?? false
