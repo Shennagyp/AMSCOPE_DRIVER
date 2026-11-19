@@ -27,6 +27,8 @@ Actual camera capability and compatibility still depend on the selected `.cti` P
 | Library and System | Implemented as an Amcam SDK-managed system |
 | Interface discovery | One SDK-managed interface |
 | Device discovery/open/close | Implemented; exclusive read/write open only |
+| Device serial number | Not reported; SDK enumeration ID is opaque and is not assumed to be a serial number |
+| Device timestamp clock | 1 MHz when Amcam FrameInfoV2 timestamps are available; timestamps are microseconds |
 | Device access status | Unknown before this backend opens the camera; open-read/write while owned |
 | Data Stream | One stream per open camera |
 | Buffer announcement/allocation | Implemented |
