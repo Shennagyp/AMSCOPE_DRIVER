@@ -1283,25 +1283,44 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     }
 
     public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
-        // Do not hold the global API lock while waiting. EventKill must be able
-        // to enter the producer concurrently to wake an infinite-timeout read.
+        // EventGetData(pBuffer: nil) discards the queued event under GenTL 1.6.
+        // Query the maximum size through EventGetInfo instead, then perform one
+        // real data retrieval. Do not hold the API lock while waiting: EventKill
+        // must be able to interrupt an infinite-timeout read.
         let eventPointer = try beginEventDataRead(event)
         defer { endEventDataRead(event.rawValue) }
 
-        var size = 0
-        let query = functions.eventGetData(eventPointer, nil, &size, timeout)
-        try checkInfoSizeQuery(query, size: size)
-        if size == 0 {
-            return Data()
+        let maximumSize = try withLock {
+            let registeredPointer = try registeredEventPointer(event)
+            let value = try readInfo { type, buffer, size in
+                functions.eventGetInfo(
+                    registeredPointer,
+                    GenTLInfoCommand.Event.maxSize.rawValue,
+                    type,
+                    buffer,
+                    size
+                )
+            }
+
+            guard case .uint64(let value) = value,
+                  value <= UInt64(64 * 1024 * 1024) else {
+                throw GC_ERROR.invalidValue
+            }
+            return Int(value)
         }
 
-        var data = Data(count: size)
-        var actualSize = size
+        // Even an event type with an empty payload needs a non-NULL buffer:
+        // NULL means discard, not "deliver an empty event".
+        let allocationSize = max(1, maximumSize)
+        var data = Data(count: allocationSize)
+        var actualSize = allocationSize
         let result = data.withUnsafeMutableBytes { output in
             functions.eventGetData(eventPointer, output.baseAddress, &actualSize, timeout)
         }
         try check(result)
-        guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+        guard actualSize >= 0, actualSize <= allocationSize else {
+            throw GC_ERROR.invalidValue
+        }
         data.count = actualSize
         return data
     }
