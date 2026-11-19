@@ -212,6 +212,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
     }
 
     public func stop() throws {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+
         lock.lock()
         let hasPullMode = streaming || callbackContext != nil
         lock.unlock()
