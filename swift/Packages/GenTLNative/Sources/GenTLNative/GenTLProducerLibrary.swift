@@ -8,6 +8,7 @@ public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
     case loadFailed(path: String, reason: String)
     case missingRequiredSymbol(String)
     case symbolNotFound(String)
+    case unsupportedABI
 
     public var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
             return "The selected CTI library is missing required GenTL entry point '\(symbol)'."
         case .symbolNotFound(let symbol):
             return "GenTL Producer does not export symbol '\(symbol)'."
+        case .unsupportedABI:
+            return "The current process architecture does not match the GenTL 1.6 ABI layouts compiled into this consumer."
         }
     }
 }
@@ -43,6 +46,10 @@ public final class GenTLProducerLibrary: @unchecked Sendable {
     private let lock = NSLock()
 
     public init(url: URL) throws {
+        guard GenTLABI_LayoutValid() == 1 else {
+            throw GenTLProducerLibraryError.unsupportedABI
+        }
+
         let standardizedURL = url.standardizedFileURL
         let path = standardizedURL.path
 
