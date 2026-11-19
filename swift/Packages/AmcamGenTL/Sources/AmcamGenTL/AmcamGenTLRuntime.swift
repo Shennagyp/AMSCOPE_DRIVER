@@ -588,7 +588,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 7: return .size(payloadSize)
         case 8: return .bool8(isGrabbing)
         case 9: return .bool8(true)
-        case 10: return .string("AMCAM")
+        case 10: return .string("Custom")
         case 11: return .size(0) // Amcam does not expose chunk payloads.
         case 12: return .size(1) // Minimum announced buffers: one.
         case 13: return .size(1) // Byte alignment.
@@ -610,7 +610,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 5: return .bool8(buffer.isQueued)
         case 6: return .bool8(buffer.isAcquiring)
         case 7: return .bool8(buffer.isIncomplete)
-        case 8: return .string("AMCAM")
+        case 8: return .string("Custom")
         case 9: return .size(buffer.sizeFilled)
         case 10: return .size(buffer.width)
         case 11: return .size(buffer.height)
