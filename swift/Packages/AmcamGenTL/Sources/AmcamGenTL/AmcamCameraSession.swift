@@ -60,6 +60,14 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return resolutions.first { $0.index == currentResolutionIndex }
     }
 
+    public func currentDimensions() -> (width: Int, height: Int) {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
+        return (width, height)
+    }
+
     public func supportsResolutionChange() -> Bool {
         sdk.resolutionChangeAvailable
     }
@@ -70,7 +78,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         defer { controlLock.unlock() }
 
         lock.lock()
-        guard !starting, !stopping, !streaming, let activeHandle = handle else {
+        guard !starting, !stopping, !streaming, callbackContext == nil,
+              let activeHandle = handle else {
             let isClosed = handle == nil
             lock.unlock()
             throw isClosed
@@ -144,72 +153,71 @@ public final class AmcamCameraSession: @unchecked Sendable {
         lock.unlock()
     }
 
-    public func stop() throws {
+    /// Stops pull mode and releases the SDK callback context if one is registered.
+    /// This also cleans up a callback after a fatal/disconnect event has already
+    /// changed streaming to false but the SDK still owns the callback pointer.
+    func stopIfNeeded() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
-        lock.lock()
-        guard !starting, !stopping else { lock.unlock(); throw AmcamCameraError.transitionInProgress }
-        guard let handle else { lock.unlock(); throw AmcamCameraError.sessionClosed }
-        guard streaming else { lock.unlock(); throw AmcamCameraError.notStreaming }
 
-        // Mark delivery inactive before entering the SDK. Never hold the session lock
-        // across Amcam_Stop because the SDK may be waiting for an event callback to return.
+        lock.lock()
+        guard !starting, !stopping else {
+            lock.unlock()
+            throw AmcamCameraError.transitionInProgress
+        }
+        guard let handle else {
+            let hasCallback = callbackContext != nil
+            lock.unlock()
+            if hasCallback { throw AmcamCameraError.sessionClosed }
+            return
+        }
+        guard callbackContext != nil else {
+            streaming = false
+            lock.unlock()
+            return
+        }
+
+        let wasStreaming = streaming
         streaming = false
         stopping = true
         lock.unlock()
 
+        // Never hold the session lock across Amcam_Stop because the SDK may be
+        // waiting for an event callback to return.
         let result = sdk.stop(handle)
 
         lock.lock()
         stopping = false
         guard result >= 0 else {
-            streaming = true
+            streaming = wasStreaming
             lock.unlock()
             throw AmcamCameraError.streamStopFailed(result)
         }
 
-        frameHandler = nil
         let context = callbackContext
         callbackContext = nil
+        frameHandler = nil
         buffer?.deallocate()
         buffer = nil
         bufferCapacity = 0
         lock.unlock()
-        if let context { Unmanaged<AmcamCallbackContext>.fromOpaque(context).release() }
+        if let context {
+            Unmanaged<AmcamCallbackContext>.fromOpaque(context).release()
+        }
+    }
+
+    public func stop() throws {
+        lock.lock()
+        let hasPullMode = streaming || callbackContext != nil
+        lock.unlock()
+        guard hasPullMode else { throw AmcamCameraError.notStreaming }
+        try stopIfNeeded()
     }
 
     public func close() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
-        lock.lock()
-        guard !starting, !stopping else { lock.unlock(); throw AmcamCameraError.transitionInProgress }
-        let isStreaming = streaming
-        let needsCallbackCleanup = callbackContext != nil
-        lock.unlock()
-
-        if isStreaming {
-            try stop()
-        } else if needsCallbackCleanup {
-            // A disconnect/error event may end delivery while the SDK still owns the callback.
-            lock.lock()
-            guard !stopping, let handle else { lock.unlock(); throw AmcamCameraError.transitionInProgress }
-            stopping = true
-            lock.unlock()
-
-            let result = sdk.stop(handle)
-
-            lock.lock()
-            stopping = false
-            guard result >= 0 else { lock.unlock(); throw AmcamCameraError.streamStopFailed(result) }
-            let context = callbackContext
-            callbackContext = nil
-            frameHandler = nil
-            buffer?.deallocate()
-            buffer = nil
-            bufferCapacity = 0
-            lock.unlock()
-            if let context { Unmanaged<AmcamCallbackContext>.fromOpaque(context).release() }
-        }
+        try stopIfNeeded()
 
         lock.lock()
         guard let handle else { lock.unlock(); return }
