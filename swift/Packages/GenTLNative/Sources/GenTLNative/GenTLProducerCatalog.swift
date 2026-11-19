@@ -55,7 +55,7 @@ public enum GenTLProducerCatalog {
 
         var seenPaths = Set<String>()
         let normalizedPaths = requestedPaths.compactMap { url -> URL? in
-            let normalized = url.standardizedFileURL
+            let normalized = url.standardizedFileURL.resolvingSymlinksInPath()
             guard seenPaths.insert(normalized.path).inserted else { return nil }
             return normalized
         }
@@ -107,7 +107,7 @@ public enum GenTLProducerCatalog {
                     let values = try child.resourceValues(forKeys: [.isRegularFileKey])
                     guard values.isRegularFile == true else { continue }
 
-                    let normalized = child.standardizedFileURL
+                    let normalized = child.standardizedFileURL.resolvingSymlinksInPath()
                     producersByPath[normalized.path] = normalized
                 }
             } catch {
