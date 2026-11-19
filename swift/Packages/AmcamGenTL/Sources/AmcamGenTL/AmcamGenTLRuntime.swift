@@ -90,22 +90,14 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         self.session = session
 
         let dimensions = session.currentDimensions()
-        let (pixels, pixelOverflow) =
-            dimensions.width.multipliedReportingOverflow(by: dimensions.height)
-        let (payloadBytes, payloadOverflow) = pixels.multipliedReportingOverflow(by: 3)
-        let (sdkBytes, sdkOverflow) = pixels.multipliedReportingOverflow(by: 4)
-
-        guard dimensions.width > 0,
-              dimensions.height > 0,
-              !pixelOverflow,
-              !payloadOverflow,
-              !sdkOverflow,
-              payloadBytes > 0,
-              sdkBytes <= 512 * 1024 * 1024 else {
+        guard let layout = AmcamRGB24Layout(
+            width: dimensions.width,
+            height: dimensions.height
+        ), layout.payloadSize <= 512 * 1024 * 1024 else {
             throw GC_ERROR.resourceExhausted
         }
 
-        payloadSize = payloadBytes
+        payloadSize = layout.payloadSize
     }
 
     func addEvent(_ event: AmcamEventRecord) {
@@ -769,20 +761,12 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         numStarted &+= 1
 
         let frameBytes = frame.bytes.count
-        let (minimumBytesPerRow, rowSizeOverflow) =
-            frame.width.multipliedReportingOverflow(by: 3)
-        let (minimumImageBytes, imageSizeOverflow) =
-            frame.bytesPerRow.multipliedReportingOverflow(by: frame.height)
-
-        let geometryIsValid =
-            frame.width > 0 &&
-            frame.height > 0 &&
-            !rowSizeOverflow &&
-            !imageSizeOverflow &&
-            frame.bytesPerRow >= minimumBytesPerRow &&
-            minimumImageBytes >= 0
-        let payloadIsComplete = geometryIsValid && frameBytes >= minimumImageBytes
-        let expectedDataSize = geometryIsValid ? minimumImageBytes : frameBytes
+        let layout = AmcamRGB24Layout(width: frame.width, height: frame.height)
+        let geometryIsValid = layout.map {
+            frame.bytesPerRow == $0.bytesPerRow
+        } ?? false
+        let payloadIsComplete = geometryIsValid && layout?.payloadSize == frameBytes
+        let expectedDataSize = layout?.payloadSize ?? frameBytes
 
         buffer.dataLargerThanBuffer = expectedDataSize > buffer.size
         buffer.width = geometryIsValid ? frame.width : 0
