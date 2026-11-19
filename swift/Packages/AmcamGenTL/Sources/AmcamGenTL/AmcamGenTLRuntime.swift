@@ -47,7 +47,8 @@ final class AmcamEventRecord: @unchecked Sendable {
 
     private let condition = NSCondition()
     private var dataQueue: [Data] = []
-    private var killed = false
+    private var pendingAbortCount = 0
+    private var unregistered = false
     private var firedCount: UInt64 = 0
 
     init(handle: EVENT_HANDLE, eventType: Int32, source: EVENTSRC_HANDLE) {
@@ -59,7 +60,7 @@ final class AmcamEventRecord: @unchecked Sendable {
     func publish(_ data: Data) {
         condition.lock()
         defer { condition.unlock() }
-        guard !killed else { return }
+        guard !unregistered else { return }
         dataQueue.append(data)
         firedCount &+= 1
         condition.broadcast()
@@ -69,22 +70,35 @@ final class AmcamEventRecord: @unchecked Sendable {
         condition.lock()
         defer { condition.unlock() }
 
+        if pendingAbortCount > 0 {
+            pendingAbortCount -= 1
+            throw GC_ERROR.abort
+        }
+        guard !unregistered else { throw GC_ERROR.abort }
+
         if timeoutMilliseconds == GenTLConstants.infiniteTimeout {
-            while dataQueue.isEmpty && !killed {
+            while dataQueue.isEmpty && pendingAbortCount == 0 && !unregistered {
                 condition.wait()
             }
         } else {
             let deadline = Date(
                 timeIntervalSinceNow: Double(timeoutMilliseconds) / 1_000.0
             )
-            while dataQueue.isEmpty && !killed {
-                if !condition.wait(until: deadline) {
+            while dataQueue.isEmpty && pendingAbortCount == 0 && !unregistered {
+                if !condition.wait(until: deadline),
+                   dataQueue.isEmpty,
+                   pendingAbortCount == 0,
+                   !unregistered {
                     throw GC_ERROR.timeout
                 }
             }
         }
 
-        guard !killed else { throw GC_ERROR.abort }
+        if pendingAbortCount > 0 {
+            pendingAbortCount -= 1
+            throw GC_ERROR.abort
+        }
+        guard !unregistered else { throw GC_ERROR.abort }
         guard !dataQueue.isEmpty else { throw GC_ERROR.noData }
         return dataQueue.removeFirst()
     }
@@ -112,9 +126,20 @@ final class AmcamEventRecord: @unchecked Sendable {
         condition.broadcast()
     }
 
-    func kill() {
+    /// EventKill aborts one EventGetData call. The abort remains pending if
+    /// no reader is currently waiting, and queued event data remains intact.
+    func abortOneRead() {
         condition.lock()
-        killed = true
+        pendingAbortCount += 1
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    /// Unregistration invalidates the event object and aborts every pending read.
+    func unregister() {
+        condition.lock()
+        unregistered = true
+        dataQueue.removeAll(keepingCapacity: false)
         condition.broadcast()
         condition.unlock()
     }
