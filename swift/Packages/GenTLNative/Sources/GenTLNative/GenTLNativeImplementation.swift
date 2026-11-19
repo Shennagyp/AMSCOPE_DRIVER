@@ -274,7 +274,6 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     }
 
     private var registeredEventsByHandle: [UInt: RegisteredEvent] = [:]
-    private var activeEventDataReadsByHandle: [UInt: Int] = [:]
     private var activeEventDataReads = 0
 
     public let genTLVersion = GenTLVersion.v1_6
@@ -1268,16 +1267,14 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             let matchingHandles = registeredEventsByHandle.compactMap { handle, record in
                 record.source == source && record.eventType == eventType ? handle : nil
             }
-            guard matchingHandles.allSatisfy({
-                activeEventDataReadsByHandle[$0, default: 0] == 0
-            }) else {
-                throw GC_ERROR.resourceInUse
-            }
 
+            // GenTL 1.6 requires GCUnregisterEvent to abort any EventGetData
+            // calls waiting on this event. The Producer coordinates that abort
+            // with its event-handle lifetime; the consumer must not block
+            // unregistration merely because a read is active.
             try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
             for handle in matchingHandles {
                 registeredEventsByHandle.removeValue(forKey: handle)
-                activeEventDataReadsByHandle.removeValue(forKey: handle)
             }
         }
     }
@@ -1288,7 +1285,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         // real data retrieval. Do not hold the API lock while waiting: EventKill
         // must be able to interrupt an infinite-timeout read.
         let eventPointer = try beginEventDataRead(event)
-        defer { endEventDataRead(event.rawValue) }
+        defer { endEventDataRead() }
 
         let maximumSize = try withLock {
             let registeredPointer = try registeredEventPointer(event)
@@ -1379,20 +1376,13 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         try requireInitialized()
         let eventPointer = try registeredEventPointer(event)
         activeEventDataReads += 1
-        activeEventDataReadsByHandle[event.rawValue, default: 0] += 1
         return eventPointer
     }
 
-    private func endEventDataRead(_ eventHandle: UInt) {
+    private func endEventDataRead() {
         lock.lock()
         defer { lock.unlock() }
         activeEventDataReads = max(0, activeEventDataReads - 1)
-        let current = activeEventDataReadsByHandle[eventHandle, default: 0]
-        if current <= 1 {
-            activeEventDataReadsByHandle.removeValue(forKey: eventHandle)
-        } else {
-            activeEventDataReadsByHandle[eventHandle] = current - 1
-        }
     }
 
     private func registeredEventPointer(_ event: EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
