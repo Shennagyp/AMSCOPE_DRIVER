@@ -7,7 +7,8 @@ The public Swift API follows the EMVA GenTL 1.6 function model and module bounda
 - Interface
 - Device
 - Data Stream and Buffer
-- Port
+- Port (including GenTL 1.1 stacked register operations)
+- Data Stream extensions (chunk, multipart, stacked buffer info, flows and segments)
 - Signaling / Events
 
 This is the sole application-facing camera API. It is not a second vendor-neutral abstraction.
