@@ -75,7 +75,7 @@ public enum GenTLConstants {
 
 /// Typed representation of the opaque void* handles defined by GenTL.
 /// The raw value is an opaque token; callers must not infer object identity from it.
-public struct GenTLHandle<Tag: Sendable>: Hashable, Sendable {
+public struct GenTLHandle<Tag: Hashable & Sendable>: Hashable, Sendable {
     public let rawValue: UInt
 
     public init(rawValue: UInt) {
@@ -85,13 +85,13 @@ public struct GenTLHandle<Tag: Sendable>: Hashable, Sendable {
     public var isValid: Bool { rawValue != GenTLConstants.invalidHandle }
 }
 
-public enum TLModule: Sendable {}
-public enum IFModule: Sendable {}
-public enum DEVModule: Sendable {}
-public enum DSModule: Sendable {}
-public enum PORTModule: Sendable {}
-public enum BUFFERModule: Sendable {}
-public enum EVENTModule: Sendable {}
+public enum TLModule: Hashable, Sendable {}
+public enum IFModule: Hashable, Sendable {}
+public enum DEVModule: Hashable, Sendable {}
+public enum DSModule: Hashable, Sendable {}
+public enum PORTModule: Hashable, Sendable {}
+public enum BUFFERModule: Hashable, Sendable {}
+public enum EVENTModule: Hashable, Sendable {}
 
 public typealias TL_HANDLE = GenTLHandle<TLModule>
 public typealias IF_HANDLE = GenTLHandle<IFModule>
