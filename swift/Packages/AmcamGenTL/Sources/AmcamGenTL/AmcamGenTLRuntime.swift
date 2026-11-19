@@ -296,6 +296,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
     func stop() throws {
         condition.lock()
+        while finiteStopScheduled {
+            condition.wait()
+        }
         guard isGrabbing else {
             condition.unlock()
             throw GC_ERROR.notAvailable
@@ -310,6 +313,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
         condition.lock()
         isGrabbing = false
+        finiteAcquisitionCount = nil
         for raw in inputQueue {
             buffers[raw]?.isAcquiring = false
         }
@@ -421,7 +425,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
     private func receive(_ frame: AmcamFrame) {
         condition.lock()
-        guard isGrabbing else {
+        guard isGrabbing, !finiteStopScheduled else {
             condition.unlock()
             return
         }
@@ -473,7 +477,6 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         let mustStop = finiteAcquisitionCount.map { numDelivered >= $0 } ?? false
         if mustStop && !finiteStopScheduled {
             finiteStopScheduled = true
-            isGrabbing = false
         }
         condition.unlock()
 
@@ -488,6 +491,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         do {
             try session.stop()
             condition.lock()
+            isGrabbing = false
             finiteAcquisitionCount = nil
             finiteStopScheduled = false
             condition.broadcast()
@@ -495,8 +499,11 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         } catch {
             publishErrorEvent()
             condition.lock()
+            // Keep isGrabbing true after a failed stop: the native session may
+            // still own callbacks and buffers, so close must remain blocked.
             finiteAcquisitionCount = nil
             finiteStopScheduled = false
+            condition.broadcast()
             condition.unlock()
         }
     }
