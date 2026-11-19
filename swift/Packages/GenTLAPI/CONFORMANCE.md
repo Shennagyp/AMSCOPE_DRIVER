@@ -1,0 +1,60 @@
+# GenTL API conformance and backend coverage
+
+This document describes the current behavior of the two implementations of the shared Swift `GenTLAPI` contract. It is an implementation-status record, not a claim that either backend is a certified GenTL implementation.
+
+## Shared API surface
+
+The public Swift protocol follows the GenTL 1.6 function groups and uses typed opaque handles, Swift values and `throws` for GenTL errors. The function names and module boundaries are GenTL-shaped; the Swift protocol is not a C ABI and is not a GenTL Producer.
+
+## GenTLNative
+
+`GenTLNativeImplementation` forwards the GenTL function calls to a manufacturer-supplied `.cti` Producer.
+
+- GenTL 1.0/base functions are resolved as required entry points.
+- Functions introduced by later GenTL revisions are resolved when exported by the Producer.
+- An absent optional function returns `GC_ERR_NOT_IMPLEMENTED`.
+- Producer handles remain opaque; this implementation does not synthesize handle IDs.
+- The pinned GenTL 1.6 header is compiled into the ABI target, with layout checks for the packed GenTL structures used by this consumer.
+
+Actual camera capability and compatibility still depend on the selected `.cti` Producer, its macOS architecture and its implementation of the standard.
+
+## AmcamGenTL
+
+`AmcamGenTLImplementation` maps the supported GenTL function behavior to the Amcam SDK. It does not create an AmScope `.cti` file.
+
+| GenTL module / capability | Current Amcam behavior |
+|---|---|
+| Library and System | Implemented as an Amcam SDK-managed system |
+| Interface discovery | One SDK-managed interface |
+| Device discovery/open/close | Implemented; exclusive read/write open only |
+| Device access status | Unknown before this backend opens the camera; open-read/write while owned |
+| Data Stream | One stream per open camera |
+| Buffer announcement/allocation | Implemented |
+| Queue, flush and acquisition | Implemented for supported default start/stop semantics |
+| Buffer metadata | Contiguous RGB8 image metadata |
+| Data Stream events | New-buffer and error events |
+| Physical port/register access | Not implemented |
+| GenApi XML URL access | Not implemented |
+| Chunk data | Not available from the Amcam pull-image path |
+| Multipart payload | One 2D image part when a complete image has been delivered; otherwise zero parts |
+| Composite buffer announcement | Not implemented |
+| Flow table | No flows exposed |
+| Buffer segments | One contiguous memory segment |
+
+Unsupported operations return a GenTL error rather than fabricated register or feature behavior.
+
+## Important GenApi boundary
+
+GenTL provides transport discovery, module lifecycle, register-port access and streaming. GenApi interprets a camera's XML feature description and maps features to the GenTL port.
+
+The current Amcam SDK integration exposes feature getters and setters, but this implementation has not established a documented Amcam remote register map or GenApi XML port. Therefore, the current Amcam backend supports acquisition and its implemented module operations, but it does **not** yet expose exposure/gain/etc. through the standard GenApi feature-node path.
+
+That is a separate integration milestone. It must be implemented using a verified feature description and SDK mapping; it must not pretend that arbitrary Amcam registers exist.
+
+## Semantic constraints
+
+- A GenTL buffer remains consumer-owned or producer-owned according to how it was announced. Revocation and stream close preserve that ownership distinction.
+- An incomplete frame is still a completed buffer delivery and counts toward a finite acquisition request.
+- GenTL `BOOL8` metadata remains Boolean in the Swift value model.
+- Access modes unsupported by the Amcam SDK are rejected.
+- Event, buffer and stream handles must be released in their owning module's lifecycle order.
