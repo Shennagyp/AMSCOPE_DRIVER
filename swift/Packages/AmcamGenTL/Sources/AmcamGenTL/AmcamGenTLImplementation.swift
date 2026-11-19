@@ -657,6 +657,11 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         guard case .dataStream(let streamHandle) = source else {
             throw GC_ERROR.notAvailable
         }
+        guard !events.values.contains(where: {
+            $0.source == source && $0.eventType == type
+        }) else {
+            throw GC_ERROR.resourceInUse
+        }
 
         let stream = try streamRecord(streamHandle)
         let eventHandle = EVENT_HANDLE(rawValue: allocateHandle())
