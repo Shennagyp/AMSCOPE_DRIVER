@@ -103,7 +103,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 8: return .int32(1) // UTF-8
         case 9: return .uint32(1) // TL_INFO_GENTL_VER_MAJOR
         case 10: return .uint32(6) // TL_INFO_GENTL_VER_MINOR
-        default: throw GC_ERROR.invalidParameter
+        default: try fail(.invalidParameter)
         }
     }
 
@@ -154,7 +154,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireSystem(hTL)
-        guard index == 0 else { throw GC_ERROR.invalidIndex }
+        guard index == 0 else { try fail(.invalidIndex) }
         return "amcam-sdk-interface"
     }
 
@@ -166,12 +166,12 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireSystem(hTL)
-        guard interfaceID == "amcam-sdk-interface" else { throw GC_ERROR.invalidID }
+        guard interfaceID == "amcam-sdk-interface" else { try fail(.invalidID) }
         switch command {
         case 0: return .string(interfaceID)
         case 1: return .string("Amcam SDK managed interface")
         case 2: return .string("Custom")
-        default: throw GC_ERROR.invalidParameter
+        default: try fail(.invalidParameter)
         }
     }
 
@@ -188,7 +188,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireSystem(hTL)
-        guard interfaceID == "amcam-sdk-interface" else { throw GC_ERROR.invalidID }
+        guard interfaceID == "amcam-sdk-interface" else { try fail(.invalidID) }
         guard !interfaceOpen else { try fail(.resourceInUse, "The Amcam interface is already open.") }
         interfaceOpen = true
         return interfaceHandle
@@ -217,7 +217,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 0: return .string("amcam-sdk-interface")
         case 1: return .string("Amcam SDK managed interface")
         case 2: return .string("Custom")
-        default: throw GC_ERROR.invalidParameter
+        default: try fail(.invalidParameter)
         }
     }
 
@@ -225,7 +225,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInterface(hIF)
-        guard let driver else { throw GC_ERROR.notInitialized }
+        guard let driver else { try fail(.notInitialized) }
 
         let previousIDs = Set(discoveredDevices.map(\.identifier))
         do {
@@ -243,7 +243,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInterface(hIF)
-        guard discoveredDevices.count <= Int(UInt32.max) else { throw GC_ERROR.resourceExhausted }
+        guard discoveredDevices.count <= Int(UInt32.max) else { try fail(.resourceExhausted) }
         return UInt32(discoveredDevices.count)
     }
 
@@ -251,7 +251,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInterface(hIF)
-        guard Int(index) < discoveredDevices.count else { throw GC_ERROR.invalidIndex }
+        guard Int(index) < discoveredDevices.count else { try fail(.invalidIndex) }
         return discoveredDevices[Int(index)].identifier
     }
 
@@ -264,7 +264,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
         try requireInterface(hIF)
         guard let device = discoveredDevices.first(where: { $0.identifier == deviceID }) else {
-            throw GC_ERROR.invalidID
+            try fail(.invalidID)
         }
         return try deviceInfo(device, command: command, isOpen: openDevices.values.contains { $0.device.identifier == deviceID })
     }
@@ -301,12 +301,12 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
 
         guard let device = discoveredDevices.first(where: { $0.identifier == deviceID }) else {
-            throw GC_ERROR.invalidID
+            try fail(.invalidID)
         }
         guard openDevices.values.allSatisfy({ $0.device.identifier != deviceID }) else {
             try fail(.resourceInUse, "The Amcam device is already open through this implementation.")
         }
-        guard let driver else { throw GC_ERROR.notInitialized }
+        guard let driver else { try fail(.notInitialized) }
 
         do {
             let session = try driver.open(deviceIdentifier: deviceID)
@@ -353,7 +353,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         _ = try deviceRecord(hDevice)
-        guard index == 0 else { throw GC_ERROR.invalidIndex }
+        guard index == 0 else { try fail(.invalidIndex) }
         return "0"
     }
 
@@ -361,8 +361,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let record = try deviceRecord(hDevice)
-        guard dataStreamID == "0" else { throw GC_ERROR.invalidID }
-        guard record.dataStreamHandle == nil else { throw GC_ERROR.resourceInUse }
+        guard dataStreamID == "0" else { try fail(.invalidID) }
+        guard record.dataStreamHandle == nil else { try fail(.resourceInUse) }
 
         let handle = DS_HANDLE(rawValue: allocateHandle())
         let stream = try AmcamDataStreamRecord(
@@ -434,7 +434,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let stream = try streamRecord(hDS)
-        guard size > 0, size <= 1_073_741_824 else { throw GC_ERROR.invalidParameter }
+        guard size > 0, size <= 1_073_741_824 else { try fail(.invalidParameter) }
 
         let pointer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
         pointer.initializeMemory(as: UInt8.self, repeating: 0, count: size)
@@ -473,7 +473,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws {
         lock.lock()
         defer { lock.unlock() }
-        guard flags == 0 else { throw GC_ERROR.notImplemented }
+        guard flags == 0 else { try fail(.notImplemented) }
         try streamRecord(hDS).start(numberToAcquire: numberToAcquire)
     }
 
@@ -482,7 +482,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
         // Amcam_Stop provides the SDK's orderly stop operation. It does not
         // expose a distinct immediate-kill semantic.
-        guard flags == 0 else { throw GC_ERROR.notImplemented }
+        guard flags == 0 else { try fail(.notImplemented) }
         try streamRecord(hDS).stop()
     }
 
@@ -554,7 +554,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         _ = try streamRecord(hDS)
         // The Amcam pull API returns a plain RGB image buffer; no chunk payload
         // is exposed by the SDK wrapper.
-        throw GC_ERROR.notAvailable
+        try fail(.notAvailable)
     }
 
     public func DSGetNumBufferParts(
@@ -574,7 +574,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> GenTLInfoValue {
         lock.lock()
         defer { lock.unlock() }
-        guard partIndex == 0 else { throw GC_ERROR.invalidIndex }
+        guard partIndex == 0 else { try fail(.invalidIndex) }
         return try streamRecord(hDS).bufferPartInfo(buffer, command: command)
     }
 
@@ -588,7 +588,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         _ = try streamRecord(hDS)
         // Amcam_PullImageV2 produces one contiguous RGB frame. It has no
         // segmented transport payload to announce as a composite buffer.
-        throw GC_ERROR.notImplemented
+        try fail(.notImplemented)
     }
 
     public func DSGetBufferInfoStacked(
@@ -626,7 +626,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         _ = try streamRecord(hDS)
-        throw GC_ERROR.invalidIndex
+        try fail(.invalidIndex)
     }
 
     public func DSGetNumBufferSegments(
@@ -646,7 +646,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> GenTLInfoValue {
         lock.lock()
         defer { lock.unlock() }
-        guard segmentIndex == 0 else { throw GC_ERROR.invalidIndex }
+        guard segmentIndex == 0 else { try fail(.invalidIndex) }
         return try streamRecord(hDS).bufferSegmentInfo(buffer, command: command)
     }
 
@@ -661,20 +661,20 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
 
         let type = eventType
         guard GenTLEventType(rawValue: type) != nil else {
-            throw GC_ERROR.invalidParameter
+            try fail(.invalidParameter)
         }
         guard type == GenTLEventType.newBuffer.rawValue ||
               type == GenTLEventType.error.rawValue else {
-            throw GC_ERROR.notImplemented
+            try fail(.notImplemented)
         }
 
         guard case .dataStream(let streamHandle) = source else {
-            throw GC_ERROR.notImplemented
+            try fail(.notImplemented)
         }
         guard !events.values.contains(where: {
             $0.source == source && $0.eventType == type
         }) else {
-            throw GC_ERROR.resourceInUse
+            try fail(.resourceInUse)
         }
 
         let stream = try streamRecord(streamHandle)
@@ -696,12 +696,12 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         guard let match = events.first(where: {
             $0.value.source == source && $0.value.eventType == type
         }) else {
-            throw GC_ERROR.invalidHandle
+            try fail(.invalidHandle)
         }
 
         guard case .dataStream(let streamHandle) = source,
               let stream = dataStreams[streamHandle.rawValue] else {
-            throw GC_ERROR.invalidHandle
+            try fail(.invalidHandle)
         }
         stream.unregisterEvent(match.value)
         events.removeValue(forKey: match.key)
@@ -718,7 +718,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
         lock.unlock()
 
-        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        guard let record, let stream else { try fail(.invalidHandle) }
         return try stream.nextEventData(record, timeoutMilliseconds: timeout)
     }
 
@@ -730,13 +730,13 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         let isRegistered = events[event.rawValue] != nil
         lock.unlock()
-        guard isRegistered else { throw GC_ERROR.invalidHandle }
+        guard isRegistered else { try fail(.invalidHandle) }
 
         // The Amcam callback API does not define GenTL event IDs or a stable
         // transport-specific EventGetDataInfo schema. Do not synthesize one.
         _ = inputData
         _ = command
-        throw GC_ERROR.notImplemented
+        try fail(.notImplemented)
     }
 
     public func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
@@ -750,7 +750,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
         lock.unlock()
 
-        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        guard let record, let stream else { try fail(.invalidHandle) }
         return try stream.eventInfo(record, command: command)
     }
 
@@ -765,7 +765,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
         lock.unlock()
 
-        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        guard let record, let stream else { try fail(.invalidHandle) }
         try stream.flushEvent(record)
     }
 
@@ -780,7 +780,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
         lock.unlock()
 
-        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        guard let record, let stream else { try fail(.invalidHandle) }
         try stream.abortOneEventRead(record)
     }
 
@@ -808,10 +808,10 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         // Report UNKNOWN until this backend owns the camera; do not claim it is
         // available for read/write merely because it was discoverable.
         case 5: return .int32(isOpen ? 5 : 0) // OPEN_READWRITE / UNKNOWN
-        case 6: throw GC_ERROR.notAvailable
-        case 7: throw GC_ERROR.notAvailable // SDK ID is opaque, not a verified serial number.
+        case 6: try fail(.notAvailable)
+        case 7: try fail(.notAvailable) // SDK ID is opaque, not a verified serial number.
         case 9: return .uint64(1_000_000) // Amcam FrameInfoV2 timestamps are microseconds.
-        default: throw GC_ERROR.notAvailable
+        default: try fail(.notAvailable)
         }
     }
 
@@ -822,28 +822,28 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     }
 
     private func requireInitialized() throws {
-        guard initialized, driver != nil else { throw GC_ERROR.notInitialized }
+        guard initialized, driver != nil else { try fail(.notInitialized) }
     }
 
     private func requireSystem(_ handle: TL_HANDLE) throws {
         try requireInitialized()
-        guard systemOpen, handle == systemHandle else { throw GC_ERROR.invalidHandle }
+        guard systemOpen, handle == systemHandle else { try fail(.invalidHandle) }
     }
 
     private func requireInterface(_ handle: IF_HANDLE) throws {
         try requireSystem(systemHandle)
-        guard interfaceOpen, handle == interfaceHandle else { throw GC_ERROR.invalidHandle }
+        guard interfaceOpen, handle == interfaceHandle else { try fail(.invalidHandle) }
     }
 
     private func deviceRecord(_ handle: DEV_HANDLE) throws -> AmcamOpenDeviceRecord {
         try requireInterface(interfaceHandle)
-        guard let record = openDevices[handle.rawValue] else { throw GC_ERROR.invalidHandle }
+        guard let record = openDevices[handle.rawValue] else { try fail(.invalidHandle) }
         return record
     }
 
     private func streamRecord(_ handle: DS_HANDLE) throws -> AmcamDataStreamRecord {
         try requireInterface(interfaceHandle)
-        guard let record = dataStreams[handle.rawValue] else { throw GC_ERROR.invalidHandle }
+        guard let record = dataStreams[handle.rawValue] else { try fail(.invalidHandle) }
         return record
     }
 
@@ -854,8 +854,25 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         )
     }
 
-    private func fail(_ code: GC_ERROR, _ message: String) throws -> Never {
-        setLastError(code, message: message)
+    private func fail(
+        _ code: GC_ERROR,
+        _ message: String? = nil
+    ) throws -> Never {
+        setLastError(code, message: message ?? String(describing: code))
         throw code
+    }
+
+    /// Records errors propagated from the stream/session runtime at the public
+    /// GenTL API boundary, preserving the returned GenTL error code.
+    private func recordErrors<T>(_ operation: () throws -> T) throws -> T {
+        do {
+            return try operation()
+        } catch let code as GC_ERROR {
+            setLastError(code, message: String(describing: code))
+            throw code
+        } catch {
+            setLastError(.error, message: error.localizedDescription)
+            throw error
+        }
     }
 }
