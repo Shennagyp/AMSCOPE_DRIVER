@@ -320,6 +320,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
             portOwners[portHandle.rawValue] = deviceHandle
             return deviceHandle
         } catch let error as GC_ERROR {
+            setLastError(error, message: String(describing: error))
             throw error
         } catch {
             try fail(.accessDenied, error.localizedDescription)
@@ -557,7 +558,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> [GenTLChunkData] {
         lock.lock()
         defer { lock.unlock() }
-        _ = try streamRecord(hDS)
+        let stream = try streamRecord(hDS)
+        _ = try recordErrors { try stream.buffer(buffer) }
         // The Amcam pull API returns a plain RGB image buffer; no chunk payload
         // is exposed by the SDK wrapper.
         try fail(.notAvailable)
@@ -698,6 +700,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let type = eventType
+        guard GenTLEventType(rawValue: type) != nil else {
+            try fail(.invalidParameter)
+        }
 
         guard let match = events.first(where: {
             $0.value.source == source && $0.value.eventType == type
@@ -741,7 +746,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         // The Amcam callback API does not define GenTL event IDs or a stable
         // transport-specific EventGetDataInfo schema. Do not synthesize one.
         _ = inputData
-        _ = command
+        guard GenTLInfoCommand.EventData(rawValue: command) != nil else {
+            try fail(.invalidParameter)
+        }
         try fail(.notImplemented)
     }
 
@@ -790,12 +797,88 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         try recordErrors { try stream.abortOneEventRead(record) }
     }
 
-    // MARK: Unsupported physical-port mapping
+    // MARK: Port
+
+    // MARK: Port
+
+    public func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        guard size >= 0 else { try fail(.invalidParameter) }
+        try fail(.notImplemented)
+    }
+
+    public func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        try fail(.notImplemented)
+    }
+
+    public func GCGetPortURL(_ hPort: PORT_HANDLE) throws -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        // Amcam does not provide a GenApi XML URL through this SDK.
+        try fail(.notAvailable)
+    }
+
+    public func GCGetNumPortURLs(_ hPort: PORT_HANDLE) throws -> UInt32 {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        return 0
+    }
+
+    public func GCGetPortURLInfo(
+        _ hPort: PORT_HANDLE,
+        index: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        guard index == 0 else { try fail(.invalidIndex) }
+        _ = command
+        try fail(.invalidIndex)
+    }
+
+    public func GCGetPortInfo(_ hPort: PORT_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        guard GenTLInfoCommand.Port(rawValue: command) != nil else {
+            try fail(.invalidParameter)
+        }
+        try fail(.notImplemented)
+    }
+
+    public func GCReadPortStacked(
+        _ hPort: PORT_HANDLE,
+        requests: [GenTLPortReadRequest]
+    ) throws -> [Data] {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        _ = requests
+        try fail(.notImplemented)
+    }
+
+    public func GCWritePortStacked(
+        _ hPort: PORT_HANDLE,
+        requests: [GenTLPortWriteRequest]
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try requirePort(hPort)
+        _ = requests
+        try fail(.notImplemented)
+    }
 
     // Amcam exposes feature getters/setters through its SDK, not a documented
-    // remote register map or GenApi XML port. Port and GenApi URL functions
-    // intentionally return NOT_IMPLEMENTED until a verified virtual register
-    // map/XML descriptor is introduced.
+    // remote register map or GenApi XML port. Register access is intentionally
+    // NOT_IMPLEMENTED until a verified virtual register map is introduced.
 
     // MARK: Internal validation and metadata
 
@@ -816,8 +899,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 5: return .int32(isOpen ? 5 : 0) // OPEN_READWRITE / UNKNOWN
         case 6: try fail(.notAvailable)
         case 7: try fail(.notAvailable) // SDK ID is opaque, not a verified serial number.
+        case 8: try fail(.notAvailable) // SDK does not expose a camera firmware version.
         case 9: return .uint64(1_000_000) // Amcam FrameInfoV2 timestamps are microseconds.
-        default: try fail(.notAvailable)
+        default: try fail(.invalidParameter)
         }
     }
 
@@ -850,6 +934,15 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     private func streamRecord(_ handle: DS_HANDLE) throws -> AmcamDataStreamRecord {
         try requireInterface(interfaceHandle)
         guard let record = dataStreams[handle.rawValue] else { try fail(.invalidHandle) }
+        return record
+    }
+
+    private func requirePort(_ handle: PORT_HANDLE) throws -> AmcamOpenDeviceRecord {
+        try requireInterface(interfaceHandle)
+        guard let deviceHandle = portOwners[handle.rawValue],
+              let record = openDevices[deviceHandle.rawValue] else {
+            try fail(.invalidHandle)
+        }
         return record
     }
 
