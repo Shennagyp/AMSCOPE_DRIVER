@@ -63,7 +63,7 @@ public extension GenTLAPI {
     func GCGetPortInfo(_ hPort: PORT_HANDLE, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
 
     func GCRegisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws -> EVENT_HANDLE { throw GC_ERROR.notImplemented }
-    func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: UInt32) throws { throw GC_ERROR.notImplemented }
+    func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws { throw GC_ERROR.notImplemented }
     func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data { throw GC_ERROR.notImplemented }
     func EventGetDataInfo(_ event: EVENT_HANDLE, inputData: Data, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
     func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
