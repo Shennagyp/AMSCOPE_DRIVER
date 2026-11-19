@@ -355,8 +355,18 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         inputQueue.removeAll { $0 == handle.rawValue }
         outputQueue.removeAll { $0 == handle.rawValue }
 
+        // GenTL transfers consumer-allocated memory back through ppBuffer.
+        // Producer-allocated memory must be freed here and ppBuffer returned NULL.
+        let returnedMemory: UnsafeMutableRawPointer?
+        if buffer.allocatedByProvider {
+            buffer.releaseMemoryIfOwned()
+            returnedMemory = nil
+        } else {
+            returnedMemory = buffer.memory
+        }
+
         return GenTLRevokedBuffer(
-            baseAddress: buffer.memory,
+            baseAddress: returnedMemory,
             privateData: buffer.privateData
         )
     }
