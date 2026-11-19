@@ -15,6 +15,7 @@ final class AmcamBufferRecord: @unchecked Sendable {
     var dataLargerThanBuffer = false
     var sizeFilled = 0
     var dataSize = 0
+    var rowPaddingBytes = 0
     var width: Int = 0
     var height: Int = 0
     var sequence: UInt64 = 0
@@ -318,6 +319,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         buffer.dataLargerThanBuffer = false
         buffer.sizeFilled = 0
         buffer.dataSize = 0
+        buffer.rowPaddingBytes = 0
         buffer.width = 0
         buffer.height = 0
         buffer.sequence = 0
@@ -351,6 +353,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 buffer.dataLargerThanBuffer = false
                 buffer.sizeFilled = 0
                 buffer.dataSize = 0
+                buffer.rowPaddingBytes = 0
                 buffer.width = 0
                 buffer.height = 0
                 buffer.sequence = 0
@@ -621,7 +624,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 9: return .size(buffer.sizeFilled)
         case 10: return .size(buffer.width)
         case 11: return .size(buffer.height)
-        case 12, 13, 14, 15: return .size(0)
+        case 12, 13: return .size(0)
+        case 14: return .size(buffer.rowPaddingBytes) // XPadding is bytes.
+        case 15: return .size(0) // No vertical padding.
         case 16: return .uint64(buffer.sequence)
         case 17: return .bool8(buffer.sizeFilled > 0)
         case 18: return .size(0)
@@ -670,7 +675,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 4: return .uint64(4) // PFNC 32-bit namespace
         case 5: return .size(buffer.width)
         case 6: return .size(buffer.height)
-        case 7, 8, 9: return .size(0)
+        case 7, 8, 9: return .size(0) // Part XPADDING is expressed in pixels.
         case 10, 12, 13: return .uint64(0)
         case 11: return .size(buffer.height)
         default: throw GC_ERROR.invalidParameter
@@ -772,6 +777,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         buffer.width = geometryIsValid ? frame.width : 0
         buffer.height = geometryIsValid ? frame.height : 0
         buffer.dataSize = expectedDataSize
+        buffer.rowPaddingBytes = layout?.rowPaddingBytes ?? 0
         buffer.sequence = UInt64(
             frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1)
         )
