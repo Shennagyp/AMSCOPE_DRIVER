@@ -268,6 +268,10 @@ public final class GenTLRouter: @unchecked Sendable {
             do {
                 try registerNativeProducer(backendID: backendID, ctiURL: producerURL)
                 registered.append(backendID)
+            } catch GenTLRouterError.duplicateBackendID {
+                // Another concurrent discovery call registered this producer
+                // after the initial backendIDs snapshot.
+                alreadyRegistered.append(backendID)
             } catch {
                 existing.remove(backendID)
                 failures.append(
