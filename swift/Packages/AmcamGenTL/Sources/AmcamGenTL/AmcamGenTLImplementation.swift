@@ -799,12 +799,11 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
 
     // MARK: Port
 
-    // MARK: Port
-
     public func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
         lock.lock()
         defer { lock.unlock() }
         _ = try requirePort(hPort)
+        _ = address
         guard size >= 0 else { try fail(.invalidParameter) }
         try fail(.notImplemented)
     }
@@ -813,6 +812,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         _ = try requirePort(hPort)
+        _ = address
+        _ = data
         try fail(.notImplemented)
     }
 
