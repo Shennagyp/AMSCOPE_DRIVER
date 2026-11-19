@@ -508,6 +508,118 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
     }
 
+    // MARK: GenTL 1.5 / 1.6 multipart, chunk and flow metadata
+
+    public func DSGetBufferChunkData(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> [GenTLChunkData] {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try streamRecord(hDS)
+        // The Amcam pull API returns a plain RGB image buffer; no chunk payload
+        // is exposed by the SDK wrapper.
+        throw GC_ERROR.notAvailable
+    }
+
+    public func DSGetNumBufferParts(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> UInt32 {
+        lock.lock()
+        defer { lock.unlock() }
+        return try streamRecord(hDS).numberOfBufferParts(buffer)
+    }
+
+    public func DSGetBufferPartInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        partIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        lock.lock()
+        defer { lock.unlock() }
+        guard partIndex == 0 else { throw GC_ERROR.invalidIndex }
+        return try streamRecord(hDS).bufferPartInfo(buffer, command: command)
+    }
+
+    public func DSAnnounceCompositeBuffer(
+        _ hDS: DS_HANDLE,
+        segments: [GenTLCompositeBufferSegment],
+        privateData: UnsafeMutableRawPointer?
+    ) throws -> BUFFER_HANDLE {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try streamRecord(hDS)
+        // Amcam_PullImageV2 produces one contiguous RGB frame. It has no
+        // segmented transport payload to announce as a composite buffer.
+        throw GC_ERROR.notImplemented
+    }
+
+    public func DSGetBufferInfoStacked(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue] {
+        lock.lock()
+        defer { lock.unlock() }
+        return try streamRecord(hDS).bufferInfoStacked(buffer, commands: commands)
+    }
+
+    public func DSGetBufferPartInfoStacked(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        partIndex: UInt32,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue] {
+        lock.lock()
+        defer { lock.unlock() }
+        return try streamRecord(hDS).bufferPartInfoStacked(
+            buffer,
+            partIndex: partIndex,
+            commands: commands
+        )
+    }
+
+    public func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try streamRecord(hDS)
+        return 0
+    }
+
+    public func DSGetFlowInfo(
+        _ hDS: DS_HANDLE,
+        flowIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        lock.lock()
+        defer { lock.unlock() }
+        _ = try streamRecord(hDS)
+        throw GC_ERROR.invalidIndex
+    }
+
+    public func DSGetNumBufferSegments(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> UInt32 {
+        lock.lock()
+        defer { lock.unlock() }
+        return try streamRecord(hDS).bufferSegmentCount(buffer)
+    }
+
+    public func DSGetBufferSegmentInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        segmentIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        lock.lock()
+        defer { lock.unlock() }
+        guard segmentIndex == 0 else { throw GC_ERROR.invalidIndex }
+        return try streamRecord(hDS).bufferSegmentInfo(buffer, command: command)
+    }
+
     // MARK: Signaling
 
     public func GCRegisterEvent(
