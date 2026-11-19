@@ -8,6 +8,9 @@ _Static_assert(offsetof(PORT_REGISTER_STACK_ENTRY, pBuffer) == 8, "GenTL stack p
 _Static_assert(offsetof(PORT_REGISTER_STACK_ENTRY, Size) == 16, "GenTL stack Size offset mismatch");
 
 _Static_assert(sizeof(SINGLE_CHUNK_DATA) == 24, "GenTL SINGLE_CHUNK_DATA ABI mismatch");
+_Static_assert(offsetof(SINGLE_CHUNK_DATA, ChunkID) == 0, "GenTL chunk ID offset mismatch");
+_Static_assert(offsetof(SINGLE_CHUNK_DATA, ChunkOffset) == 8, "GenTL chunk offset mismatch");
+_Static_assert(offsetof(SINGLE_CHUNK_DATA, ChunkLength) == 16, "GenTL chunk length offset mismatch");
 _Static_assert(sizeof(DS_BUFFER_INFO_STACKED) == 28, "GenTL DS_BUFFER_INFO_STACKED ABI mismatch");
 _Static_assert(offsetof(DS_BUFFER_INFO_STACKED, iInfoCmd) == 0, "GenTL stacked buffer-info command offset mismatch");
 _Static_assert(offsetof(DS_BUFFER_INFO_STACKED, iType) == 4, "GenTL stacked buffer-info type offset mismatch");

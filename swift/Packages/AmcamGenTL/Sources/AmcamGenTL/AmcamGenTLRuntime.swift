@@ -382,8 +382,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 5: return .uint64(UInt64(outputQueue.count))
         case 6: return .uint64(numStarted)
         case 7: return .uint64(UInt64(payloadSize))
-        case 8: return .uint32(isGrabbing ? 1 : 0)
-        case 9: return .uint32(1)
+        case 8: return .bool8(isGrabbing)
+        case 9: return .bool8(true)
         case 10: return .string("AMCAM")
         case 12: return .uint64(1) // Minimum announced buffers: one.
         case 13: return .uint64(1) // Byte alignment.
@@ -401,17 +401,17 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 1: return .uint64(UInt64(buffer.size))
         case 2: return .pointer(buffer.privateData.map(UInt.init(bitPattern:)) ?? 0)
         case 3: return .uint64(buffer.timestampMicroseconds)
-        case 4: return .uint32(buffer.newData ? 1 : 0)
-        case 5: return .uint32(buffer.isQueued ? 1 : 0)
-        case 6: return .uint32(buffer.isAcquiring ? 1 : 0)
-        case 7: return .uint32(buffer.isIncomplete ? 1 : 0)
+        case 4: return .bool8(buffer.newData)
+        case 5: return .bool8(buffer.isQueued)
+        case 6: return .bool8(buffer.isAcquiring)
+        case 7: return .bool8(buffer.isIncomplete)
         case 8: return .string("AMCAM")
         case 9: return .uint64(UInt64(buffer.sizeFilled))
         case 10: return .uint64(UInt64(buffer.width))
         case 11: return .uint64(UInt64(buffer.height))
         case 12, 13, 14, 15: return .uint64(0)
         case 16: return .uint64(buffer.sequence)
-        case 17: return .uint32(buffer.sizeFilled > 0 ? 1 : 0)
+        case 17: return .bool8(buffer.sizeFilled > 0)
         case 18: return .uint64(0)
         case 19: return .uint64(1) // IMAGE payload type
         case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
@@ -466,7 +466,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         switch command {
         case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
         case 1: return .uint64(UInt64(buffer.size)) // SIZE
-        case 2: return .uint32(buffer.isIncomplete ? 1 : 0) // IS_INCOMPLETE
+        case 2: return .bool8(buffer.isIncomplete) // IS_INCOMPLETE
         case 3: return .uint64(UInt64(buffer.sizeFilled)) // SIZE_FILLED
         case 4: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE
         default: throw GC_ERROR.invalidParameter

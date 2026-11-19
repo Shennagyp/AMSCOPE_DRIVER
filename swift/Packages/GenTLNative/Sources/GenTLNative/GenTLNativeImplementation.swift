@@ -1427,7 +1427,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         case .uint64: return .uint64(try value(UInt64.self))
         case .float64: return .float64(try value(Double.self))
         case .pointer: return .pointer(try value(UInt.self))
-        case .bool8: return .uint32((try value(UInt8.self)) == 0 ? 0 : 1)
+        case .bool8: return .bool8((try value(UInt8.self)) != 0)
         case .size: return .uint64(UInt64(try value(UInt.self)))
         case .pointerDifference: return .int64(Int64(try value(Int.self)))
         }
