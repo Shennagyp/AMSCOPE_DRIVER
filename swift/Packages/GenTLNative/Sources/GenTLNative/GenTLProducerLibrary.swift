@@ -37,6 +37,7 @@ public final class GenTLProducerLibrary: @unchecked Sendable {
 
     public let url: URL
     public let genTLHeaderVersion = GenTLVersion.v1_6
+    public static let abiHeaderVersionCode: UInt32 = GenTLABI_HeaderVersion()
 
     private let libraryHandle: UnsafeMutableRawPointer
     private let lock = NSLock()
