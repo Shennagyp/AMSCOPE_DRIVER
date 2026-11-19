@@ -9,7 +9,7 @@ public protocol GenTLAPI:
     GenTLInterfaceFunctions,
     GenTLDeviceFunctions,
     GenTLDataStreamFunctions,
-    GenTLAdvancedDataFunctions,
+    GenTLDataStreamExtensionFunctions,
     GenTLPortFunctions,
     GenTLSignalingFunctions
 {
