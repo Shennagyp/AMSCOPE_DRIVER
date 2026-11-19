@@ -732,15 +732,15 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         command: Int32
     ) throws -> GenTLInfoValue {
         lock.lock()
-        let record = events[event.rawValue]
+        let isRegistered = events[event.rawValue] != nil
         lock.unlock()
-        guard let record else { throw GC_ERROR.invalidHandle }
-        switch command {
-        case 0: return .string("AmcamEvent-\(record.eventType)")
-        case 1: return .raw(inputData)
-        case 2: return .uint64(0)
-        default: throw GC_ERROR.invalidParameter
-        }
+        guard isRegistered else { throw GC_ERROR.invalidHandle }
+
+        // The Amcam callback API does not define GenTL event IDs or a stable
+        // transport-specific EventGetDataInfo schema. Do not synthesize one.
+        _ = inputData
+        _ = command
+        throw GC_ERROR.notImplemented
     }
 
     public func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
