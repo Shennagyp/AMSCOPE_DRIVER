@@ -757,7 +757,10 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 2: return .string(device.modelName ?? "Unknown Amcam camera")
         case 3: return .string("AMCAM")
         case 4: return .string(device.displayName)
-        case 5: return .int32(isOpen ? 5 : 1) // OPEN_READWRITE / NOACCESS
+        // The Amcam SDK does not expose a non-invasive access-status query.
+        // Report UNKNOWN until this backend owns the camera; do not claim it is
+        // available for read/write merely because it was discoverable.
+        case 5: return .int32(isOpen ? 5 : 0) // OPEN_READWRITE / UNKNOWN
         case 6: return .string(device.displayName)
         case 7: return .string(device.identifier)
         default: throw GC_ERROR.notAvailable
