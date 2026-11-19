@@ -182,6 +182,24 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         events[event.eventType]?.removeAll { $0.handle == event.handle }
     }
 
+    /// GenTL EventFlush on a New Buffer event discards its data queue and the
+    /// associated DataStream output queue. Error-event flushes only clear data.
+    func flushEvent(_ event: AmcamEventRecord) {
+        event.flush()
+        guard event.eventType == GenTLEventType.newBuffer.rawValue else { return }
+
+        condition.lock()
+        defer { condition.unlock() }
+        let discardedHandles = outputQueue
+        outputQueue.removeAll()
+        for rawHandle in discardedHandles {
+            guard let buffer = buffers[rawHandle] else { continue }
+            buffer.isQueued = false
+            buffer.newData = false
+        }
+        condition.broadcast()
+    }
+
     func announce(
         handle: BUFFER_HANDLE,
         memory: UnsafeMutableRawPointer,
