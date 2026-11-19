@@ -230,13 +230,11 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         condition.lock()
         defer { condition.unlock() }
         guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
-        guard !buffer.isAcquiring,
-              !inputQueue.contains(handle.rawValue) else {
+        guard !buffer.isQueued, !buffer.isAcquiring else {
+            // This includes buffers still waiting in the output queue. They
+            // become queueable only after EventGetData delivers their handle.
             throw GC_ERROR.resourceInUse
         }
-        // A buffer in the output queue is still queued; DSQueueBuffer is the
-        // operation that transfers it back into the input pool.
-        outputQueue.removeAll { $0 == handle.rawValue }
         removeBufferEvents(for: [handle.rawValue])
         prepareForInput(buffer)
         inputQueue.append(handle.rawValue)
@@ -442,6 +440,32 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             baseAddress: returnedMemory,
             privateData: buffer.privateData
         )
+    }
+
+    /// Completes delivery of a New Buffer event. GenTL removes the associated
+    /// buffer from the Output Buffer Queue when EventGetData returns its event
+    /// payload, not when the frame first enters that queue.
+    func deliverNewBufferEvent(_ payload: Data) throws {
+        guard payload.count >= MemoryLayout<UInt>.size else {
+            throw GC_ERROR.invalidValue
+        }
+        let rawHandle = payload.withUnsafeBytes {
+            $0.loadUnaligned(as: UInt.self)
+        }
+
+        condition.lock()
+        defer { condition.unlock() }
+        guard let buffer = buffers[rawHandle] else { throw GC_ERROR.invalidBuffer }
+        guard let queueIndex = outputQueue.firstIndex(of: rawHandle),
+              buffer.isQueued else {
+            // The buffer may have been discarded concurrently by EventFlush or
+            // DSFlushQueue after the event data was dequeued.
+            throw GC_ERROR.noData
+        }
+
+        outputQueue.remove(at: queueIndex)
+        buffer.isQueued = false
+        condition.broadcast()
     }
 
     func buffer(_ handle: BUFFER_HANDLE) throws -> AmcamBufferRecord {
