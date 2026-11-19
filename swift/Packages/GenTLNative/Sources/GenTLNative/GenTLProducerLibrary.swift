@@ -5,6 +5,7 @@ import GenTLAPI
 
 public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
     case fileNotFound(String)
+    case notRegularFile(String)
     case loadFailed(path: String, reason: String)
     case missingRequiredSymbol(String)
     case symbolNotFound(String)
@@ -14,6 +15,8 @@ public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
         switch self {
         case .fileNotFound(let path):
             return "GenTL Producer library was not found at '\(path)'."
+        case .notRegularFile(let path):
+            return "GenTL Producer path is not a regular file: '\(path)'."
         case .loadFailed(let path, let reason):
             return "Could not load GenTL Producer '\(path)': \(reason)"
         case .missingRequiredSymbol(let symbol):
@@ -50,11 +53,24 @@ public final class GenTLProducerLibrary: @unchecked Sendable {
             throw GenTLProducerLibraryError.unsupportedABI
         }
 
-        let standardizedURL = url.standardizedFileURL
+        // Resolve aliases before loading so the library identity and retained
+        // URL are stable even when the caller supplies a symlink.
+        let standardizedURL = url.standardizedFileURL.resolvingSymlinksInPath()
         let path = standardizedURL.path
 
         guard FileManager.default.fileExists(atPath: path) else {
             throw GenTLProducerLibraryError.fileNotFound(path)
+        }
+
+        do {
+            let values = try standardizedURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else {
+                throw GenTLProducerLibraryError.notRegularFile(path)
+            }
+        } catch let error as GenTLProducerLibraryError {
+            throw error
+        } catch {
+            throw GenTLProducerLibraryError.notRegularFile(path)
         }
 
         guard let loaded = dlopen(path, RTLD_NOW | RTLD_LOCAL) else {
