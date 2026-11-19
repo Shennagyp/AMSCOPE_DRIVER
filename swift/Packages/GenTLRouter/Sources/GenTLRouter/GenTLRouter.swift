@@ -1,0 +1,287 @@
+import Foundation
+import GenTLAPI
+import GenTLNative
+import AmcamGenTL
+
+public enum GenTLRouterError: Error, LocalizedError, Sendable {
+    case emptyBackendID
+    case duplicateBackendID(String)
+    case unknownBackendID(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .emptyBackendID:
+            return "A GenTL backend registration requires a non-empty identifier."
+        case .duplicateBackendID(let id):
+            return "GenTL backend '\(id)' is already registered."
+        case .unknownBackendID(let id):
+            return "No GenTL backend is registered with identifier '\(id)'."
+        }
+    }
+}
+
+public struct GenTLProviderFailure: Equatable, Sendable, Identifiable {
+    public let backendID: String
+    public let message: String
+
+    public var id: String { backendID }
+
+    public init(backendID: String, message: String) {
+        self.backendID = backendID
+        self.message = message
+    }
+}
+
+public struct GenTLDiscoveryReport: Sendable {
+    public let devices: [GenTLDeviceCandidate]
+    public let failures: [GenTLProviderFailure]
+
+    public init(devices: [GenTLDeviceCandidate], failures: [GenTLProviderFailure]) {
+        self.devices = devices
+        self.failures = failures
+    }
+
+    public var isComplete: Bool { failures.isEmpty }
+}
+
+/// A discovered device remains bound to the exact GenTLAPI implementation
+/// and interface handle that discovered it. The app still uses GenTL function
+/// calls; backend selection is not repeated at individual call sites.
+public struct GenTLDeviceCandidate: Sendable, Identifiable {
+    public let backendID: String
+    public let interfaceID: String
+    public let deviceID: String
+    public let api: any GenTLAPI
+    public let systemHandle: TL_HANDLE
+    public let interfaceHandle: IF_HANDLE
+
+    private let context: GenTLProviderContext
+
+    public var id: String {
+        "\(backendID)|\(interfaceID)|\(deviceID)"
+    }
+
+    fileprivate init(
+        backendID: String,
+        interfaceID: String,
+        deviceID: String,
+        context: GenTLProviderContext
+    ) {
+        self.backendID = backendID
+        self.interfaceID = interfaceID
+        self.deviceID = deviceID
+        self.api = context.api
+        self.systemHandle = context.systemHandle
+        self.interfaceHandle = context.interfaceHandlesByID[interfaceID]!
+        self.context = context
+    }
+
+    public func open(accessFlags: UInt32) throws -> GenTLDeviceSession {
+        let handle = try api.IFOpenDevice(
+            interfaceHandle,
+            deviceID: deviceID,
+            accessFlags: accessFlags
+        )
+        return GenTLDeviceSession(context: context, api: api, deviceHandle: handle)
+    }
+}
+
+/// Owns the GenTL Library/System/Interface lifetime for one backend instance.
+/// It remains alive while any discovered candidate or opened device session uses it.
+private final class GenTLProviderContext: @unchecked Sendable {
+    let backendID: String
+    let api: any GenTLAPI
+    let systemHandle: TL_HANDLE
+
+    private let lock = NSRecursiveLock()
+    private var interfaceHandles: [IF_HANDLE] = []
+    private var closed = false
+
+    var interfaceHandlesByID: [String: IF_HANDLE] = [:]
+
+    init(backendID: String, api: any GenTLAPI, systemHandle: TL_HANDLE) {
+        self.backendID = backendID
+        self.api = api
+        self.systemHandle = systemHandle
+    }
+
+    func addInterface(id: String, handle: IF_HANDLE) {
+        lock.lock()
+        defer { lock.unlock() }
+        interfaceHandlesByID[id] = handle
+        interfaceHandles.append(handle)
+    }
+
+    func close() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed else { return }
+        closed = true
+
+        for handle in interfaceHandles.reversed() {
+            try? api.IFClose(handle)
+        }
+        interfaceHandles.removeAll()
+        interfaceHandlesByID.removeAll()
+
+        try? api.TLClose(systemHandle)
+        try? api.GCCloseLib()
+    }
+
+    deinit {
+        close()
+    }
+}
+
+/// Open device ownership. Close the device before releasing its GenTL route.
+public final class GenTLDeviceSession: @unchecked Sendable {
+    public let api: any GenTLAPI
+    public let deviceHandle: DEV_HANDLE
+
+    private let context: GenTLProviderContext
+    private let lock = NSLock()
+    private var isClosed = false
+
+    fileprivate init(
+        context: GenTLProviderContext,
+        api: any GenTLAPI,
+        deviceHandle: DEV_HANDLE
+    ) {
+        self.context = context
+        self.api = api
+        self.deviceHandle = deviceHandle
+    }
+
+    public func close() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isClosed else { return }
+        try api.DevClose(deviceHandle)
+        isClosed = true
+    }
+
+    deinit {
+        try? close()
+        _ = context
+    }
+}
+
+private struct BackendRegistration: Sendable {
+    let identifier: String
+    let makeAPI: @Sendable () throws -> any GenTLAPI
+}
+
+/// Registers and routes to GenTLAPI implementations.
+///
+/// A native registration is one CTI Producer. An Amcam registration is the
+/// Amcam SDK-backed implementation of the same GenTL-shaped Swift API.
+public final class GenTLRouter: @unchecked Sendable {
+    private let lock = NSRecursiveLock()
+    private var registrations: [String: BackendRegistration] = [:]
+
+    public init() {}
+
+    public var backendIDs: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return registrations.keys.sorted()
+    }
+
+    public func register(
+        backendID: String,
+        makeAPI: @escaping @Sendable () throws -> any GenTLAPI
+    ) throws {
+        let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized == backendID else {
+            throw GenTLRouterError.emptyBackendID
+        }
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard registrations[backendID] == nil else {
+            throw GenTLRouterError.duplicateBackendID(backendID)
+        }
+        registrations[backendID] = BackendRegistration(
+            identifier: backendID,
+            makeAPI: makeAPI
+        )
+    }
+
+    public func registerNativeProducer(backendID: String, ctiURL: URL) throws {
+        try register(backendID: backendID) {
+            try GenTLNativeImplementation(ctiURL: ctiURL)
+        }
+    }
+
+    public func registerAmcam(backendID: String, sdkLibraryURL: URL) throws {
+        try register(backendID: backendID) {
+            AmcamGenTLImplementation(sdkLibraryURL: sdkLibraryURL)
+        }
+    }
+
+    public func discover(timeout: UInt64 = 2_000) -> GenTLDiscoveryReport {
+        lock.lock()
+        let current = registrations.values.sorted { $0.identifier < $1.identifier }
+        lock.unlock()
+
+        var devices: [GenTLDeviceCandidate] = []
+        var failures: [GenTLProviderFailure] = []
+
+        for registration in current {
+            do {
+                let api = try registration.makeAPI()
+                try api.GCInitLib()
+                let system = try api.TLOpen()
+                let context = GenTLProviderContext(
+                    backendID: registration.identifier,
+                    api: api,
+                    systemHandle: system
+                )
+
+                do {
+                    try api.TLUpdateInterfaceList(system, timeout: timeout)
+                    let interfaceCount = try api.TLGetNumInterfaces(system)
+
+                    for interfaceIndex in 0..<interfaceCount {
+                        let interfaceID = try api.TLGetInterfaceID(system, index: interfaceIndex)
+                        let interfaceHandle = try api.TLOpenInterface(system, interfaceID: interfaceID)
+                        context.addInterface(id: interfaceID, handle: interfaceHandle)
+
+                        try api.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
+                        let deviceCount = try api.IFGetNumDevices(interfaceHandle)
+
+                        for deviceIndex in 0..<deviceCount {
+                            let deviceID = try api.IFGetDeviceID(interfaceHandle, index: deviceIndex)
+                            devices.append(GenTLDeviceCandidate(
+                                backendID: registration.identifier,
+                                interfaceID: interfaceID,
+                                deviceID: deviceID,
+                                context: context
+                            ))
+                        }
+                    }
+
+                    if !devices.contains(where: { $0.backendID == registration.identifier }) {
+                        context.close()
+                    }
+                } catch {
+                    context.close()
+                    throw error
+                }
+            } catch {
+                failures.append(GenTLProviderFailure(
+                    backendID: registration.identifier,
+                    message: error.localizedDescription
+                ))
+            }
+        }
+
+        devices.sort {
+            if $0.backendID != $1.backendID { return $0.backendID < $1.backendID }
+            if $0.interfaceID != $1.interfaceID { return $0.interfaceID < $1.interfaceID }
+            return $0.deviceID < $1.deviceID
+        }
+
+        return GenTLDiscoveryReport(devices: devices, failures: failures)
+    }
+}
