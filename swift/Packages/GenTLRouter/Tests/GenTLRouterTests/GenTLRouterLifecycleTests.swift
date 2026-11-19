@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 import GenTLAPI
 @testable import GenTLRouter
@@ -105,7 +106,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 final class GenTLRouterLifecycleTests: XCTestCase {
     func testNativeProducerSymlinkAliasesCannotRegisterTwice() throws {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("GenTLRouterProducerIdentity-\\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("GenTLRouterProducerIdentity-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -121,7 +122,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
             try router.registerNativeProducer(backendID: "alias", ctiURL: alias)
         ) { error in
             guard case GenTLRouterError.duplicateBackendResource(let existingID) = error else {
-                return XCTFail("Expected duplicate backend resource, received \\(error)")
+                return XCTFail("Expected duplicate backend resource, received \(error)")
             }
             XCTAssertEqual(existingID, "primary")
         }
