@@ -82,7 +82,7 @@ public protocol GenTLPortFunctions: Sendable {
 /// Signaling/event functions (GenTL 1.6, section 6.3.7).
 public protocol GenTLSignalingFunctions: Sendable {
     func GCRegisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws -> EVENT_HANDLE
-    func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: UInt32) throws
+    func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws
     func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data
     func EventGetDataInfo(_ event: EVENT_HANDLE, inputData: Data, command: Int32) throws -> GenTLInfoValue
     func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue
