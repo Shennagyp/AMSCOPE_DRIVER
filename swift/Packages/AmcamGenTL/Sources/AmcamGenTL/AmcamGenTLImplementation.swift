@@ -689,7 +689,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
            let stream = dataStreams[streamHandle.rawValue] {
             stream.removeEvent(match.value)
         }
-        match.value.kill()
+        match.value.unregister()
         events.removeValue(forKey: match.key)
     }
 
@@ -761,7 +761,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         let record = events[event.rawValue]
         lock.unlock()
         guard let record else { throw GC_ERROR.invalidHandle }
-        record.kill()
+        record.abortOneRead()
     }
 
     // MARK: Unsupported physical-port mapping
