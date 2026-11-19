@@ -214,7 +214,15 @@ public final class AmcamCameraSession: @unchecked Sendable {
         sdk.close(handle)
     }
 
-    deinit { try? close() }
+    deinit {
+        do {
+            try close()
+        } catch {
+            // The SDK may still own the native handle, callback and pull buffer.
+            // Keep its dylib loaded rather than unloading code still in use.
+            sdk.retainForProcessLifetimeAfterCleanupFailure()
+        }
+    }
 
 
     public func readControls() throws -> AmcamControlSnapshot {
