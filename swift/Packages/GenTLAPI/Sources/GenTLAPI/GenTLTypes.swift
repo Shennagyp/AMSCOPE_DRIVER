@@ -108,6 +108,7 @@ public struct GenTLVersion: Hashable, Sendable {
 
 public enum GenTLConstants {
     public static let infiniteTimeout: UInt64 = .max
+    public static let infiniteCount: UInt64 = .max
     public static let invalidHandle: UInt = 0
 }
 
