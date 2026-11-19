@@ -1,6 +1,6 @@
 import Foundation
 
-/// Library-level GenTL functions (GenTL 1.6, section 6.3.1).
+/// Library-level GenTL 1.6 functions.
 public protocol GenTLLibraryFunctions: Sendable {
     func GCInitLib() throws
     func GCCloseLib() throws
@@ -8,7 +8,7 @@ public protocol GenTLLibraryFunctions: Sendable {
     func GCGetLastError() -> GenTLErrorInfo
 }
 
-/// System module functions (GenTL 1.6, section 6.3.2).
+/// System module functions.
 public protocol GenTLSystemFunctions: Sendable {
     func TLOpen() throws -> TL_HANDLE
     func TLClose(_ hTL: TL_HANDLE) throws
@@ -20,7 +20,7 @@ public protocol GenTLSystemFunctions: Sendable {
     func TLUpdateInterfaceList(_ hTL: TL_HANDLE, timeout: UInt64) throws -> Bool
 }
 
-/// Interface module functions (GenTL 1.6, section 6.3.3).
+/// Interface module functions.
 public protocol GenTLInterfaceFunctions: Sendable {
     func IFClose(_ hIF: IF_HANDLE) throws
     func IFGetInfo(_ hIF: IF_HANDLE, command: Int32) throws -> GenTLInfoValue
@@ -32,7 +32,7 @@ public protocol GenTLInterfaceFunctions: Sendable {
     func IFGetParentTL(_ hIF: IF_HANDLE) throws -> TL_HANDLE
 }
 
-/// Device module functions (GenTL 1.6, section 6.3.4).
+/// Device module functions.
 public protocol GenTLDeviceFunctions: Sendable {
     func DevGetPort(_ hDevice: DEV_HANDLE) throws -> PORT_HANDLE
     func DevGetNumDataStreams(_ hDevice: DEV_HANDLE) throws -> UInt32
@@ -43,7 +43,7 @@ public protocol GenTLDeviceFunctions: Sendable {
     func DevClose(_ hDevice: DEV_HANDLE) throws
 }
 
-/// Data Stream and Buffer module functions (GenTL 1.6, section 6.3.5).
+/// Data Stream and Buffer module functions.
 public protocol GenTLDataStreamFunctions: Sendable {
     func DSAnnounceBuffer(
         _ hDS: DS_HANDLE,
@@ -69,7 +69,51 @@ public protocol GenTLDataStreamFunctions: Sendable {
     func DSClose(_ hDS: DS_HANDLE) throws
 }
 
-/// Port functions used for register access and XML-description discovery (GenTL 1.6, section 6.3.6).
+/// GenTL 1.6 extension functions for register stacks, chunks, multipart buffers and flows.
+public protocol GenTLAdvancedDataFunctions: Sendable {
+    func GCReadPortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortReadRequest]) throws -> [Data]
+    func GCWritePortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortWriteRequest]) throws
+
+    func DSGetBufferChunkData(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> [GenTLChunkData]
+    func DSGetNumBufferParts(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32
+    func DSGetBufferPartInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        partIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue
+
+    func DSAnnounceCompositeBuffer(
+        _ hDS: DS_HANDLE,
+        segments: [GenTLCompositeBufferSegment],
+        privateData: UnsafeMutableRawPointer?
+    ) throws -> BUFFER_HANDLE
+
+    func DSGetBufferInfoStacked(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue]
+
+    func DSGetBufferPartInfoStacked(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        partIndex: UInt32,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue]
+
+    func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32
+    func DSGetFlowInfo(_ hDS: DS_HANDLE, flowIndex: UInt32, command: Int32) throws -> GenTLInfoValue
+    func DSGetNumBufferSegments(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32
+    func DSGetBufferSegmentInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        segmentIndex: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue
+}
+
+/// Port functions used for register access and XML-description discovery.
 public protocol GenTLPortFunctions: Sendable {
     func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data
     func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws
@@ -79,7 +123,7 @@ public protocol GenTLPortFunctions: Sendable {
     func GCGetPortInfo(_ hPort: PORT_HANDLE, command: Int32) throws -> GenTLInfoValue
 }
 
-/// Signaling/event functions (GenTL 1.6, section 6.3.7).
+/// Signaling and event functions.
 public protocol GenTLSignalingFunctions: Sendable {
     func GCRegisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws -> EVENT_HANDLE
     func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws
