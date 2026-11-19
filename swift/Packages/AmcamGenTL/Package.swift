@@ -18,6 +18,10 @@ let package = Package(
                 "AmcamABI",
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
+        ),
+        .testTarget(
+            name: "AmcamGenTLTests",
+            dependencies: ["AmcamGenTL"]
         )
     ]
 )
