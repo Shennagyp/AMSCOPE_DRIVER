@@ -124,6 +124,16 @@ public enum GenTLProducerCatalog {
                     }
 
                     let normalized = child.standardizedFileURL.resolvingSymlinksInPath()
+                    guard FileManager.default.fileExists(atPath: normalized.path) else {
+                        issues.append(
+                            GenTLProducerSearchIssue(
+                                path: child.path,
+                                message: "The .cti entry points to a missing file."
+                            )
+                        )
+                        continue
+                    }
+
                     do {
                         let values = try normalized.resourceValues(forKeys: [.isRegularFileKey])
                         guard values.isRegularFile == true else { continue }
