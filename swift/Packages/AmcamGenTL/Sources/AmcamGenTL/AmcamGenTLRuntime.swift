@@ -1,0 +1,478 @@
+import Foundation
+import GenTLAPI
+
+final class AmcamBufferRecord: @unchecked Sendable {
+    let handle: BUFFER_HANDLE
+    let memory: UnsafeMutableRawPointer
+    let size: Int
+    let privateData: UnsafeMutableRawPointer?
+    let allocatedByProvider: Bool
+
+    var isQueued = false
+    var isAcquiring = false
+    var isIncomplete = false
+    var newData = false
+    var sizeFilled = 0
+    var width: Int = 0
+    var height: Int = 0
+    var sequence: UInt64 = 0
+    var timestampMicroseconds: UInt64 = 0
+
+    init(
+        handle: BUFFER_HANDLE,
+        memory: UnsafeMutableRawPointer,
+        size: Int,
+        privateData: UnsafeMutableRawPointer?,
+        allocatedByProvider: Bool
+    ) {
+        self.handle = handle
+        self.memory = memory
+        self.size = size
+        self.privateData = privateData
+        self.allocatedByProvider = allocatedByProvider
+    }
+
+    func releaseMemoryIfOwned() {
+        if allocatedByProvider {
+            memory.deallocate()
+        }
+    }
+}
+
+final class AmcamEventRecord: @unchecked Sendable {
+    let handle: EVENT_HANDLE
+    let eventType: Int32
+    let source: EVENTSRC_HANDLE
+
+    private let condition = NSCondition()
+    private var dataQueue: [Data] = []
+    private var killed = false
+    private var firedCount: UInt64 = 0
+
+    init(handle: EVENT_HANDLE, eventType: Int32, source: EVENTSRC_HANDLE) {
+        self.handle = handle
+        self.eventType = eventType
+        self.source = source
+    }
+
+    func publish(_ data: Data) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !killed else { return }
+        dataQueue.append(data)
+        firedCount &+= 1
+        condition.broadcast()
+    }
+
+    func next(timeoutMilliseconds: UInt64) throws -> Data {
+        condition.lock()
+        defer { condition.unlock() }
+
+        if timeoutMilliseconds == GenTLConstants.infiniteTimeout {
+            while dataQueue.isEmpty && !killed {
+                condition.wait()
+            }
+        } else {
+            let deadline = Date(
+                timeIntervalSinceNow: Double(timeoutMilliseconds) / 1_000.0
+            )
+            while dataQueue.isEmpty && !killed {
+                if !condition.wait(until: deadline) {
+                    throw GC_ERROR.timeout
+                }
+            }
+        }
+
+        guard !killed else { throw GC_ERROR.abort }
+        guard !dataQueue.isEmpty else { throw GC_ERROR.noData }
+        return dataQueue.removeFirst()
+    }
+
+    func flush() {
+        condition.lock()
+        dataQueue.removeAll(keepingCapacity: true)
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func kill() {
+        condition.lock()
+        killed = true
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func info(command: Int32) throws -> GenTLInfoValue {
+        condition.lock()
+        defer { condition.unlock() }
+        switch command {
+        case 0: return .int32(eventType) // EVENT_EVENT_TYPE
+        case 1: return .uint64(UInt64(dataQueue.count)) // EVENT_NUM_IN_QUEUE
+        case 2: return .uint64(firedCount) // EVENT_NUM_FIRED
+        case 3: return .uint64(2 * UInt64(MemoryLayout<UInt>.size)) // EVENT_SIZE_MAX
+        case 4: return .uint64(0) // No event-specific info payload currently exposed.
+        default: throw GC_ERROR.invalidParameter
+        }
+    }
+}
+
+final class AmcamDataStreamRecord: @unchecked Sendable {
+    let handle: DS_HANDLE
+    let deviceHandle: DEV_HANDLE
+    let session: AmcamCameraSession
+
+    private let condition = NSCondition()
+    private var buffers: [UInt: AmcamBufferRecord] = [:]
+    private var announcedOrder: [UInt] = []
+    private var inputQueue: [UInt] = []
+    private var outputQueue: [UInt] = []
+    private var events: [Int32: [AmcamEventRecord]] = [:]
+
+    private(set) var isGrabbing = false
+    private(set) var numDelivered: UInt64 = 0
+    private(set) var numUnderrun: UInt64 = 0
+    private(set) var numStarted: UInt64 = 0
+    private(set) var payloadSize: Int = 0
+
+    init(handle: DS_HANDLE, deviceHandle: DEV_HANDLE, session: AmcamCameraSession) {
+        self.handle = handle
+        self.deviceHandle = deviceHandle
+        self.session = session
+        if let resolution = session.currentResolution() {
+            let (pixels, overflow1) = resolution.width.multipliedReportingOverflow(by: resolution.height)
+            let (bytes, overflow2) = pixels.multipliedReportingOverflow(by: 3)
+            if !overflow1 && !overflow2 && bytes > 0 {
+                payloadSize = bytes
+            }
+        }
+    }
+
+    func addEvent(_ event: AmcamEventRecord) {
+        condition.lock()
+        defer { condition.unlock() }
+        events[event.eventType, default: []].append(event)
+    }
+
+    func removeEvent(_ event: AmcamEventRecord) {
+        condition.lock()
+        defer { condition.unlock() }
+        events[event.eventType]?.removeAll { $0.handle == event.handle }
+    }
+
+    func announce(
+        handle: BUFFER_HANDLE,
+        memory: UnsafeMutableRawPointer,
+        size: Int,
+        privateData: UnsafeMutableRawPointer?,
+        allocatedByProvider: Bool
+    ) throws {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !isGrabbing else { throw GC_ERROR.busy }
+        guard size > 0 else { throw GC_ERROR.invalidParameter }
+        guard buffers[handle.rawValue] == nil else { throw GC_ERROR.resourceInUse }
+        buffers[handle.rawValue] = AmcamBufferRecord(
+            handle: handle,
+            memory: memory,
+            size: size,
+            privateData: privateData,
+            allocatedByProvider: allocatedByProvider
+        )
+        announcedOrder.append(handle.rawValue)
+    }
+
+    func queue(_ handle: BUFFER_HANDLE) throws {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+        guard !buffer.isQueued, !buffer.isAcquiring else { throw GC_ERROR.resourceInUse }
+        outputQueue.removeAll { $0 == handle.rawValue }
+        buffer.isQueued = true
+        buffer.isIncomplete = false
+        buffer.newData = false
+        buffer.sizeFilled = 0
+        inputQueue.append(handle.rawValue)
+    }
+
+    func flush(operation: Int32) throws {
+        condition.lock()
+        defer { condition.unlock() }
+
+        switch operation {
+        case 0: // ACQ_QUEUE_INPUT_TO_OUTPUT
+            // GenTL defines this as making input-pool buffers available on output.
+            // Amcam cannot manufacture image data, so return empty buffers as incomplete.
+            for raw in inputQueue {
+                guard let buffer = buffers[raw] else { continue }
+                buffer.isQueued = false
+                buffer.isIncomplete = true
+                buffer.newData = false
+                buffer.sizeFilled = 0
+                outputQueue.append(raw)
+                publishBufferEvent(buffer)
+            }
+            inputQueue.removeAll()
+        case 1: // ACQ_QUEUE_OUTPUT_DISCARD
+            for raw in outputQueue {
+                if let buffer = buffers[raw] {
+                    buffer.isQueued = false
+                    buffer.newData = false
+                }
+            }
+            outputQueue.removeAll()
+        case 2: // ACQ_QUEUE_ALL_TO_INPUT
+            let all = announcedOrder
+            inputQueue = all
+            outputQueue.removeAll()
+            for raw in all {
+                guard let buffer = buffers[raw] else { continue }
+                buffer.isQueued = true
+                buffer.newData = false
+                buffer.isIncomplete = false
+                buffer.sizeFilled = 0
+            }
+        case 3: // ACQ_QUEUE_UNQUEUED_TO_INPUT
+            let queued = Set(inputQueue + outputQueue)
+            for raw in announcedOrder where !queued.contains(raw) {
+                guard let buffer = buffers[raw] else { continue }
+                buffer.isQueued = true
+                buffer.newData = false
+                buffer.isIncomplete = false
+                buffer.sizeFilled = 0
+                inputQueue.append(raw)
+            }
+        case 4: // ACQ_QUEUE_ALL_DISCARD
+            for raw in inputQueue + outputQueue {
+                if let buffer = buffers[raw] {
+                    buffer.isQueued = false
+                    buffer.newData = false
+                }
+            }
+            inputQueue.removeAll()
+            outputQueue.removeAll()
+        default:
+            throw GC_ERROR.invalidParameter
+        }
+        condition.broadcast()
+    }
+
+    func start(numberToAcquire: UInt64) throws {
+        condition.lock()
+        guard !isGrabbing else {
+            condition.unlock()
+            throw GC_ERROR.resourceInUse
+        }
+        guard !inputQueue.isEmpty else {
+            condition.unlock()
+            throw GC_ERROR.invalidBuffer
+        }
+        isGrabbing = true
+        numDelivered = 0
+        numStarted = 0
+        condition.unlock()
+
+        do {
+            try session.start { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success(let frame):
+                    self.receive(frame)
+                case .failure:
+                    self.publishErrorEvent()
+                }
+            }
+        } catch {
+            condition.lock()
+            isGrabbing = false
+            condition.unlock()
+            throw error
+        }
+    }
+
+    func stop() throws {
+        condition.lock()
+        guard isGrabbing else {
+            condition.unlock()
+            throw GC_ERROR.notAvailable
+        }
+        condition.unlock()
+
+        do {
+            try session.stop()
+        } catch {
+            throw GC_ERROR.error
+        }
+
+        condition.lock()
+        isGrabbing = false
+        for raw in inputQueue {
+            buffers[raw]?.isAcquiring = false
+        }
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func close() throws {
+        condition.lock()
+        guard !isGrabbing else {
+            condition.unlock()
+            throw GC_ERROR.busy
+        }
+        guard buffers.isEmpty else {
+            condition.unlock()
+            throw GC_ERROR.resourceInUse
+        }
+        let registeredEvents = events.values.flatMap { $0 }
+        events.removeAll()
+        condition.unlock()
+        registeredEvents.forEach { $0.kill() }
+    }
+
+    func revoke(_ handle: BUFFER_HANDLE) throws -> GenTLRevokedBuffer {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !isGrabbing else { throw GC_ERROR.busy }
+        guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+        guard !buffer.isQueued, !buffer.isAcquiring else { throw GC_ERROR.resourceInUse }
+
+        buffers.removeValue(forKey: handle.rawValue)
+        announcedOrder.removeAll { $0 == handle.rawValue }
+        inputQueue.removeAll { $0 == handle.rawValue }
+        outputQueue.removeAll { $0 == handle.rawValue }
+
+        return GenTLRevokedBuffer(
+            baseAddress: buffer.memory,
+            privateData: buffer.privateData
+        )
+    }
+
+    func buffer(_ handle: BUFFER_HANDLE) throws -> AmcamBufferRecord {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let value = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+        return value
+    }
+
+    func bufferID(index: UInt32) throws -> BUFFER_HANDLE {
+        condition.lock()
+        defer { condition.unlock() }
+        guard Int(index) < announcedOrder.count else { throw GC_ERROR.invalidIndex }
+        return BUFFER_HANDLE(rawValue: announcedOrder[Int(index)])
+    }
+
+    func info(command: Int32) throws -> GenTLInfoValue {
+        condition.lock()
+        defer { condition.unlock() }
+        switch command {
+        case 0: return .string("0") // STREAM_INFO_ID
+        case 1: return .uint64(numDelivered)
+        case 2: return .uint64(numUnderrun)
+        case 3: return .uint64(UInt64(announcedOrder.count))
+        case 4: return .uint64(UInt64(inputQueue.count))
+        case 5: return .uint64(UInt64(outputQueue.count))
+        case 6: return .uint64(numStarted)
+        case 7: return .uint64(UInt64(payloadSize))
+        case 8: return .uint32(isGrabbing ? 1 : 0)
+        case 9: return .uint32(1)
+        case 10: return .string("AMCAM")
+        case 12: return .uint64(1) // Minimum announced buffers: one.
+        case 13: return .uint64(1) // Byte alignment.
+        default: throw GC_ERROR.notAvailable
+        }
+    }
+
+    func bufferInfo(_ handle: BUFFER_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+
+        switch command {
+        case 0: return .pointer(UInt(bitPattern: buffer.memory))
+        case 1: return .uint64(UInt64(buffer.size))
+        case 2: return .pointer(buffer.privateData.map(UInt.init(bitPattern:)) ?? 0)
+        case 3: return .uint64(buffer.timestampMicroseconds)
+        case 4: return .uint32(buffer.newData ? 1 : 0)
+        case 5: return .uint32(buffer.isQueued ? 1 : 0)
+        case 6: return .uint32(buffer.isAcquiring ? 1 : 0)
+        case 7: return .uint32(buffer.isIncomplete ? 1 : 0)
+        case 8: return .string("AMCAM")
+        case 9: return .uint64(UInt64(buffer.sizeFilled))
+        case 10: return .uint64(UInt64(buffer.width))
+        case 11: return .uint64(UInt64(buffer.height))
+        case 12, 13, 14, 15: return .uint64(0)
+        case 16: return .uint64(buffer.sequence)
+        case 17: return .uint32(buffer.sizeFilled > 0 ? 1 : 0)
+        case 18: return .uint64(0)
+        case 19: return .uint64(1) // IMAGE payload type
+        case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
+        case 21: return .uint64(0) // PFNC namespace.
+        case 22: return .uint64(UInt64(buffer.height))
+        case 23, 24, 25, 26, 27, 28, 29, 30, 31:
+            return .uint64(0)
+        default:
+            throw GC_ERROR.invalidParameter
+        }
+    }
+
+    private func receive(_ frame: AmcamFrame) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard isGrabbing else { return }
+        guard let raw = inputQueue.first, let buffer = buffers[raw] else {
+            numUnderrun &+= 1
+            return
+        }
+        inputQueue.removeFirst()
+        buffer.isQueued = false
+        buffer.isAcquiring = true
+
+        let frameBytes = frame.bytes.count
+        guard frameBytes <= buffer.size else {
+            buffer.isAcquiring = false
+            buffer.isIncomplete = true
+            buffer.newData = true
+            buffer.sizeFilled = 0
+            outputQueue.append(raw)
+            publishBufferEvent(buffer)
+            return
+        }
+
+        frame.bytes.withUnsafeBytes { source in
+            if let base = source.baseAddress, frameBytes > 0 {
+                buffer.memory.copyMemory(from: base, byteCount: frameBytes)
+            }
+        }
+        buffer.width = frame.width
+        buffer.height = frame.height
+        buffer.sizeFilled = frameBytes
+        buffer.sequence = UInt64(frame.sequence ?? UInt32(numDelivered &+ 1))
+        buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
+        buffer.isIncomplete = false
+        buffer.newData = true
+        buffer.isAcquiring = false
+        outputQueue.append(raw)
+        numDelivered &+= 1
+        numStarted &+= 1
+        publishBufferEvent(buffer)
+    }
+
+    private func publishBufferEvent(_ buffer: AmcamBufferRecord) {
+        var bufferHandle = buffer.handle.rawValue
+        var userPointer = buffer.privateData.map(UInt.init(bitPattern:)) ?? 0
+        var payload = Data()
+        withUnsafeBytes(of: &bufferHandle) { payload.append(contentsOf: $0) }
+        withUnsafeBytes(of: &userPointer) { payload.append(contentsOf: $0) }
+        for event in events[GenTLEventType.newBuffer.rawValue] ?? [] {
+            event.publish(payload)
+        }
+        condition.broadcast()
+    }
+
+    private func publishErrorEvent() {
+        let payload = Data()
+        condition.lock()
+        let errorEvents = events[GenTLEventType.error.rawValue] ?? []
+        condition.unlock()
+        errorEvents.forEach { $0.publish(payload) }
+    }
+}
