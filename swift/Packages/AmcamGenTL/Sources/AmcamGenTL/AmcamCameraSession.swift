@@ -119,12 +119,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
             throw AmcamCameraError.alreadyStreaming
         }
 
-        let (pixels, overflow1) = width.multipliedReportingOverflow(by: height)
-        let (capacity, overflow2) = pixels.multipliedReportingOverflow(by: 4)
-        guard !overflow1, !overflow2, capacity > 0, capacity <= 512 * 1024 * 1024 else {
+        guard let layout = AmcamRGB24Layout(width: width, height: height),
+              layout.payloadSize <= 512 * 1024 * 1024 else {
             lock.unlock()
             throw AmcamCameraError.frameBufferTooLarge
         }
+        let capacity = layout.payloadSize
 
         let newBuffer = UnsafeMutableRawPointer.allocate(byteCount: capacity, alignment: 64)
         newBuffer.initializeMemory(as: UInt8.self, repeating: 0, count: capacity)
@@ -487,10 +487,10 @@ public final class AmcamCameraSession: @unchecked Sendable {
             }
             let frameWidth = Int(info.width)
             let frameHeight = Int(info.height)
-            let (rowBytes, overflow1) = frameWidth.multipliedReportingOverflow(by: 3)
-            let (byteCount, overflow2) = rowBytes.multipliedReportingOverflow(by: frameHeight)
-            guard !overflow1, !overflow2, frameWidth == width, frameHeight == height,
-                  rowBytes > 0, byteCount > 0, byteCount <= bufferCapacity else {
+            guard let layout = AmcamRGB24Layout(width: frameWidth, height: frameHeight),
+                  frameWidth == width,
+                  frameHeight == height,
+                  layout.payloadSize <= bufferCapacity else {
                 streaming = false
                 lock.unlock()
                 handler(.failure(.invalidFrameDimensions))
@@ -499,9 +499,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
             let frame = AmcamFrame(
                 width: frameWidth,
                 height: frameHeight,
-                bytesPerRow: rowBytes,
+                bytesPerRow: layout.bytesPerRow,
                 pixelFormat: .rgb24,
-                bytes: Data(bytes: buffer, count: byteCount),
+                bytes: Data(bytes: buffer, count: layout.payloadSize),
                 sequence: (info.flag & AmcamSDK.frameSequenceFlag) != 0 ? info.seq : nil,
                 deviceTimestampMicroseconds: (info.flag & AmcamSDK.frameTimestampFlag) != 0 ? info.timestamp : nil
             )
