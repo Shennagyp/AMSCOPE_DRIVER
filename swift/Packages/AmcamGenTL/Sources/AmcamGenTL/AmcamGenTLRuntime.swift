@@ -185,11 +185,15 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     /// GenTL EventFlush on a New Buffer event discards its data queue and the
     /// associated DataStream output queue. Error-event flushes only clear data.
     func flushEvent(_ event: AmcamEventRecord) {
-        event.flush()
-        guard event.eventType == GenTLEventType.newBuffer.rawValue else { return }
-
+        // receive() holds the stream condition while publishing to an event.
+        // Use the same lock order here so a concurrently arriving frame cannot
+        // enqueue a fresh New Buffer event between event flush and queue clear.
         condition.lock()
         defer { condition.unlock() }
+        event.flush()
+
+        guard event.eventType == GenTLEventType.newBuffer.rawValue else { return }
+
         let discardedHandles = outputQueue
         outputQueue.removeAll()
         for rawHandle in discardedHandles {
@@ -639,14 +643,16 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             frameBytes >= minimumImageBytes
 
         buffer.dataLargerThanBuffer = frameBytes > buffer.size
-        buffer.width = frame.width > 0 ? frame.width : 0
-        buffer.height = frame.height > 0 ? frame.height : 0
+        buffer.width = 0
+        buffer.height = 0
         buffer.sequence = UInt64(
             frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1)
         )
         buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
 
         guard !buffer.dataLargerThanBuffer, geometryIsValid else {
+            // The delivered buffer contains no valid image part; do not expose
+            // dimensions from a rejected frame as if they described its payload.
             buffer.isIncomplete = true
             buffer.newData = true
             buffer.sizeFilled = 0
@@ -662,6 +668,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 buffer.memory.copyMemory(from: base, byteCount: frameBytes)
             }
         }
+        buffer.width = frame.width
+        buffer.height = frame.height
         buffer.sizeFilled = frameBytes
         buffer.isIncomplete = false
         buffer.newData = true
