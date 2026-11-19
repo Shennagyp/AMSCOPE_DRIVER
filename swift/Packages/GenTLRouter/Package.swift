@@ -20,6 +20,13 @@ let package = Package(
                 .product(name: "GenTLNative", package: "GenTLNative"),
                 .product(name: "AmcamGenTL", package: "AmcamGenTL")
             ]
+        ),
+        .testTarget(
+            name: "GenTLRouterTests",
+            dependencies: [
+                "GenTLRouter",
+                .product(name: "GenTLAPI", package: "GenTLAPI")
+            ]
         )
     ]
 )
