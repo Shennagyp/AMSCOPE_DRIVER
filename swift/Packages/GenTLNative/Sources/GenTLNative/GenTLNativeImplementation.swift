@@ -3,84 +3,201 @@ import Foundation
 import GenTLABI
 import GenTLAPI
 
+// MARK: GenTL 1.6 C ABI function signatures
+
 private typealias GCInitLibFunction = @convention(c) () -> Int32
 private typealias GCCloseLibFunction = @convention(c) () -> Int32
+private typealias GCGetInfoFunction = @convention(c) (
+    Int32, UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
 private typealias GCGetLastErrorFunction = @convention(c) (
-    UnsafeMutablePointer<Int32>?,
-    UnsafeMutablePointer<CChar>?,
-    UnsafeMutablePointer<Int>?
+    UnsafeMutablePointer<Int32>?, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
 ) -> Int32
 
-private typealias TLOpenFunction = @convention(c) (
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
+private typealias TLOpenFunction = @convention(c) (UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> Int32
 private typealias TLCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
+private typealias ModuleInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<Int32>?,
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
 private typealias TLGetNumInterfacesFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UInt32>?
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
 ) -> Int32
 private typealias TLGetInterfaceIDFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UInt32,
-    UnsafeMutablePointer<CChar>?,
-    UnsafeMutablePointer<Int>?
+    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
 ) -> Int32
 private typealias TLUpdateInterfaceListFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UInt8>?,
-    UInt64
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt8>?, UInt64
 ) -> Int32
 private typealias TLOpenInterfaceFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UnsafePointer<CChar>?,
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
 ) -> Int32
 
 private typealias IFCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
 private typealias IFUpdateDeviceListFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UInt8>?,
-    UInt64
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt8>?, UInt64
 ) -> Int32
 private typealias IFGetNumDevicesFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UInt32>?
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
 ) -> Int32
 private typealias IFGetDeviceIDFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UInt32,
-    UnsafeMutablePointer<CChar>?,
-    UnsafeMutablePointer<Int>?
+    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias IFGetDeviceInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, Int32,
+    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
 ) -> Int32
 private typealias IFOpenDeviceFunction = @convention(c) (
-    UnsafeMutableRawPointer?,
-    UnsafePointer<CChar>?,
-    UInt32,
+    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, Int32,
     UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias IFGetParentTLFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+
+private typealias DevGetPortFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DevGetNumDataStreamsFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
+) -> Int32
+private typealias DevGetDataStreamIDFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias DevOpenDataStreamFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DevGetParentIFFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
 ) -> Int32
 private typealias DevCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
 
-/// Direct GenTL Consumer implementation backed by one vendor .cti Producer.
+private typealias DSAnnounceBufferFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int, UnsafeMutableRawPointer?,
+    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DSAllocAndAnnounceBufferFunction = @convention(c) (
+    UnsafeMutableRawPointer?, Int, UnsafeMutableRawPointer?,
+    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DSQueueBufferFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?
+) -> Int32
+private typealias DSFlushQueueFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
+private typealias DSStartAcquisitionFunction = @convention(c) (
+    UnsafeMutableRawPointer?, Int32, UInt64
+) -> Int32
+private typealias DSStopAcquisitionFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
+private typealias DSGetBufferIDFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DSRevokeBufferFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
+    UnsafeMutablePointer<UnsafeMutableRawPointer?>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias DSCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
+private typealias DSGetParentDevFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+
+private typealias GCReadPortFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UInt64, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias GCWritePortFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UInt64, UnsafeRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias GCGetPortURLFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias GCGetNumPortURLsFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
+) -> Int32
+private typealias GCGetPortURLInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UInt32, Int32, UnsafeMutablePointer<Int32>?,
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+
+private typealias GCRegisterEventFunction = @convention(c) (
+    UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32
+private typealias GCUnregisterEventFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
+private typealias EventGetDataFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?, UInt64
+) -> Int32
+private typealias EventGetDataInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeRawPointer?, Int, Int32, UnsafeMutablePointer<Int32>?,
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias EventGetInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<Int32>?,
+    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
+private typealias EventSimpleFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
+
+/// GenTL Consumer implementation backed by a manufacturer-supplied .cti Producer.
 ///
-/// Each instance owns one CTI library/System. Register multiple instances with
-/// GenTLRouter when multiple independent Producers are installed.
+/// The implementation owns one loaded CTI library. Handles returned by the
+/// Producer remain opaque and are never synthesized or reinterpreted as IDs.
 public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     private struct Functions {
         let gcInitLib: GCInitLibFunction
         let gcCloseLib: GCCloseLibFunction
+        let gcGetInfo: GCGetInfoFunction
         let gcGetLastError: GCGetLastErrorFunction
+
         let tlOpen: TLOpenFunction
         let tlClose: TLCloseFunction
+        let tlGetInfo: ModuleInfoFunction
         let tlGetNumInterfaces: TLGetNumInterfacesFunction
         let tlGetInterfaceID: TLGetInterfaceIDFunction
+        let tlGetInterfaceInfo: IFGetDeviceInfoFunction
         let tlUpdateInterfaceList: TLUpdateInterfaceListFunction
         let tlOpenInterface: TLOpenInterfaceFunction
+
         let ifClose: IFCloseFunction
-        let ifUpdateDeviceList: IFUpdateDeviceListFunction
+        let ifGetInfo: ModuleInfoFunction
         let ifGetNumDevices: IFGetNumDevicesFunction
         let ifGetDeviceID: IFGetDeviceIDFunction
+        let ifUpdateDeviceList: IFUpdateDeviceListFunction
+        let ifGetDeviceInfo: IFGetDeviceInfoFunction
         let ifOpenDevice: IFOpenDeviceFunction
+        let ifGetParentTL: IFGetParentTLFunction
+
+        let devGetPort: DevGetPortFunction
+        let devGetNumDataStreams: DevGetNumDataStreamsFunction
+        let devGetDataStreamID: DevGetDataStreamIDFunction
+        let devOpenDataStream: DevOpenDataStreamFunction
+        let devGetInfo: IFGetDeviceInfoFunction
+        let devGetParentIF: DevGetParentIFFunction
         let devClose: DevCloseFunction
+
+        let dsAnnounceBuffer: DSAnnounceBufferFunction
+        let dsAllocAndAnnounceBuffer: DSAllocAndAnnounceBufferFunction
+        let dsQueueBuffer: DSQueueBufferFunction
+        let dsFlushQueue: DSFlushQueueFunction
+        let dsStartAcquisition: DSStartAcquisitionFunction
+        let dsStopAcquisition: DSStopAcquisitionFunction
+        let dsGetInfo: ModuleInfoFunction
+        let dsGetBufferID: DSGetBufferIDFunction
+        let dsGetBufferInfo: IFGetDeviceInfoFunction
+        let dsRevokeBuffer: DSRevokeBufferFunction
+        let dsGetParentDev: DSGetParentDevFunction
+        let dsClose: DSCloseFunction
+
+        let gcReadPort: GCReadPortFunction
+        let gcWritePort: GCWritePortFunction
+        let gcGetPortURL: GCGetPortURLFunction
+        let gcGetNumPortURLs: GCGetNumPortURLsFunction
+        let gcGetPortURLInfo: GCGetPortURLInfoFunction
+        let gcGetPortInfo: IFGetDeviceInfoFunction
+
+        let gcRegisterEvent: GCRegisterEventFunction
+        let gcUnregisterEvent: GCUnregisterEventFunction
+        let eventGetData: EventGetDataFunction
+        let eventGetDataInfo: EventGetDataInfoFunction
+        let eventGetInfo: EventGetInfoFunction
+        let eventFlush: EventSimpleFunction
+        let eventKill: EventSimpleFunction
     }
 
     private let library: GenTLProducerLibrary
@@ -89,6 +206,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     private var initialized = false
 
     public let genTLVersion = GenTLVersion.v1_6
+
     public static var compiledHeaderVersionCode: UInt32 {
         GenTLABI_HeaderVersion()
     }
@@ -105,21 +223,66 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         self.functions = try Functions(
             gcInitLib: load("GCInitLib", as: GCInitLibFunction.self),
             gcCloseLib: load("GCCloseLib", as: GCCloseLibFunction.self),
+            gcGetInfo: load("GCGetInfo", as: GCGetInfoFunction.self),
             gcGetLastError: load("GCGetLastError", as: GCGetLastErrorFunction.self),
+
             tlOpen: load("TLOpen", as: TLOpenFunction.self),
             tlClose: load("TLClose", as: TLCloseFunction.self),
+            tlGetInfo: load("TLGetInfo", as: ModuleInfoFunction.self),
             tlGetNumInterfaces: load("TLGetNumInterfaces", as: TLGetNumInterfacesFunction.self),
             tlGetInterfaceID: load("TLGetInterfaceID", as: TLGetInterfaceIDFunction.self),
+            tlGetInterfaceInfo: load("TLGetInterfaceInfo", as: IFGetDeviceInfoFunction.self),
             tlUpdateInterfaceList: load("TLUpdateInterfaceList", as: TLUpdateInterfaceListFunction.self),
             tlOpenInterface: load("TLOpenInterface", as: TLOpenInterfaceFunction.self),
+
             ifClose: load("IFClose", as: IFCloseFunction.self),
-            ifUpdateDeviceList: load("IFUpdateDeviceList", as: IFUpdateDeviceListFunction.self),
+            ifGetInfo: load("IFGetInfo", as: ModuleInfoFunction.self),
             ifGetNumDevices: load("IFGetNumDevices", as: IFGetNumDevicesFunction.self),
             ifGetDeviceID: load("IFGetDeviceID", as: IFGetDeviceIDFunction.self),
+            ifUpdateDeviceList: load("IFUpdateDeviceList", as: IFUpdateDeviceListFunction.self),
+            ifGetDeviceInfo: load("IFGetDeviceInfo", as: IFGetDeviceInfoFunction.self),
             ifOpenDevice: load("IFOpenDevice", as: IFOpenDeviceFunction.self),
-            devClose: load("DevClose", as: DevCloseFunction.self)
+            ifGetParentTL: load("IFGetParentTL", as: IFGetParentTLFunction.self),
+
+            devGetPort: load("DevGetPort", as: DevGetPortFunction.self),
+            devGetNumDataStreams: load("DevGetNumDataStreams", as: DevGetNumDataStreamsFunction.self),
+            devGetDataStreamID: load("DevGetDataStreamID", as: DevGetDataStreamIDFunction.self),
+            devOpenDataStream: load("DevOpenDataStream", as: DevOpenDataStreamFunction.self),
+            devGetInfo: load("DevGetInfo", as: IFGetDeviceInfoFunction.self),
+            devGetParentIF: load("DevGetParentIF", as: DevGetParentIFFunction.self),
+            devClose: load("DevClose", as: DevCloseFunction.self),
+
+            dsAnnounceBuffer: load("DSAnnounceBuffer", as: DSAnnounceBufferFunction.self),
+            dsAllocAndAnnounceBuffer: load("DSAllocAndAnnounceBuffer", as: DSAllocAndAnnounceBufferFunction.self),
+            dsQueueBuffer: load("DSQueueBuffer", as: DSQueueBufferFunction.self),
+            dsFlushQueue: load("DSFlushQueue", as: DSFlushQueueFunction.self),
+            dsStartAcquisition: load("DSStartAcquisition", as: DSStartAcquisitionFunction.self),
+            dsStopAcquisition: load("DSStopAcquisition", as: DSStopAcquisitionFunction.self),
+            dsGetInfo: load("DSGetInfo", as: ModuleInfoFunction.self),
+            dsGetBufferID: load("DSGetBufferID", as: DSGetBufferIDFunction.self),
+            dsGetBufferInfo: load("DSGetBufferInfo", as: IFGetDeviceInfoFunction.self),
+            dsRevokeBuffer: load("DSRevokeBuffer", as: DSRevokeBufferFunction.self),
+            dsGetParentDev: load("DSGetParentDev", as: DSGetParentDevFunction.self),
+            dsClose: load("DSClose", as: DSCloseFunction.self),
+
+            gcReadPort: load("GCReadPort", as: GCReadPortFunction.self),
+            gcWritePort: load("GCWritePort", as: GCWritePortFunction.self),
+            gcGetPortURL: load("GCGetPortURL", as: GCGetPortURLFunction.self),
+            gcGetNumPortURLs: load("GCGetNumPortURLs", as: GCGetNumPortURLsFunction.self),
+            gcGetPortURLInfo: load("GCGetPortURLInfo", as: GCGetPortURLInfoFunction.self),
+            gcGetPortInfo: load("GCGetPortInfo", as: IFGetDeviceInfoFunction.self),
+
+            gcRegisterEvent: load("GCRegisterEvent", as: GCRegisterEventFunction.self),
+            gcUnregisterEvent: load("GCUnregisterEvent", as: GCUnregisterEventFunction.self),
+            eventGetData: load("EventGetData", as: EventGetDataFunction.self),
+            eventGetDataInfo: load("EventGetDataInfo", as: EventGetDataInfoFunction.self),
+            eventGetInfo: load("EventGetInfo", as: EventGetInfoFunction.self),
+            eventFlush: load("EventFlush", as: EventSimpleFunction.self),
+            eventKill: load("EventKill", as: EventSimpleFunction.self)
         )
     }
+
+    // MARK: Library
 
     public func GCInitLib() throws {
         lock.lock()
@@ -132,9 +295,18 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     public func GCCloseLib() throws {
         lock.lock()
         defer { lock.unlock() }
-        guard initialized else { throw GC_ERROR.notInitialized }
+        try requireInitialized()
         try check(functions.gcCloseLib())
         initialized = false
+    }
+
+    public func GCGetInfo(command: Int32) throws -> GenTLInfoValue {
+        lock.lock()
+        defer { lock.unlock() }
+        try requireInitialized()
+        return try readInfo { type, buffer, size in
+            functions.gcGetInfo(command, type, buffer, size)
+        }
     }
 
     public func GCGetLastError() -> GenTLErrorInfo {
@@ -144,16 +316,18 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         var errorCode: Int32 = GC_ERROR.success.rawValue
         var size = 0
         let queryResult = functions.gcGetLastError(&errorCode, nil, &size)
-        guard queryResult == GC_ERROR.success.rawValue, size > 0, size <= 1_048_576 else {
+        guard (queryResult == GC_ERROR.success.rawValue ||
+               queryResult == GC_ERROR.bufferTooSmall.rawValue),
+              size > 0, size <= 1_048_576 else {
             return GenTLErrorInfo(
                 code: GC_ERROR(rawValue: errorCode),
-                message: "GenTL Producer returned error information with an invalid text size."
+                message: "GenTL Producer did not return a valid last-error text size."
             )
         }
 
         var text = [CChar](repeating: 0, count: size)
-        let readResult = text.withUnsafeMutableBufferPointer { buffer in
-            functions.gcGetLastError(&errorCode, buffer.baseAddress, &size)
+        let readResult = text.withUnsafeMutableBufferPointer {
+            functions.gcGetLastError(&errorCode, $0.baseAddress, &size)
         }
         guard readResult == GC_ERROR.success.rawValue else {
             return GenTLErrorInfo(
@@ -161,22 +335,19 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 message: "GenTL Producer could not return its last-error text (status \(readResult))."
             )
         }
-
-        return GenTLErrorInfo(
-            code: GC_ERROR(rawValue: errorCode),
-            message: String(cString: text)
-        )
+        return GenTLErrorInfo(code: GC_ERROR(rawValue: errorCode), message: String(cString: text))
     }
+
+    // MARK: System
 
     public func TLOpen() throws -> TL_HANDLE {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
-
-        var rawHandle: UnsafeMutableRawPointer?
-        try check(functions.tlOpen(&rawHandle))
-        guard let rawHandle else { throw GC_ERROR.invalidHandle }
-        return TL_HANDLE(rawValue: UInt(bitPattern: rawHandle))
+        var handle: UnsafeMutableRawPointer?
+        try check(functions.tlOpen(&handle))
+        guard let handle else { throw GC_ERROR.invalidHandle }
+        return TL_HANDLE(rawValue: UInt(bitPattern: handle))
     }
 
     public func TLClose(_ hTL: TL_HANDLE) throws {
@@ -186,125 +357,463 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         try check(functions.tlClose(try pointer(hTL)))
     }
 
+    public func TLGetInfo(_ hTL: TL_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.tlGetInfo(try pointer(hTL), command, type, buffer, size)
+            }
+        }
+    }
+
     public func TLGetNumInterfaces(_ hTL: TL_HANDLE) throws -> UInt32 {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-        var count: UInt32 = 0
-        try check(functions.tlGetNumInterfaces(try pointer(hTL), &count))
-        return count
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.tlGetNumInterfaces(try pointer(hTL), &count))
+            return count
+        }
     }
 
     public func TLGetInterfaceID(_ hTL: TL_HANDLE, index: UInt32) throws -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        let handle = try pointer(hTL)
-        var size = 0
-        let query = functions.tlGetInterfaceID(handle, index, nil, &size)
-        try checkStringQuery(query, size: size)
-
-        var bytes = [CChar](repeating: 0, count: size)
-        let result = bytes.withUnsafeMutableBufferPointer {
-            functions.tlGetInterfaceID(handle, index, $0.baseAddress, &size)
+        try withLock {
+            try readString { buffer, size in
+                functions.tlGetInterfaceID(try pointer(hTL), index, buffer, size)
+            }
         }
-        try check(result)
-        return String(cString: bytes)
+    }
+
+    public func TLGetInterfaceInfo(
+        _ hTL: TL_HANDLE,
+        interfaceID: String,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            let handle = try pointer(hTL)
+            return try interfaceID.withCString { id in
+                try readInfo { type, buffer, size in
+                    functions.tlGetInterfaceInfo(handle, id, command, type, buffer, size)
+                }
+            }
+        }
     }
 
     public func TLUpdateInterfaceList(_ hTL: TL_HANDLE, timeout: UInt64) throws -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        var changed: UInt8 = 0
-        try check(functions.tlUpdateInterfaceList(try pointer(hTL), &changed, timeout))
-        return changed != 0
+        try withLock {
+            var changed: UInt8 = 0
+            try check(functions.tlUpdateInterfaceList(try pointer(hTL), &changed, timeout))
+            return changed != 0
+        }
     }
 
     public func TLOpenInterface(_ hTL: TL_HANDLE, interfaceID: String) throws -> IF_HANDLE {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        var rawHandle: UnsafeMutableRawPointer?
-        let result = interfaceID.withCString {
-            functions.tlOpenInterface(try! pointer(hTL), $0, &rawHandle)
+        try withLock {
+            let handle = try pointer(hTL)
+            var interface: UnsafeMutableRawPointer?
+            try check(interfaceID.withCString { id in
+                functions.tlOpenInterface(handle, id, &interface)
+            })
+            guard let interface else { throw GC_ERROR.invalidHandle }
+            return IF_HANDLE(rawValue: UInt(bitPattern: interface))
         }
-        try check(result)
-        guard let rawHandle else { throw GC_ERROR.invalidHandle }
-        return IF_HANDLE(rawValue: UInt(bitPattern: rawHandle))
     }
+
+    // MARK: Interface
 
     public func IFClose(_ hIF: IF_HANDLE) throws {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-        try check(functions.ifClose(try pointer(hIF)))
+        try withLock { try check(functions.ifClose(try pointer(hIF))) }
     }
 
-    public func IFUpdateDeviceList(_ hIF: IF_HANDLE, timeout: UInt64) throws -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        var changed: UInt8 = 0
-        try check(functions.ifUpdateDeviceList(try pointer(hIF), &changed, timeout))
-        return changed != 0
+    public func IFGetInfo(_ hIF: IF_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.ifGetInfo(try pointer(hIF), command, type, buffer, size)
+            }
+        }
     }
 
     public func IFGetNumDevices(_ hIF: IF_HANDLE) throws -> UInt32 {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        var count: UInt32 = 0
-        try check(functions.ifGetNumDevices(try pointer(hIF), &count))
-        return count
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.ifGetNumDevices(try pointer(hIF), &count))
+            return count
+        }
     }
 
     public func IFGetDeviceID(_ hIF: IF_HANDLE, index: UInt32) throws -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        let handle = try pointer(hIF)
-        var size = 0
-        let query = functions.ifGetDeviceID(handle, index, nil, &size)
-        try checkStringQuery(query, size: size)
-
-        var bytes = [CChar](repeating: 0, count: size)
-        let result = bytes.withUnsafeMutableBufferPointer {
-            functions.ifGetDeviceID(handle, index, $0.baseAddress, &size)
+        try withLock {
+            try readString { buffer, size in
+                functions.ifGetDeviceID(try pointer(hIF), index, buffer, size)
+            }
         }
-        try check(result)
-        return String(cString: bytes)
+    }
+
+    public func IFUpdateDeviceList(_ hIF: IF_HANDLE, timeout: UInt64) throws -> Bool {
+        try withLock {
+            var changed: UInt8 = 0
+            try check(functions.ifUpdateDeviceList(try pointer(hIF), &changed, timeout))
+            return changed != 0
+        }
+    }
+
+    public func IFGetDeviceInfo(
+        _ hIF: IF_HANDLE,
+        deviceID: String,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            let handle = try pointer(hIF)
+            return try deviceID.withCString { id in
+                try readInfo { type, buffer, size in
+                    functions.ifGetDeviceInfo(handle, id, command, type, buffer, size)
+                }
+            }
+        }
     }
 
     public func IFOpenDevice(
         _ hIF: IF_HANDLE,
         deviceID: String,
-        accessFlags: UInt32
+        accessFlags: Int32
     ) throws -> DEV_HANDLE {
-        lock.lock()
-        defer { lock.unlock() }
-        try requireInitialized()
-
-        var rawHandle: UnsafeMutableRawPointer?
-        let result = deviceID.withCString {
-            functions.ifOpenDevice(try! pointer(hIF), $0, accessFlags, &rawHandle)
+        try withLock {
+            let handle = try pointer(hIF)
+            var device: UnsafeMutableRawPointer?
+            try check(deviceID.withCString { id in
+                functions.ifOpenDevice(handle, id, accessFlags, &device)
+            })
+            guard let device else { throw GC_ERROR.invalidHandle }
+            return DEV_HANDLE(rawValue: UInt(bitPattern: device))
         }
-        try check(result)
-        guard let rawHandle else { throw GC_ERROR.invalidHandle }
-        return DEV_HANDLE(rawValue: UInt(bitPattern: rawHandle))
+    }
+
+    public func IFGetParentTL(_ hIF: IF_HANDLE) throws -> TL_HANDLE {
+        try withLock {
+            var system: UnsafeMutableRawPointer?
+            try check(functions.ifGetParentTL(try pointer(hIF), &system))
+            guard let system else { throw GC_ERROR.invalidHandle }
+            return TL_HANDLE(rawValue: UInt(bitPattern: system))
+        }
+    }
+
+    // MARK: Device
+
+    public func DevGetPort(_ hDevice: DEV_HANDLE) throws -> PORT_HANDLE {
+        try withLock {
+            var port: UnsafeMutableRawPointer?
+            try check(functions.devGetPort(try pointer(hDevice), &port))
+            guard let port else { throw GC_ERROR.invalidHandle }
+            return PORT_HANDLE(rawValue: UInt(bitPattern: port))
+        }
+    }
+
+    public func DevGetNumDataStreams(_ hDevice: DEV_HANDLE) throws -> UInt32 {
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.devGetNumDataStreams(try pointer(hDevice), &count))
+            return count
+        }
+    }
+
+    public func DevGetDataStreamID(_ hDevice: DEV_HANDLE, index: UInt32) throws -> String {
+        try withLock {
+            try readString { buffer, size in
+                functions.devGetDataStreamID(try pointer(hDevice), index, buffer, size)
+            }
+        }
+    }
+
+    public func DevOpenDataStream(_ hDevice: DEV_HANDLE, dataStreamID: String) throws -> DS_HANDLE {
+        try withLock {
+            let handle = try pointer(hDevice)
+            var stream: UnsafeMutableRawPointer?
+            try check(dataStreamID.withCString { id in
+                functions.devOpenDataStream(handle, id, &stream)
+            })
+            guard let stream else { throw GC_ERROR.invalidHandle }
+            return DS_HANDLE(rawValue: UInt(bitPattern: stream))
+        }
+    }
+
+    public func DevGetInfo(_ hDevice: DEV_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.devGetInfo(try pointer(hDevice), command, type, buffer, size)
+            }
+        }
+    }
+
+    public func DevGetParentIF(_ hDevice: DEV_HANDLE) throws -> IF_HANDLE {
+        try withLock {
+            var interface: UnsafeMutableRawPointer?
+            try check(functions.devGetParentIF(try pointer(hDevice), &interface))
+            guard let interface else { throw GC_ERROR.invalidHandle }
+            return IF_HANDLE(rawValue: UInt(bitPattern: interface))
+        }
     }
 
     public func DevClose(_ hDevice: DEV_HANDLE) throws {
+        try withLock { try check(functions.devClose(try pointer(hDevice))) }
+    }
+
+    // MARK: Data Stream / Buffer
+
+    public func DSAnnounceBuffer(
+        _ hDS: DS_HANDLE,
+        memory: GenTLBufferMemory,
+        privateData: UnsafeMutableRawPointer?
+    ) throws -> BUFFER_HANDLE {
+        try withLock {
+            var buffer: UnsafeMutableRawPointer?
+            try check(functions.dsAnnounceBuffer(
+                try pointer(hDS), memory.baseAddress, memory.size, privateData, &buffer
+            ))
+            guard let buffer else { throw GC_ERROR.invalidBuffer }
+            return BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
+        }
+    }
+
+    public func DSAllocAndAnnounceBuffer(
+        _ hDS: DS_HANDLE,
+        size: Int,
+        privateData: UnsafeMutableRawPointer?
+    ) throws -> BUFFER_HANDLE {
+        try withLock {
+            var buffer: UnsafeMutableRawPointer?
+            try check(functions.dsAllocAndAnnounceBuffer(try pointer(hDS), size, privateData, &buffer))
+            guard let buffer else { throw GC_ERROR.invalidBuffer }
+            return BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
+        }
+    }
+
+    public func DSQueueBuffer(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws {
+        try withLock {
+            try check(functions.dsQueueBuffer(try pointer(hDS), try pointer(buffer)))
+        }
+    }
+
+    public func DSFlushQueue(_ hDS: DS_HANDLE, operation: Int32) throws {
+        try withLock {
+            try check(functions.dsFlushQueue(try pointer(hDS), operation))
+        }
+    }
+
+    public func DSStartAcquisition(
+        _ hDS: DS_HANDLE,
+        flags: Int32,
+        numberToAcquire: UInt64
+    ) throws {
+        try withLock {
+            try check(functions.dsStartAcquisition(try pointer(hDS), flags, numberToAcquire))
+        }
+    }
+
+    public func DSStopAcquisition(_ hDS: DS_HANDLE, flags: Int32) throws {
+        try withLock {
+            try check(functions.dsStopAcquisition(try pointer(hDS), flags))
+        }
+    }
+
+    public func DSGetInfo(_ hDS: DS_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.dsGetInfo(try pointer(hDS), command, type, buffer, size)
+            }
+        }
+    }
+
+    public func DSGetBufferID(_ hDS: DS_HANDLE, index: UInt32) throws -> BUFFER_HANDLE {
+        try withLock {
+            var buffer: UnsafeMutableRawPointer?
+            try check(functions.dsGetBufferID(try pointer(hDS), index, &buffer))
+            guard let buffer else { throw GC_ERROR.invalidBuffer }
+            return BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
+        }
+    }
+
+    public func DSGetBufferInfo(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            let stream = try pointer(hDS)
+            let bufferHandle = try pointer(buffer)
+            return try readInfo { type, output, size in
+                functions.dsGetBufferInfo(stream, bufferHandle, command, type, output, size)
+            }
+        }
+    }
+
+    public func DSRevokeBuffer(
+        _ hDS: DS_HANDLE,
+        buffer: BUFFER_HANDLE
+    ) throws -> GenTLRevokedBuffer {
+        try withLock {
+            var memory: UnsafeMutableRawPointer?
+            var privateData: UnsafeMutableRawPointer?
+            try check(functions.dsRevokeBuffer(try pointer(hDS), try pointer(buffer), &memory, &privateData))
+            return GenTLRevokedBuffer(baseAddress: memory, privateData: privateData)
+        }
+    }
+
+    public func DSGetParentDev(_ hDS: DS_HANDLE) throws -> DEV_HANDLE {
+        try withLock {
+            var device: UnsafeMutableRawPointer?
+            try check(functions.dsGetParentDev(try pointer(hDS), &device))
+            guard let device else { throw GC_ERROR.invalidHandle }
+            return DEV_HANDLE(rawValue: UInt(bitPattern: device))
+        }
+    }
+
+    public func DSClose(_ hDS: DS_HANDLE) throws {
+        try withLock { try check(functions.dsClose(try pointer(hDS))) }
+    }
+
+    // MARK: Port / Register Access
+
+    public func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
+        try withLock {
+            guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidParameter }
+            var data = Data(count: size)
+            var actualSize = size
+            let result = data.withUnsafeMutableBytes { output in
+                functions.gcReadPort(try! pointer(hPort), address, output.baseAddress, &actualSize)
+            }
+            try check(result)
+            guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+            data.count = actualSize
+            return data
+        }
+    }
+
+    public func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws {
+        try withLock {
+            var size = data.count
+            let result = data.withUnsafeBytes { input in
+                functions.gcWritePort(try! pointer(hPort), address, input.baseAddress, &size)
+            }
+            try check(result)
+        }
+    }
+
+    public func GCGetPortURL(_ hPort: PORT_HANDLE) throws -> String {
+        try withLock {
+            try readString { buffer, size in
+                functions.gcGetPortURL(try pointer(hPort), buffer, size)
+            }
+        }
+    }
+
+    public func GCGetNumPortURLs(_ hPort: PORT_HANDLE) throws -> UInt32 {
+        try withLock {
+            var count: UInt32 = 0
+            try check(functions.gcGetNumPortURLs(try pointer(hPort), &count))
+            return count
+        }
+    }
+
+    public func GCGetPortURLInfo(
+        _ hPort: PORT_HANDLE,
+        index: UInt32,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.gcGetPortURLInfo(try pointer(hPort), index, command, type, buffer, size)
+            }
+        }
+    }
+
+    public func GCGetPortInfo(_ hPort: PORT_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.gcGetPortInfo(try pointer(hPort), command, type, buffer, size)
+            }
+        }
+    }
+
+    // MARK: Signaling / Events
+
+    public func GCRegisterEvent(
+        _ source: EVENTSRC_HANDLE,
+        eventType: Int32
+    ) throws -> EVENT_HANDLE {
+        try withLock {
+            var event: UnsafeMutableRawPointer?
+            try check(functions.gcRegisterEvent(try eventSourcePointer(source), eventType, &event))
+            guard let event else { throw GC_ERROR.invalidHandle }
+            return EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+        }
+    }
+
+    public func GCUnregisterEvent(
+        _ source: EVENTSRC_HANDLE,
+        eventType: Int32
+    ) throws {
+        try withLock {
+            try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
+        }
+    }
+
+    public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
+        try withLock {
+            let eventPointer = try pointer(event)
+            var size = 0
+            let query = functions.eventGetData(eventPointer, nil, &size, timeout)
+            try checkInfoSizeQuery(query, size: size)
+
+            var data = Data(count: size)
+            var actualSize = size
+            let result = data.withUnsafeMutableBytes { output in
+                functions.eventGetData(eventPointer, output.baseAddress, &actualSize, timeout)
+            }
+            try check(result)
+            guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+            data.count = actualSize
+            return data
+        }
+    }
+
+    public func EventGetDataInfo(
+        _ event: EVENT_HANDLE,
+        inputData: Data,
+        command: Int32
+    ) throws -> GenTLInfoValue {
+        try withLock {
+            let eventPointer = try pointer(event)
+            return try inputData.withUnsafeBytes { input in
+                try readInfo { type, output, size in
+                    functions.eventGetDataInfo(
+                        eventPointer, input.baseAddress, inputData.count,
+                        command, type, output, size
+                    )
+                }
+            }
+        }
+    }
+
+    public func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        try withLock {
+            try readInfo { type, buffer, size in
+                functions.eventGetInfo(try pointer(event), command, type, buffer, size)
+            }
+        }
+    }
+
+    public func EventFlush(_ event: EVENT_HANDLE) throws {
+        try withLock { try check(functions.eventFlush(try pointer(event))) }
+    }
+
+    public func EventKill(_ event: EVENT_HANDLE) throws {
+        try withLock { try check(functions.eventKill(try pointer(event))) }
+    }
+
+    // MARK: Helpers
+
+    private func withLock<T>(_ operation: () throws -> T) throws -> T {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
-        try check(functions.devClose(try pointer(hDevice)))
+        return try operation()
     }
 
     private func requireInitialized() throws {
@@ -317,21 +826,105 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         }
     }
 
-    private func checkStringQuery(_ result: Int32, size: Int) throws {
-        guard size > 0, size <= 1_048_576 else { throw GC_ERROR.invalidValue }
+    private func checkInfoSizeQuery(_ result: Int32, size: Int) throws {
+        guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidValue }
         if result == GC_ERROR.success.rawValue || result == GC_ERROR.bufferTooSmall.rawValue {
             return
         }
         throw GC_ERROR(rawValue: result)
     }
 
+    private func readString(
+        _ call: (UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?) throws -> Int32
+    ) throws -> String {
+        var size = 0
+        let query = try call(nil, &size)
+        try checkInfoSizeQuery(query, size: size)
+        guard size > 0 else { return "" }
+
+        var bytes = [CChar](repeating: 0, count: size)
+        let result = try bytes.withUnsafeMutableBufferPointer { buffer in
+            try call(buffer.baseAddress, &size)
+        }
+        try check(result)
+        return String(cString: bytes)
+    }
+
+    private func readInfo(
+        _ call: (
+            UnsafeMutablePointer<Int32>?,
+            UnsafeMutableRawPointer?,
+            UnsafeMutablePointer<Int>?
+        ) throws -> Int32
+    ) throws -> GenTLInfoValue {
+        var dataType: Int32 = GenTLInfoDataType.unknown.rawValue
+        var size = 0
+        let query = try call(&dataType, nil, &size)
+        try checkInfoSizeQuery(query, size: size)
+        guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidValue }
+
+        var data = Data(count: size)
+        var actualSize = size
+        let result = data.withUnsafeMutableBytes { output in
+            call(&dataType, output.baseAddress, &actualSize)
+        }
+        try check(result)
+        guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+        data.count = actualSize
+        return try decodeInfo(dataType: dataType, data: data)
+    }
+
+    private func decodeInfo(dataType: Int32, data: Data) throws -> GenTLInfoValue {
+        guard let type = GenTLInfoDataType(rawValue: dataType) else {
+            return .raw(data)
+        }
+
+        func value<T>(_ type: T.Type) throws -> T {
+            guard data.count >= MemoryLayout<T>.size else { throw GC_ERROR.bufferTooSmall }
+            return data.withUnsafeBytes { $0.loadUnaligned(as: T.self) }
+        }
+
+        switch type {
+        case .unknown, .buffer:
+            return .raw(data)
+        case .string:
+            let bytes = data.prefix { $0 != 0 }
+            return .string(String(decoding: bytes, as: UTF8.self))
+        case .stringList:
+            let strings = data.split(separator: 0, omittingEmptySubsequences: true)
+                .map { String(decoding: $0, as: UTF8.self) }
+            return .stringList(strings)
+        case .int16: return .int16(try value(Int16.self))
+        case .uint16: return .uint16(try value(UInt16.self))
+        case .int32: return .int32(try value(Int32.self))
+        case .uint32: return .uint32(try value(UInt32.self))
+        case .int64: return .int64(try value(Int64.self))
+        case .uint64: return .uint64(try value(UInt64.self))
+        case .float64: return .float64(try value(Double.self))
+        case .pointer: return .pointer(try value(UInt.self))
+        case .bool8: return .uint32((try value(UInt8.self)) == 0 ? 0 : 1)
+        case .size: return .uint64(UInt64(try value(UInt.self)))
+        case .pointerDifference: return .int64(Int64(try value(Int.self)))
+        }
+    }
+
     private func pointer<Tag: Hashable & Sendable>(
         _ handle: GenTLHandle<Tag>
     ) throws -> UnsafeMutableRawPointer {
         guard handle.isValid,
-              let pointer = UnsafeMutableRawPointer(bitPattern: handle.rawValue) else {
+              let raw = UnsafeMutableRawPointer(bitPattern: handle.rawValue) else {
             throw GC_ERROR.invalidHandle
         }
-        return pointer
+        return raw
+    }
+
+    private func eventSourcePointer(_ source: EVENTSRC_HANDLE) throws -> UnsafeMutableRawPointer {
+        switch source {
+        case .system(let handle): return try pointer(handle)
+        case .interface(let handle): return try pointer(handle)
+        case .device(let handle): return try pointer(handle)
+        case .dataStream(let handle): return try pointer(handle)
+        case .buffer(let handle): return try pointer(handle)
+        }
     }
 }
