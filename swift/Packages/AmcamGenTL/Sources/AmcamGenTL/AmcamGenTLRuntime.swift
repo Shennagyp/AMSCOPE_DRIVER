@@ -211,6 +211,10 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         condition.lock()
         defer { condition.unlock() }
 
+        // Flush mutates input/output ownership. The callback may be concurrently
+        // consuming the input pool, so require the acquisition engine to be stopped.
+        guard !isGrabbing else { throw GC_ERROR.busy }
+
         switch operation {
         case 0: // ACQ_QUEUE_INPUT_TO_OUTPUT
             // GenTL defines this as making input-pool buffers available on output.
