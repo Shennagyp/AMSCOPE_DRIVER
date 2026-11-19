@@ -1,7 +1,4 @@
-import Foundation
-
-/// Conservative defaults for API operations not supplied by a backend.
-/// Returning NOT_IMPLEMENTED is preferable to manufacturing unsupported behavior.
+/// Explicit defaults for GenTL 1.6 operations a particular backend cannot supply.
 public extension GenTLAPI {
     var genTLVersion: GenTLVersion { .v1_6 }
 
@@ -38,12 +35,8 @@ public extension GenTLAPI {
     func DevGetParentIF(_ hDevice: DEV_HANDLE) throws -> IF_HANDLE { throw GC_ERROR.notImplemented }
     func DevClose(_ hDevice: DEV_HANDLE) throws { throw GC_ERROR.notImplemented }
 
-    func DSAnnounceBuffer(_ hDS: DS_HANDLE, memory: GenTLBufferMemory, privateData: UnsafeMutableRawPointer?) throws -> BUFFER_HANDLE {
-        throw GC_ERROR.notImplemented
-    }
-    func DSAllocAndAnnounceBuffer(_ hDS: DS_HANDLE, size: Int, privateData: UnsafeMutableRawPointer?) throws -> BUFFER_HANDLE {
-        throw GC_ERROR.notImplemented
-    }
+    func DSAnnounceBuffer(_ hDS: DS_HANDLE, memory: GenTLBufferMemory, privateData: UnsafeMutableRawPointer?) throws -> BUFFER_HANDLE { throw GC_ERROR.notImplemented }
+    func DSAllocAndAnnounceBuffer(_ hDS: DS_HANDLE, size: Int, privateData: UnsafeMutableRawPointer?) throws -> BUFFER_HANDLE { throw GC_ERROR.notImplemented }
     func DSQueueBuffer(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws { throw GC_ERROR.notImplemented }
     func DSFlushQueue(_ hDS: DS_HANDLE, operation: Int32) throws { throw GC_ERROR.notImplemented }
     func DSStartAcquisition(_ hDS: DS_HANDLE, flags: Int32, numberToAcquire: UInt64) throws { throw GC_ERROR.notImplemented }
@@ -54,6 +47,19 @@ public extension GenTLAPI {
     func DSRevokeBuffer(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> GenTLRevokedBuffer { throw GC_ERROR.notImplemented }
     func DSGetParentDev(_ hDS: DS_HANDLE) throws -> DEV_HANDLE { throw GC_ERROR.notImplemented }
     func DSClose(_ hDS: DS_HANDLE) throws { throw GC_ERROR.notImplemented }
+
+    func GCReadPortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortReadRequest]) throws -> [Data] { throw GC_ERROR.notImplemented }
+    func GCWritePortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortWriteRequest]) throws { throw GC_ERROR.notImplemented }
+    func DSGetBufferChunkData(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> [GenTLChunkData] { throw GC_ERROR.notImplemented }
+    func DSGetNumBufferParts(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32 { throw GC_ERROR.notImplemented }
+    func DSGetBufferPartInfo(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, partIndex: UInt32, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
+    func DSAnnounceCompositeBuffer(_ hDS: DS_HANDLE, segments: [GenTLCompositeBufferSegment], privateData: UnsafeMutableRawPointer?) throws -> BUFFER_HANDLE { throw GC_ERROR.notImplemented }
+    func DSGetBufferInfoStacked(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, commands: [Int32]) throws -> [GenTLInfoValue] { throw GC_ERROR.notImplemented }
+    func DSGetBufferPartInfoStacked(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, partIndex: UInt32, commands: [Int32]) throws -> [GenTLInfoValue] { throw GC_ERROR.notImplemented }
+    func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 { throw GC_ERROR.notImplemented }
+    func DSGetFlowInfo(_ hDS: DS_HANDLE, flowIndex: UInt32, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
+    func DSGetNumBufferSegments(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32 { throw GC_ERROR.notImplemented }
+    func DSGetBufferSegmentInfo(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, segmentIndex: UInt32, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
 
     func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data { throw GC_ERROR.notImplemented }
     func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws { throw GC_ERROR.notImplemented }
