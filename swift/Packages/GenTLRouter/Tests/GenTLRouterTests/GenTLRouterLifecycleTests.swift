@@ -103,6 +103,30 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 }
 
 final class GenTLRouterLifecycleTests: XCTestCase {
+    func testNativeProducerSymlinkAliasesCannotRegisterTwice() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GenTLRouterProducerIdentity-\\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let producer = root.appendingPathComponent("camera.cti")
+        let alias = root.appendingPathComponent("camera-alias.cti")
+        XCTAssertTrue(FileManager.default.createFile(atPath: producer.path, contents: Data()))
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: producer)
+
+        let router = GenTLRouter()
+        try router.registerNativeProducer(backendID: "primary", ctiURL: producer)
+
+        XCTAssertThrowsError(
+            try router.registerNativeProducer(backendID: "alias", ctiURL: alias)
+        ) { error in
+            guard case GenTLRouterError.duplicateBackendResource(let existingID) = error else {
+                return XCTFail("Expected duplicate backend resource, received \\(error)")
+            }
+            XCTAssertEqual(existingID, "primary")
+        }
+    }
+
     func testRepeatedDiscoveryReusesOneProducerSystemAndInterface() throws {
         let api = RecordingGenTLAPI()
 
