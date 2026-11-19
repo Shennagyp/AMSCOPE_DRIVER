@@ -129,8 +129,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireSystem(hTL)
-        guard !interfaceOpen, openDevices.isEmpty, dataStreams.isEmpty else {
-            try fail(.resourceInUse, "Close the interface, devices and streams before TLClose.")
+        if interfaceOpen {
+            try IFClose(interfaceHandle)
         }
         discoveredDevices.removeAll(keepingCapacity: false)
         systemOpen = false
@@ -200,8 +200,10 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInterface(hIF)
-        guard openDevices.isEmpty else {
-            try fail(.resourceInUse, "Close all devices before IFClose.")
+        // IFClose closes every Device module owned by this interface. DevClose
+        // in turn closes its dependent Data Stream and unregisters its events.
+        for deviceHandle in Array(openDevices.keys) {
+            try DevClose(DEV_HANDLE(rawValue: deviceHandle))
         }
         discoveredDevices.removeAll(keepingCapacity: false)
         interfaceOpen = false
@@ -391,8 +393,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let record = try deviceRecord(hDevice)
-        guard record.dataStreamHandle == nil else {
-            throw GC_ERROR.resourceInUse
+        if let streamHandle = record.dataStreamHandle {
+            try DSClose(streamHandle)
         }
         do {
             try record.session.close()
