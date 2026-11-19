@@ -224,6 +224,9 @@ private final class GenTLProviderContext: @unchecked Sendable {
             } else {
                 let openedHandle = try api.TLOpenInterface(systemHandle, interfaceID: interfaceID)
                 guard openedHandle.isValid else { throw GC_ERROR.invalidHandle }
+                guard !interfaceHandles.contains(openedHandle) else {
+                    throw GC_ERROR.resourceInUse
+                }
                 interfaceHandlesByID[interfaceID] = openedHandle
                 interfaceHandles.append(openedHandle)
                 interfaceHandle = openedHandle
