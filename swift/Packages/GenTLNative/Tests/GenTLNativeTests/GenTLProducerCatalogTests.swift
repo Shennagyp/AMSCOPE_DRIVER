@@ -59,6 +59,23 @@ final class GenTLProducerCatalogTests: XCTestCase {
         XCTAssertEqual(result.issues.first?.path, missing.standardizedFileURL.path)
     }
 
+    func testEnvironmentPathsPreserveSemicolonsInMacOSDirectoryNames() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GenTL;Producer;Path-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let producer = root.appendingPathComponent("camera.cti")
+        XCTAssertTrue(FileManager.default.createFile(atPath: producer.path, contents: Data()))
+
+        let result = GenTLProducerCatalog.discover(
+            environment: [GenTLProducerCatalog.standardSearchPathEnvironmentVariable: root.path]
+        )
+
+        XCTAssertTrue(result.issues.isEmpty)
+        XCTAssertEqual(result.producers.map(\.standardizedFileURL), [producer.standardizedFileURL])
+    }
+
     func testDirectCTIPathsAndSymlinkAliasesAreRegisteredOnce() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("GenTLProducerAliasTests-\(UUID().uuidString)", isDirectory: true)
