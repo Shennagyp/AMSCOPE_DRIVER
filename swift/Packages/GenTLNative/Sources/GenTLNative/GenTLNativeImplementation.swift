@@ -274,7 +274,13 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     }
 
     private var registeredEventsByHandle: [UInt: RegisteredEvent] = [:]
-    private var activeEventDataReads = 0
+    /// Protected by lock. Prevents new event API calls after unregister begins.
+    private var unregisteringEventHandles = Set<UInt>()
+
+    /// EventGetData can block without holding lock. A separate condition tracks
+    /// the lifetime of each event handle until its blocked reads have returned.
+    private let eventReadCondition = NSCondition()
+    private var activeEventDataReadsByHandle: [UInt: Int] = [:]
 
     public let genTLVersion = GenTLVersion.v1_6
 
@@ -380,8 +386,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
-        guard activeEventDataReads == 0,
-              registeredEventsByHandle.isEmpty else {
+        guard !hasActiveEventDataReads,
+              registeredEventsByHandle.isEmpty,
+              unregisteringEventHandles.isEmpty else {
             throw GC_ERROR.resourceInUse
         }
         try check(functions.gcCloseLib())
@@ -1273,18 +1280,45 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         _ source: EVENTSRC_HANDLE,
         eventType: Int32
     ) throws {
-        try withLock {
+        let handles = try withLock { () throws -> [UInt] in
             let matchingHandles = registeredEventsByHandle.compactMap { handle, record in
                 record.source == source && record.eventType == eventType ? handle : nil
             }
+            guard !matchingHandles.isEmpty else { throw GC_ERROR.invalidHandle }
+            guard matchingHandles.allSatisfy({
+                !unregisteringEventHandles.contains($0)
+            }) else {
+                throw GC_ERROR.resourceInUse
+            }
 
-            // GenTL 1.6 requires GCUnregisterEvent to abort any EventGetData
-            // calls waiting on this event. The Producer coordinates that abort
-            // with its event-handle lifetime; the consumer must not block
-            // unregistration merely because a read is active.
-            try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
-            for handle in matchingHandles {
+            // Block new EventGetData/EventGetInfo/EventKill calls before asking
+            // the Producer to abort any reads already in progress.
+            unregisteringEventHandles.formUnion(matchingHandles)
+            do {
+                try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
+            } catch {
+                unregisteringEventHandles.subtract(matchingHandles)
+                throw error
+            }
+            return matchingHandles
+        }
+
+        // The Producer must abort outstanding EventGetData calls as part of
+        // GCUnregisterEvent. Keep the opaque handles registered until those
+        // calls have actually returned to Swift, so no in-flight call uses a
+        // handle after the consumer releases its registration record.
+        eventReadCondition.lock()
+        while handles.contains(where: {
+            activeEventDataReadsByHandle[$0, default: 0] > 0
+        }) {
+            eventReadCondition.wait()
+        }
+        eventReadCondition.unlock()
+
+        try withLock {
+            for handle in handles {
                 registeredEventsByHandle.removeValue(forKey: handle)
+                unregisteringEventHandles.remove(handle)
             }
         }
     }
@@ -1316,7 +1350,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         // Mark the read only after its size query succeeds, then enter the
         // blocking Producer call without another API operation in between.
         let eventPointer = try beginEventDataRead(event)
-        defer { endEventDataRead() }
+        defer { endEventDataRead(event.rawValue) }
 
         // Even an event type with an empty payload needs a non-NULL buffer:
         // NULL means discard, not "deliver an empty event".
@@ -1387,18 +1421,34 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
         try requireInitialized()
         let eventPointer = try registeredEventPointer(event)
-        activeEventDataReads += 1
+
+        eventReadCondition.lock()
+        activeEventDataReadsByHandle[event.rawValue, default: 0] += 1
+        eventReadCondition.unlock()
         return eventPointer
     }
 
-    private func endEventDataRead() {
-        lock.lock()
-        defer { lock.unlock() }
-        activeEventDataReads = max(0, activeEventDataReads - 1)
+    private func endEventDataRead(_ eventHandle: UInt) {
+        eventReadCondition.lock()
+        defer { eventReadCondition.unlock() }
+        let activeCount = activeEventDataReadsByHandle[eventHandle, default: 0]
+        if activeCount <= 1 {
+            activeEventDataReadsByHandle.removeValue(forKey: eventHandle)
+        } else {
+            activeEventDataReadsByHandle[eventHandle] = activeCount - 1
+        }
+        eventReadCondition.broadcast()
+    }
+
+    private var hasActiveEventDataReads: Bool {
+        eventReadCondition.lock()
+        defer { eventReadCondition.unlock() }
+        return !activeEventDataReadsByHandle.isEmpty
     }
 
     private func registeredEventPointer(_ event: EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
-        guard registeredEventsByHandle[event.rawValue] != nil else {
+        guard registeredEventsByHandle[event.rawValue] != nil,
+              !unregisteringEventHandles.contains(event.rawValue) else {
             throw GC_ERROR.invalidHandle
         }
         return try pointer(event)
