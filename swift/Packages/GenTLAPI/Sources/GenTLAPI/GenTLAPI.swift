@@ -13,5 +13,8 @@ public protocol GenTLAPI:
     GenTLPortFunctions,
     GenTLSignalingFunctions
 {
+    /// GenTL revision represented by this Swift API contract. For GenTLNative,
+    /// this is not a promise that every loaded .cti Producer implements that revision;
+    /// query GCGetInfo/TL_INFO_GENTL_VER_MAJOR and MINOR for the Producer's own version.
     var genTLVersion: GenTLVersion { get }
 }
