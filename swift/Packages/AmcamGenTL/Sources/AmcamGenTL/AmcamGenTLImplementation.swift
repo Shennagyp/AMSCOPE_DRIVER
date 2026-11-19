@@ -809,7 +809,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         // available for read/write merely because it was discoverable.
         case 5: return .int32(isOpen ? 5 : 0) // OPEN_READWRITE / UNKNOWN
         case 6: throw GC_ERROR.notAvailable
-        case 7: return .string(device.identifier)
+        case 7: throw GC_ERROR.notAvailable // SDK ID is opaque, not a verified serial number.
         case 9: return .uint64(1_000_000) // Amcam FrameInfoV2 timestamps are microseconds.
         default: throw GC_ERROR.notAvailable
         }
