@@ -7,6 +7,7 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case emptyBackendID
     case duplicateBackendID(String)
     case unknownBackendID(String)
+    case interfaceHandleUnavailable(String)
 
     public var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
             return "GenTL backend '\(id)' is already registered."
         case .unknownBackendID(let id):
             return "No GenTL backend is registered with identifier '\(id)'."
+        case .interfaceHandleUnavailable(let id):
+            return "The discovered GenTL interface handle for '\(id)' is no longer available."
         }
     }
 }
@@ -86,13 +89,16 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
         interfaceID: String,
         deviceID: String,
         context: GenTLProviderContext
-    ) {
+    ) throws {
+        guard let interfaceHandle = context.interfaceHandle(for: interfaceID) else {
+            throw GenTLRouterError.interfaceHandleUnavailable(interfaceID)
+        }
         self.backendID = backendID
         self.interfaceID = interfaceID
         self.deviceID = deviceID
         self.api = context.api
         self.systemHandle = context.systemHandle
-        self.interfaceHandle = context.interfaceHandlesByID[interfaceID]!
+        self.interfaceHandle = interfaceHandle
         self.context = context
     }
 
@@ -133,7 +139,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
     private var interfaceHandles: [IF_HANDLE] = []
     private var closed = false
 
-    var interfaceHandlesByID: [String: IF_HANDLE] = [:]
+    private var interfaceHandlesByID: [String: IF_HANDLE] = [:]
 
     init(backendID: String, api: any GenTLAPI, systemHandle: TL_HANDLE) {
         self.backendID = backendID
@@ -146,6 +152,12 @@ private final class GenTLProviderContext: @unchecked Sendable {
         defer { lock.unlock() }
         interfaceHandlesByID[id] = handle
         interfaceHandles.append(handle)
+    }
+
+    func interfaceHandle(for id: String) -> IF_HANDLE? {
+        lock.lock()
+        defer { lock.unlock() }
+        return interfaceHandlesByID[id]
     }
 
     /// Abandons teardown without unloading a Producer that may still own live
@@ -384,7 +396,7 @@ public final class GenTLRouter: @unchecked Sendable {
 
                         for deviceIndex in 0..<deviceCount {
                             let deviceID = try createdAPI.IFGetDeviceID(interfaceHandle, index: deviceIndex)
-                            devices.append(GenTLDeviceCandidate(
+                            devices.append(try GenTLDeviceCandidate(
                                 backendID: registration.identifier,
                                 interfaceID: interfaceID,
                                 deviceID: deviceID,
