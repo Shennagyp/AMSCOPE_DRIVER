@@ -105,6 +105,7 @@ public struct AmcamControlSnapshot: Equatable, Sendable {
 /// three padding bytes even though each pixel occupies exactly three bytes.
 struct AmcamRGB24Layout: Equatable, Sendable {
     let bytesPerRow: Int
+    let rowPaddingBytes: Int
     let payloadSize: Int
 
     init?(width: Int, height: Int) {
@@ -122,6 +123,7 @@ struct AmcamRGB24Layout: Equatable, Sendable {
         guard !payloadOverflow, totalBytes > 0 else { return nil }
 
         self.bytesPerRow = alignedRowBytes
+        self.rowPaddingBytes = alignedRowBytes - packedRowBytes
         self.payloadSize = totalBytes
     }
 }
