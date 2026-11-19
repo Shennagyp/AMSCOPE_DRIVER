@@ -653,6 +653,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         privateData: UnsafeMutableRawPointer?
     ) throws -> BUFFER_HANDLE {
         try withLock {
+            guard memory.size > 0 else { throw GC_ERROR.invalidParameter }
             var buffer: UnsafeMutableRawPointer?
             try check(functions.dsAnnounceBuffer(
                 try pointer(hDS), memory.baseAddress, memory.size, privateData, &buffer
@@ -668,6 +669,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         privateData: UnsafeMutableRawPointer?
     ) throws -> BUFFER_HANDLE {
         try withLock {
+            guard size > 0 else { throw GC_ERROR.invalidParameter }
             var buffer: UnsafeMutableRawPointer?
             try check(functions.dsAllocAndAnnounceBuffer(try pointer(hDS), size, privateData, &buffer))
             guard let buffer else { throw GC_ERROR.invalidBuffer }
