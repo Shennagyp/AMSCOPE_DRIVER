@@ -256,6 +256,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     private let functions: Functions
     private let lock = NSRecursiveLock()
     private var initialized = false
+    /// EventGetData can block until its timeout (or indefinitely). It must not
+    /// hold the API-wide lock, but GCCloseLib must not run while a read is active.
+    private var activeEventDataReads = 0
 
     public let genTLVersion = GenTLVersion.v1_6
 
@@ -359,6 +362,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
+        guard activeEventDataReads == 0 else {
+            throw GC_ERROR.resourceInUse
+        }
         try check(functions.gcCloseLib())
         initialized = false
     }
@@ -1065,22 +1071,24 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     }
 
     public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
-        try withLock {
-            let eventPointer = try pointer(event)
-            var size = 0
-            let query = functions.eventGetData(eventPointer, nil, &size, timeout)
-            try checkInfoSizeQuery(query, size: size)
+        // Do not hold the global API lock while waiting. EventKill must be able
+        // to enter the producer concurrently to wake an infinite-timeout read.
+        let eventPointer = try beginEventDataRead(event)
+        defer { endEventDataRead() }
 
-            var data = Data(count: size)
-            var actualSize = size
-            let result = data.withUnsafeMutableBytes { output in
-                functions.eventGetData(eventPointer, output.baseAddress, &actualSize, timeout)
-            }
-            try check(result)
-            guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
-            data.count = actualSize
-            return data
+        var size = 0
+        let query = functions.eventGetData(eventPointer, nil, &size, timeout)
+        try checkInfoSizeQuery(query, size: size)
+
+        var data = Data(count: size)
+        var actualSize = size
+        let result = data.withUnsafeMutableBytes { output in
+            functions.eventGetData(eventPointer, output.baseAddress, &actualSize, timeout)
         }
+        try check(result)
+        guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+        data.count = actualSize
+        return data
     }
 
     public func EventGetDataInfo(
@@ -1124,6 +1132,21 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
         try requireInitialized()
         return try operation()
+    }
+
+    private func beginEventDataRead(_ event: EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
+        lock.lock()
+        defer { lock.unlock() }
+        try requireInitialized()
+        let eventPointer = try pointer(event)
+        activeEventDataReads += 1
+        return eventPointer
+    }
+
+    private func endEventDataRead() {
+        lock.lock()
+        defer { lock.unlock() }
+        activeEventDataReads -= 1
     }
 
     private func requireInitialized() throws {
