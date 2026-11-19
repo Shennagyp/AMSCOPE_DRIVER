@@ -106,6 +106,22 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     }
 }
 
+/// Prevents a native Producer from being unloaded after cleanup failed with live
+/// module handles. Retention is process-lifetime by design: leaking a loaded CTI
+/// is safer than invalidating handles still owned by its Producer.
+private final class GenTLProviderRetainer: @unchecked Sendable {
+    static let shared = GenTLProviderRetainer()
+
+    private let lock = NSLock()
+    private var retainedAPIs: [any GenTLAPI] = []
+
+    func retain(_ api: any GenTLAPI) {
+        lock.lock()
+        defer { lock.unlock() }
+        retainedAPIs.append(api)
+    }
+}
+
 /// Owns the GenTL Library/System/Interface lifetime for one backend instance.
 /// It remains alive while any discovered candidate or opened device session uses it.
 private final class GenTLProviderContext: @unchecked Sendable {
@@ -132,20 +148,50 @@ private final class GenTLProviderContext: @unchecked Sendable {
         interfaceHandles.append(handle)
     }
 
-    func close() {
+    /// Abandons teardown without unloading a Producer that may still own live
+    /// device/stream handles. Used only after a child handle could not be closed.
+    func abandon() {
         lock.lock()
         defer { lock.unlock() }
         guard !closed else { return }
         closed = true
+        GenTLProviderRetainer.shared.retain(api)
+    }
+
+    func close() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed else { return }
 
         for handle in interfaceHandles.reversed() {
-            try? api.IFClose(handle)
+            do {
+                try api.IFClose(handle)
+            } catch {
+                closed = true
+                GenTLProviderRetainer.shared.retain(api)
+                return
+            }
         }
         interfaceHandles.removeAll()
         interfaceHandlesByID.removeAll()
 
-        try? api.TLClose(systemHandle)
-        try? api.GCCloseLib()
+        do {
+            try api.TLClose(systemHandle)
+        } catch {
+            closed = true
+            GenTLProviderRetainer.shared.retain(api)
+            return
+        }
+
+        do {
+            try api.GCCloseLib()
+        } catch {
+            closed = true
+            GenTLProviderRetainer.shared.retain(api)
+            return
+        }
+
+        closed = true
     }
 
     deinit {
@@ -181,8 +227,13 @@ public final class GenTLDeviceSession: @unchecked Sendable {
     }
 
     deinit {
-        try? close()
-        _ = context
+        do {
+            try close()
+        } catch {
+            // A device can still own data streams or callbacks. Do not allow
+            // the context to dlclose its Producer while those handles remain.
+            context.abandon()
+        }
     }
 }
 
