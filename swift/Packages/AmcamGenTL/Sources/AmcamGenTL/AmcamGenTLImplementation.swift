@@ -274,6 +274,28 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
         try requireInterface(hIF)
 
+        // Amcam_Open exposes one read/write camera handle. It has no SDK
+        // operation for GenTL read-only access or the shared CONTROL mode,
+        // so accepting those requests would falsely claim stronger access
+        // semantics than this backend can provide.
+        guard let requestedAccess = GenTLDeviceAccess(rawValue: accessFlags) else {
+            try fail(.invalidParameter, "Unsupported GenTL device access flag: \(accessFlags).")
+        }
+        switch requestedAccess {
+        case .exclusive:
+            break
+        case .readOnly, .control:
+            try fail(
+                .accessDenied,
+                "The Amcam SDK only supports exclusive read/write access; it cannot honor GenTL read-only or CONTROL access."
+            )
+        case .unknown, .none:
+            try fail(
+                .invalidParameter,
+                "GenTL DEVICE_ACCESS_UNKNOWN and DEVICE_ACCESS_NONE are not valid IFOpenDevice requests."
+            )
+        }
+
         guard let device = discoveredDevices.first(where: { $0.identifier == deviceID }) else {
             throw GC_ERROR.invalidID
         }
