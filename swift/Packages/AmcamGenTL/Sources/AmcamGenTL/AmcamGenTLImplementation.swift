@@ -533,7 +533,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
 
     public func GCUnregisterEvent(
         _ source: EVENTSRC_HANDLE,
-        eventType: UInt32
+        eventType: Int32
     ) throws {
         lock.lock()
         defer { lock.unlock() }
