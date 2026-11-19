@@ -69,11 +69,8 @@ public protocol GenTLDataStreamFunctions: Sendable {
     func DSClose(_ hDS: DS_HANDLE) throws
 }
 
-/// GenTL 1.6 extension functions for register stacks, chunks, multipart buffers and flows.
-public protocol GenTLAdvancedDataFunctions: Sendable {
-    func GCReadPortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortReadRequest]) throws -> [Data]
-    func GCWritePortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortWriteRequest]) throws
-
+/// Data Stream extensions introduced across GenTL 1.3 through 1.6.
+public protocol GenTLDataStreamExtensionFunctions: Sendable {
     func DSGetBufferChunkData(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> [GenTLChunkData]
     func DSGetNumBufferParts(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32
     func DSGetBufferPartInfo(
@@ -122,6 +119,10 @@ public protocol GenTLPortFunctions: Sendable {
     func GCGetNumPortURLs(_ hPort: PORT_HANDLE) throws -> UInt32
     func GCGetPortURLInfo(_ hPort: PORT_HANDLE, index: UInt32, command: Int32) throws -> GenTLInfoValue
     func GCGetPortInfo(_ hPort: PORT_HANDLE, command: Int32) throws -> GenTLInfoValue
+
+    /// GenTL 1.1 register-stack operations belong to the Port module.
+    func GCReadPortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortReadRequest]) throws -> [Data]
+    func GCWritePortStacked(_ hPort: PORT_HANDLE, requests: [GenTLPortWriteRequest]) throws
 }
 
 /// Signaling and event functions.
