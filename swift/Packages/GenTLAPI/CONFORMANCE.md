@@ -35,7 +35,7 @@ Actual camera capability and compatibility still depend on the selected `.cti` P
 | Data Stream | One stream per open camera |
 | Buffer announcement/allocation | Implemented |
 | Queue, flush and acquisition | Implemented for supported default start/stop semantics |
-| Buffer metadata | RGB8 image metadata with the Amcam SDK's DWORD-aligned row pitch; row padding is included in payload and filled sizes |
+| Buffer metadata | RGB8 image metadata with DWORD-aligned rows; padding bytes are included in payload and filled sizes and reported through BUFFER_INFO_XPADDING |
 | Data Stream events | New-buffer and error events |
 | Physical port/register access | Not implemented |
 | GenApi XML URL access | Not implemented |
