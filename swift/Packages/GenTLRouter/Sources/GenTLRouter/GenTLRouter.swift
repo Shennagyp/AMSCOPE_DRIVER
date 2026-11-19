@@ -228,47 +228,63 @@ public final class GenTLRouter: @unchecked Sendable {
         var failures: [GenTLProviderFailure] = []
 
         for registration in current {
+            let firstDeviceIndex = devices.count
+            var api: (any GenTLAPI)?
+            var didInitialize = false
+            var context: GenTLProviderContext?
+
             do {
-                let api = try registration.makeAPI()
-                try api.GCInitLib()
-                let system = try api.TLOpen()
-                let context = GenTLProviderContext(
+                let createdAPI = try registration.makeAPI()
+                api = createdAPI
+                try createdAPI.GCInitLib()
+                didInitialize = true
+
+                let system = try createdAPI.TLOpen()
+                let providerContext = GenTLProviderContext(
                     backendID: registration.identifier,
-                    api: api,
+                    api: createdAPI,
                     systemHandle: system
                 )
+                context = providerContext
 
                 do {
-                    try api.TLUpdateInterfaceList(system, timeout: timeout)
-                    let interfaceCount = try api.TLGetNumInterfaces(system)
+                    try createdAPI.TLUpdateInterfaceList(system, timeout: timeout)
+                    let interfaceCount = try createdAPI.TLGetNumInterfaces(system)
 
                     for interfaceIndex in 0..<interfaceCount {
-                        let interfaceID = try api.TLGetInterfaceID(system, index: interfaceIndex)
-                        let interfaceHandle = try api.TLOpenInterface(system, interfaceID: interfaceID)
-                        context.addInterface(id: interfaceID, handle: interfaceHandle)
+                        let interfaceID = try createdAPI.TLGetInterfaceID(system, index: interfaceIndex)
+                        let interfaceHandle = try createdAPI.TLOpenInterface(system, interfaceID: interfaceID)
+                        providerContext.addInterface(id: interfaceID, handle: interfaceHandle)
 
-                        try api.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
-                        let deviceCount = try api.IFGetNumDevices(interfaceHandle)
+                        try createdAPI.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
+                        let deviceCount = try createdAPI.IFGetNumDevices(interfaceHandle)
 
                         for deviceIndex in 0..<deviceCount {
-                            let deviceID = try api.IFGetDeviceID(interfaceHandle, index: deviceIndex)
+                            let deviceID = try createdAPI.IFGetDeviceID(interfaceHandle, index: deviceIndex)
                             devices.append(GenTLDeviceCandidate(
                                 backendID: registration.identifier,
                                 interfaceID: interfaceID,
                                 deviceID: deviceID,
-                                context: context
+                                context: providerContext
                             ))
                         }
                     }
 
-                    if !devices.contains(where: { $0.backendID == registration.identifier }) {
-                        context.close()
+                    if devices.count == firstDeviceIndex {
+                        providerContext.close()
                     }
                 } catch {
-                    context.close()
+                    devices.removeSubrange(firstDeviceIndex..<devices.count)
+                    providerContext.close()
                     throw error
                 }
             } catch {
+                devices.removeSubrange(firstDeviceIndex..<devices.count)
+                if let context {
+                    context.close()
+                } else if didInitialize, let api {
+                    try? api.GCCloseLib()
+                }
                 failures.append(GenTLProviderFailure(
                     backendID: registration.identifier,
                     message: error.localizedDescription
