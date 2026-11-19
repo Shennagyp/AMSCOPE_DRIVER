@@ -455,15 +455,17 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     func numberOfBufferParts(_ handle: BUFFER_HANDLE) throws -> UInt32 {
         condition.lock()
         defer { condition.unlock() }
-        guard buffers[handle.rawValue] != nil else { throw GC_ERROR.invalidBuffer }
-        // Amcam produces one complete packed 2D image per acquired frame.
-        return 1
+        guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+        // A frame contains one packed 2D image part. Empty/incomplete buffers
+        // have no delivered image payload and therefore expose zero parts.
+        return buffer.sizeFilled > 0 ? 1 : 0
     }
 
     func bufferPartInfo(_ handle: BUFFER_HANDLE, command: Int32) throws -> GenTLInfoValue {
         condition.lock()
         defer { condition.unlock() }
         guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+        guard buffer.sizeFilled > 0 else { throw GC_ERROR.invalidIndex }
 
         switch command {
         case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
