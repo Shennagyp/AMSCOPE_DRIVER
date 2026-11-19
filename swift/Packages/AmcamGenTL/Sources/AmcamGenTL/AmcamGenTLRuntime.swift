@@ -327,9 +327,15 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             // the DSFlushQueue call discarded previous event data.
             for raw in inputQueue {
                 guard let buffer = buffers[raw] else { continue }
-                buffer.isIncomplete = true
+                buffer.isIncomplete = false
                 buffer.newData = false
+                buffer.dataLargerThanBuffer = false
                 buffer.sizeFilled = 0
+                buffer.dataSize = 0
+                buffer.width = 0
+                buffer.height = 0
+                buffer.sequence = 0
+                buffer.timestampMicroseconds = 0
                 outputQueue.append(raw)
             }
             inputQueue.removeAll()
@@ -767,19 +773,20 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             !rowSizeOverflow &&
             !imageSizeOverflow &&
             frame.bytesPerRow >= minimumBytesPerRow &&
-            minimumImageBytes >= 0 &&
-            frameBytes >= minimumImageBytes
+            minimumImageBytes >= 0
+        let payloadIsComplete = geometryIsValid && frameBytes >= minimumImageBytes
+        let expectedDataSize = geometryIsValid ? minimumImageBytes : frameBytes
 
-        buffer.dataLargerThanBuffer = frameBytes > buffer.size
+        buffer.dataLargerThanBuffer = expectedDataSize > buffer.size
         buffer.width = geometryIsValid ? frame.width : 0
         buffer.height = geometryIsValid ? frame.height : 0
-        buffer.dataSize = geometryIsValid ? minimumImageBytes : frameBytes
+        buffer.dataSize = expectedDataSize
         buffer.sequence = UInt64(
             frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1)
         )
         buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
 
-        guard !buffer.dataLargerThanBuffer, geometryIsValid else {
+        guard !buffer.dataLargerThanBuffer, payloadIsComplete else {
             buffer.isIncomplete = true
             buffer.newData = true
             buffer.sizeFilled = 0
