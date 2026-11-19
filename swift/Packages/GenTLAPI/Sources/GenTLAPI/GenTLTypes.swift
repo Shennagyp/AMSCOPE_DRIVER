@@ -248,7 +248,6 @@ public enum GenTLInfoCommand {
         case newData = 4, isQueued = 5, isAcquiring = 6, isIncomplete = 7
         case transportType = 8, sizeFilled = 9, width = 10, height = 11
         case xOffset = 12, yOffset = 13, xPadding = 14, yPadding = 15
-        case pixelFormat = 16, pixelFormatNamespace = 17, deliveredImageHeight = 18
         case frameID = 16, imagePresent = 17, imageOffset = 18, payloadType = 19
         case pixelFormat = 20, pixelFormatNamespace = 21, deliveredImageHeight = 22
         case deliveredChunkPayloadSize = 23, chunkLayoutID = 24, fileName = 25
