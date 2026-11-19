@@ -199,10 +199,17 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
         try api.TLUpdateInterfaceList(systemHandle, timeout: timeout)
         let interfaceCount = try api.TLGetNumInterfaces(systemHandle)
+        guard interfaceCount <= 4_096 else { throw GC_ERROR.resourceExhausted }
+
         var candidates: [GenTLDeviceCandidate] = []
+        var seenInterfaceIDs = Set<String>()
 
         for interfaceIndex in 0..<interfaceCount {
             let interfaceID = try api.TLGetInterfaceID(systemHandle, index: interfaceIndex)
+            guard !interfaceID.isEmpty,
+                  seenInterfaceIDs.insert(interfaceID).inserted else {
+                throw GC_ERROR.invalidID
+            }
             let interfaceHandle: IF_HANDLE
 
             if let existingHandle = interfaceHandlesByID[interfaceID] {
@@ -217,9 +224,15 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
             try api.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
             let deviceCount = try api.IFGetNumDevices(interfaceHandle)
+            guard deviceCount <= 65_536 else { throw GC_ERROR.resourceExhausted }
 
+            var seenDeviceIDs = Set<String>()
             for deviceIndex in 0..<deviceCount {
                 let deviceID = try api.IFGetDeviceID(interfaceHandle, index: deviceIndex)
+                guard !deviceID.isEmpty,
+                      seenDeviceIDs.insert(deviceID).inserted else {
+                    throw GC_ERROR.invalidID
+                }
                 candidates.append(try GenTLDeviceCandidate(
                     backendID: backendID,
                     interfaceID: interfaceID,
@@ -433,8 +446,12 @@ public final class GenTLRouter: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        if let existing = providerContexts[registration.identifier],
-           !existing.isClosed {
+        if let existing = providerContexts[registration.identifier] {
+            guard !existing.isClosed else {
+                // An abandoned Producer may still own live native handles.
+                // Do not initialize a second instance of the same backend.
+                throw GenTLRouterError.providerContextUnavailable(registration.identifier)
+            }
             return existing
         }
 
