@@ -249,8 +249,11 @@ public enum GenTLInfoCommand {
         case transportType = 8, sizeFilled = 9, width = 10, height = 11
         case xOffset = 12, yOffset = 13, xPadding = 14, yPadding = 15
         case pixelFormat = 16, pixelFormatNamespace = 17, deliveredImageHeight = 18
-        case deliveredChunkPayloadSize = 19, chunkLayoutID = 20
-        case payloadType = 21, timestampFrequency = 22, timestamp tick = 23
+        case frameID = 16, imagePresent = 17, imageOffset = 18, payloadType = 19
+        case pixelFormat = 20, pixelFormatNamespace = 21, deliveredImageHeight = 22
+        case deliveredChunkPayloadSize = 23, chunkLayoutID = 24, fileName = 25
+        case pixelEndianness = 26, dataSize = 27, timestampNanoseconds = 28
+        case dataLargerThanBuffer = 29, containsChunkData = 30, isComposite = 31
     }
     public enum Event: Int32, Sendable {
         case eventType = 0, numInQueue = 1, numFired = 2, maxSize = 3
