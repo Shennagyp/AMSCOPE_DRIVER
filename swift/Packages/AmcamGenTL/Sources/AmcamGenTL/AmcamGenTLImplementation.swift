@@ -878,7 +878,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
             throw code
         } catch {
             setLastError(.error, message: error.localizedDescription)
-            throw error
+            throw GC_ERROR.error
         }
     }
 }
