@@ -605,7 +605,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 11: return .size(0) // Amcam does not expose chunk payloads.
         case 12: return .size(1) // Minimum announced buffers: one.
         case 13: return .size(1) // Byte alignment.
-        default: throw GC_ERROR.notAvailable
+        case 14, 15: throw GC_ERROR.notAvailable // GenDC flow metadata is not supplied.
+        default: throw GC_ERROR.invalidParameter
         }
     }
 
