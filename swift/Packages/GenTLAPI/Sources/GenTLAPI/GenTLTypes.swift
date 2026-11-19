@@ -161,6 +161,8 @@ public enum GenTLInfoValue: Equatable, Sendable {
     case uint64(UInt64)
     case float64(Double)
     case bool8(Bool)
+    case size(Int)
+    case pointerDifference(Int)
     case pointer(UInt)
     case raw(Data)
 }
