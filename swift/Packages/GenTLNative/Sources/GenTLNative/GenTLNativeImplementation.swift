@@ -174,6 +174,14 @@ private typealias DSGetBufferSegmentInfoFunction = @convention(c) (
     UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UInt32, Int32,
     UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
 ) -> Int32
+private typealias DSGetBufferInfoStackedFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
+    UnsafeMutablePointer<DS_BUFFER_INFO_STACKED>?, Int
+) -> Int32
+private typealias DSGetBufferPartInfoStackedFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
+    UnsafeMutablePointer<DS_BUFFER_PART_INFO_STACKED>?, Int
+) -> Int32
 
 /// GenTL Consumer implementation backed by a manufacturer-supplied .cti Producer.
 ///
@@ -245,6 +253,8 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let dsGetBufferChunkData: DSGetBufferChunkDataFunction
         let dsGetNumBufferParts: DSGetNumBufferPartsFunction
         let dsGetBufferPartInfo: DSGetBufferPartInfoFunction
+        let dsGetBufferInfoStacked: DSGetBufferInfoStackedFunction
+        let dsGetBufferPartInfoStacked: DSGetBufferPartInfoStackedFunction
         let dsAnnounceCompositeBuffer: DSAnnounceCompositeBufferFunction
         let dsGetNumFlows: DSGetNumFlowsFunction
         let dsGetFlowInfo: DSGetFlowInfoFunction
@@ -340,6 +350,8 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             dsGetBufferChunkData: load("DSGetBufferChunkData", as: DSGetBufferChunkDataFunction.self),
             dsGetNumBufferParts: load("DSGetNumBufferParts", as: DSGetNumBufferPartsFunction.self),
             dsGetBufferPartInfo: load("DSGetBufferPartInfo", as: DSGetBufferPartInfoFunction.self),
+            dsGetBufferInfoStacked: load("DSGetBufferInfoStacked", as: DSGetBufferInfoStackedFunction.self),
+            dsGetBufferPartInfoStacked: load("DSGetBufferPartInfoStacked", as: DSGetBufferPartInfoStackedFunction.self),
             dsAnnounceCompositeBuffer: load("DSAnnounceCompositeBuffer", as: DSAnnounceCompositeBufferFunction.self),
             dsGetNumFlows: load("DSGetNumFlows", as: DSGetNumFlowsFunction.self),
             dsGetFlowInfo: load("DSGetFlowInfo", as: DSGetFlowInfoFunction.self),
@@ -919,18 +931,164 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         _ hDS: DS_HANDLE,
         buffer: BUFFER_HANDLE,
         commands: [Int32]
-    ) throws -> [GenTLInfoValue] {
-        try commands.map { try DSGetBufferInfo(hDS, buffer: buffer, command: $0) }
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
+        try withLock {
+            let stream = try pointer(hDS)
+            let bufferHandle = try pointer(buffer)
+            guard !commands.isEmpty else { return [] }
+
+            var entries = commands.map { command -> DS_BUFFER_INFO_STACKED in
+                var entry = DS_BUFFER_INFO_STACKED()
+                entry.iInfoCmd = command
+                entry.iType = GenTLInfoDataType.unknown.rawValue
+                entry.pBuffer = nil
+                entry.iSize = 0
+                entry.iResult = GC_ERROR.success.rawValue
+                return entry
+            }
+
+            let queryStatus = entries.withUnsafeMutableBufferPointer {
+                functions.dsGetBufferInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+            }
+            try checkStackedInfoCall(queryStatus)
+
+            var allocations = [UnsafeMutableRawPointer?](repeating: nil, count: entries.count)
+            var capacities = [Int](repeating: 0, count: entries.count)
+            var outputEntries: [DS_BUFFER_INFO_STACKED] = []
+            var outputIndices: [Int] = []
+            defer { allocations.compactMap { $0 }.forEach { $0.deallocate() } }
+
+            for index in entries.indices {
+                let entryStatus = GC_ERROR(rawValue: entries[index].iResult)
+                guard entryStatus == .success || entryStatus == .bufferTooSmall else {
+                    continue
+                }
+
+                let capacity = entries[index].iSize
+                guard capacity >= 0, capacity <= 64 * 1024 * 1024 else {
+                    entries[index].iResult = GC_ERROR.invalidValue.rawValue
+                    continue
+                }
+
+                capacities[index] = capacity
+                if capacity > 0 {
+                    allocations[index] = UnsafeMutableRawPointer.allocate(
+                        byteCount: capacity,
+                        alignment: 8
+                    )
+                }
+
+                var outputEntry = entries[index]
+                outputEntry.pBuffer = allocations[index]
+                outputEntry.iSize = capacity
+                outputEntry.iResult = GC_ERROR.success.rawValue
+                outputEntries.append(outputEntry)
+                outputIndices.append(index)
+            }
+
+            if !outputEntries.isEmpty {
+                let readStatus = outputEntries.withUnsafeMutableBufferPointer {
+                    functions.dsGetBufferInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+                }
+                try checkStackedInfoCall(readStatus)
+
+                for (outputIndex, originalIndex) in outputIndices.enumerated() {
+                    entries[originalIndex] = outputEntries[outputIndex]
+                }
+            }
+
+            return entries.indices.map { index in
+                decodeStackedInfoResult(
+                    dataType: entries[index].iType,
+                    buffer: allocations[index],
+                    capacity: capacities[index],
+                    actualSize: entries[index].iSize,
+                    result: entries[index].iResult
+                )
+            }
+        }
     }
 
     public func DSGetBufferPartInfoStacked(
         _ hDS: DS_HANDLE,
         buffer: BUFFER_HANDLE,
-        partIndex: UInt32,
-        commands: [Int32]
-    ) throws -> [GenTLInfoValue] {
-        try commands.map {
-            try DSGetBufferPartInfo(hDS, buffer: buffer, partIndex: partIndex, command: $0)
+        requests: [GenTLBufferPartInfoStackedRequest]
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
+        try withLock {
+            let stream = try pointer(hDS)
+            let bufferHandle = try pointer(buffer)
+            guard !requests.isEmpty else { return [] }
+
+            var entries = requests.map { request -> DS_BUFFER_PART_INFO_STACKED in
+                var entry = DS_BUFFER_PART_INFO_STACKED()
+                entry.iPartIndex = request.partIndex
+                entry.iInfoCmd = request.command
+                entry.iResult = GC_ERROR.success.rawValue
+                entry.iType = GenTLInfoDataType.unknown.rawValue
+                entry.pBuffer = nil
+                entry.iSize = 0
+                return entry
+            }
+
+            let queryStatus = entries.withUnsafeMutableBufferPointer {
+                functions.dsGetBufferPartInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+            }
+            try checkStackedInfoCall(queryStatus)
+
+            var allocations = [UnsafeMutableRawPointer?](repeating: nil, count: entries.count)
+            var capacities = [Int](repeating: 0, count: entries.count)
+            var outputEntries: [DS_BUFFER_PART_INFO_STACKED] = []
+            var outputIndices: [Int] = []
+            defer { allocations.compactMap { $0 }.forEach { $0.deallocate() } }
+
+            for index in entries.indices {
+                let entryStatus = GC_ERROR(rawValue: entries[index].iResult)
+                guard entryStatus == .success || entryStatus == .bufferTooSmall else {
+                    continue
+                }
+
+                let capacity = entries[index].iSize
+                guard capacity >= 0, capacity <= 64 * 1024 * 1024 else {
+                    entries[index].iResult = GC_ERROR.invalidValue.rawValue
+                    continue
+                }
+
+                capacities[index] = capacity
+                if capacity > 0 {
+                    allocations[index] = UnsafeMutableRawPointer.allocate(
+                        byteCount: capacity,
+                        alignment: 8
+                    )
+                }
+
+                var outputEntry = entries[index]
+                outputEntry.pBuffer = allocations[index]
+                outputEntry.iSize = capacity
+                outputEntry.iResult = GC_ERROR.success.rawValue
+                outputEntries.append(outputEntry)
+                outputIndices.append(index)
+            }
+
+            if !outputEntries.isEmpty {
+                let readStatus = outputEntries.withUnsafeMutableBufferPointer {
+                    functions.dsGetBufferPartInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+                }
+                try checkStackedInfoCall(readStatus)
+
+                for (outputIndex, originalIndex) in outputIndices.enumerated() {
+                    entries[originalIndex] = outputEntries[outputIndex]
+                }
+            }
+
+            return entries.indices.map { index in
+                decodeStackedInfoResult(
+                    dataType: entries[index].iType,
+                    buffer: allocations[index],
+                    capacity: capacities[index],
+                    actualSize: entries[index].iSize,
+                    result: entries[index].iResult
+                )
+            }
         }
     }
 
@@ -1205,6 +1363,40 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
         data.count = actualSize
         return try decodeInfo(dataType: dataType, data: data)
+    }
+
+    private func checkStackedInfoCall(_ result: Int32) throws {
+        guard result == GC_ERROR.success.rawValue ||
+              result == GC_ERROR.bufferTooSmall.rawValue else {
+            throw GC_ERROR(rawValue: result)
+        }
+    }
+
+    private func decodeStackedInfoResult(
+        dataType: Int32,
+        buffer: UnsafeMutableRawPointer?,
+        capacity: Int,
+        actualSize: Int,
+        result: Int32
+    ) -> Result<GenTLInfoValue, GC_ERROR> {
+        let status = GC_ERROR(rawValue: result)
+        guard status == .success else { return .failure(status) }
+        guard actualSize >= 0, actualSize <= 64 * 1024 * 1024 else {
+            return .failure(.invalidValue)
+        }
+        guard actualSize <= capacity else { return .failure(.bufferTooSmall) }
+        if actualSize > 0 && buffer == nil {
+            return .failure(.invalidBuffer)
+        }
+
+        let data = buffer.map { Data(bytes: $0, count: actualSize) } ?? Data()
+        do {
+            return .success(try decodeInfo(dataType: dataType, data: data))
+        } catch let error as GC_ERROR {
+            return .failure(error)
+        } catch {
+            return .failure(.error)
+        }
     }
 
     private func decodeInfo(dataType: Int32, data: Data) throws -> GenTLInfoValue {

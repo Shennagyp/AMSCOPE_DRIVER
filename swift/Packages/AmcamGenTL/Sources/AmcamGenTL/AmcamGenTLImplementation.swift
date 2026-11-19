@@ -582,7 +582,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         _ hDS: DS_HANDLE,
         buffer: BUFFER_HANDLE,
         commands: [Int32]
-    ) throws -> [GenTLInfoValue] {
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
         lock.lock()
         defer { lock.unlock() }
         return try streamRecord(hDS).bufferInfoStacked(buffer, commands: commands)
@@ -591,16 +591,11 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func DSGetBufferPartInfoStacked(
         _ hDS: DS_HANDLE,
         buffer: BUFFER_HANDLE,
-        partIndex: UInt32,
-        commands: [Int32]
-    ) throws -> [GenTLInfoValue] {
+        requests: [GenTLBufferPartInfoStackedRequest]
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
         lock.lock()
         defer { lock.unlock() }
-        return try streamRecord(hDS).bufferPartInfoStacked(
-            buffer,
-            partIndex: partIndex,
-            commands: commands
-        )
+        return try streamRecord(hDS).bufferPartInfoStacked(buffer, requests: requests)
     }
 
     public func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 {

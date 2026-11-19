@@ -9,7 +9,18 @@ _Static_assert(offsetof(PORT_REGISTER_STACK_ENTRY, Size) == 16, "GenTL stack Siz
 
 _Static_assert(sizeof(SINGLE_CHUNK_DATA) == 24, "GenTL SINGLE_CHUNK_DATA ABI mismatch");
 _Static_assert(sizeof(DS_BUFFER_INFO_STACKED) == 28, "GenTL DS_BUFFER_INFO_STACKED ABI mismatch");
+_Static_assert(offsetof(DS_BUFFER_INFO_STACKED, iInfoCmd) == 0, "GenTL stacked buffer-info command offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_INFO_STACKED, iType) == 4, "GenTL stacked buffer-info type offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_INFO_STACKED, pBuffer) == 8, "GenTL stacked buffer-info pointer offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_INFO_STACKED, iSize) == 16, "GenTL stacked buffer-info size offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_INFO_STACKED, iResult) == 24, "GenTL stacked buffer-info result offset mismatch");
 _Static_assert(sizeof(DS_BUFFER_PART_INFO_STACKED) == 32, "GenTL DS_BUFFER_PART_INFO_STACKED ABI mismatch");
+_Static_assert(offsetof(DS_BUFFER_PART_INFO_STACKED, iPartIndex) == 0, "GenTL stacked part-info index offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_PART_INFO_STACKED, iInfoCmd) == 4, "GenTL stacked part-info command offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_PART_INFO_STACKED, iResult) == 8, "GenTL stacked part-info result offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_PART_INFO_STACKED, iType) == 12, "GenTL stacked part-info type offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_PART_INFO_STACKED, pBuffer) == 16, "GenTL stacked part-info pointer offset mismatch");
+_Static_assert(offsetof(DS_BUFFER_PART_INFO_STACKED, iSize) == 24, "GenTL stacked part-info size offset mismatch");
 
 uint32_t GenTLABI_HeaderVersion(void) {
     return ((uint32_t)GenTLMajorVersion << 24) |

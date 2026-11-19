@@ -476,17 +476,36 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     func bufferInfoStacked(
         _ handle: BUFFER_HANDLE,
         commands: [Int32]
-    ) throws -> [GenTLInfoValue] {
-        try commands.map { try bufferInfo(handle, command: $0) }
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
+        _ = try buffer(handle)
+        return commands.map { command in
+            infoResult { try bufferInfo(handle, command: command) }
+        }
     }
 
     func bufferPartInfoStacked(
         _ handle: BUFFER_HANDLE,
-        partIndex: UInt32,
-        commands: [Int32]
-    ) throws -> [GenTLInfoValue] {
-        guard partIndex == 0 else { throw GC_ERROR.invalidIndex }
-        try commands.map { try bufferPartInfo(handle, command: $0) }
+        requests: [GenTLBufferPartInfoStackedRequest]
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
+        _ = try buffer(handle)
+        return requests.map { request in
+            infoResult {
+                guard request.partIndex == 0 else { throw GC_ERROR.invalidIndex }
+                return try bufferPartInfo(handle, command: request.command)
+            }
+        }
+    }
+
+    private func infoResult(
+        _ operation: () throws -> GenTLInfoValue
+    ) -> Result<GenTLInfoValue, GC_ERROR> {
+        do {
+            return .success(try operation())
+        } catch let error as GC_ERROR {
+            return .failure(error)
+        } catch {
+            return .failure(.error)
+        }
     }
 
     private func receive(_ frame: AmcamFrame) {

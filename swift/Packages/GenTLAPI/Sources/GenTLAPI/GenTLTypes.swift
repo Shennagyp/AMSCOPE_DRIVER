@@ -327,6 +327,17 @@ public struct GenTLChunkData: Sendable, Equatable {
     }
 }
 
+/// One request entry for GenTL 1.6 DSGetBufferPartInfoStacked.
+public struct GenTLBufferPartInfoStackedRequest: Sendable, Equatable {
+    public let partIndex: UInt32
+    public let command: Int32
+
+    public init(partIndex: UInt32, command: Int32) {
+        self.partIndex = partIndex
+        self.command = command
+    }
+}
+
 /// One memory segment for GenTL 1.6 composite-buffer announcement.
 public struct GenTLCompositeBufferSegment: @unchecked Sendable {
     public let memory: GenTLBufferMemory

@@ -89,18 +89,19 @@ public protocol GenTLAdvancedDataFunctions: Sendable {
         privateData: UnsafeMutableRawPointer?
     ) throws -> BUFFER_HANDLE
 
+    /// Executes one GenTL 1.6 stacked call. Individual entry failures are returned
+    /// as Result.failure; a thrown error represents failure of the stacked call itself.
     func DSGetBufferInfoStacked(
         _ hDS: DS_HANDLE,
         buffer: BUFFER_HANDLE,
         commands: [Int32]
-    ) throws -> [GenTLInfoValue]
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>]
 
     func DSGetBufferPartInfoStacked(
         _ hDS: DS_HANDLE,
         buffer: BUFFER_HANDLE,
-        partIndex: UInt32,
-        commands: [Int32]
-    ) throws -> [GenTLInfoValue]
+        requests: [GenTLBufferPartInfoStackedRequest]
+    ) throws -> [Result<GenTLInfoValue, GC_ERROR>]
 
     func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32
     func DSGetFlowInfo(_ hDS: DS_HANDLE, flowIndex: UInt32, command: Int32) throws -> GenTLInfoValue

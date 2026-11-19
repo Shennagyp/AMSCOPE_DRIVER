@@ -54,8 +54,8 @@ public extension GenTLAPI {
     func DSGetNumBufferParts(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32 { throw GC_ERROR.notImplemented }
     func DSGetBufferPartInfo(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, partIndex: UInt32, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
     func DSAnnounceCompositeBuffer(_ hDS: DS_HANDLE, segments: [GenTLCompositeBufferSegment], privateData: UnsafeMutableRawPointer?) throws -> BUFFER_HANDLE { throw GC_ERROR.notImplemented }
-    func DSGetBufferInfoStacked(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, commands: [Int32]) throws -> [GenTLInfoValue] { throw GC_ERROR.notImplemented }
-    func DSGetBufferPartInfoStacked(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, partIndex: UInt32, commands: [Int32]) throws -> [GenTLInfoValue] { throw GC_ERROR.notImplemented }
+    func DSGetBufferInfoStacked(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, commands: [Int32]) throws -> [Result<GenTLInfoValue, GC_ERROR>] { throw GC_ERROR.notImplemented }
+    func DSGetBufferPartInfoStacked(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE, requests: [GenTLBufferPartInfoStackedRequest]) throws -> [Result<GenTLInfoValue, GC_ERROR>] { throw GC_ERROR.notImplemented }
     func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 { throw GC_ERROR.notImplemented }
     func DSGetFlowInfo(_ hDS: DS_HANDLE, flowIndex: UInt32, command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
     func DSGetNumBufferSegments(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32 { throw GC_ERROR.notImplemented }
