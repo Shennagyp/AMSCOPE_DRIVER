@@ -124,14 +124,14 @@ final class AmcamEventRecord: @unchecked Sendable {
         defer { condition.unlock() }
         switch command {
         case 0: return .int32(eventType) // EVENT_EVENT_TYPE
-        case 1: return .uint64(UInt64(dataQueue.count)) // EVENT_NUM_IN_QUEUE
+        case 1: return .size(dataQueue.count) // EVENT_NUM_IN_QUEUE
         case 2: return .uint64(firedCount) // EVENT_NUM_FIRED
         case 3:
             let maximumSize = eventType == GenTLEventType.newBuffer.rawValue
                 ? 2 * UInt64(MemoryLayout<UInt>.size)
                 : 0
-            return .uint64(maximumSize) // EVENT_SIZE_MAX
-        case 4: return .uint64(0) // No event-specific info payload currently exposed.
+            return .size(Int(maximumSize)) // EVENT_SIZE_MAX
+        case 4: return .size(0) // No event-specific info payload currently exposed.
         default: throw GC_ERROR.invalidParameter
         }
     }
@@ -461,17 +461,17 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 0: return .string("0") // STREAM_INFO_ID
         case 1: return .uint64(numDelivered)
         case 2: return .uint64(numUnderrun)
-        case 3: return .uint64(UInt64(announcedOrder.count))
-        case 4: return .uint64(UInt64(inputQueue.count))
-        case 5: return .uint64(UInt64(outputQueue.count))
+        case 3: return .size(announcedOrder.count)
+        case 4: return .size(inputQueue.count)
+        case 5: return .size(outputQueue.count)
         case 6: return .uint64(numStarted)
-        case 7: return .uint64(UInt64(payloadSize))
+        case 7: return .size(payloadSize)
         case 8: return .bool8(isGrabbing)
         case 9: return .bool8(true)
         case 10: return .string("AMCAM")
-        case 11: return .uint64(0) // Amcam does not expose chunk payloads.
-        case 12: return .uint64(1) // Minimum announced buffers: one.
-        case 13: return .uint64(1) // Byte alignment.
+        case 11: return .size(0) // Amcam does not expose chunk payloads.
+        case 12: return .size(1) // Minimum announced buffers: one.
+        case 13: return .size(1) // Byte alignment.
         default: throw GC_ERROR.notAvailable
         }
     }
@@ -483,7 +483,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
         switch command {
         case 0: return .pointer(UInt(bitPattern: buffer.memory))
-        case 1: return .uint64(UInt64(buffer.size))
+        case 1: return .size(buffer.size)
         case 2: return .pointer(buffer.privateData.map(UInt.init(bitPattern:)) ?? 0)
         case 3: return .uint64(buffer.timestampMicroseconds)
         case 4: return .bool8(buffer.newData)
@@ -491,22 +491,22 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 6: return .bool8(buffer.isAcquiring)
         case 7: return .bool8(buffer.isIncomplete)
         case 8: return .string("AMCAM")
-        case 9: return .uint64(UInt64(buffer.sizeFilled))
-        case 10: return .uint64(UInt64(buffer.width))
-        case 11: return .uint64(UInt64(buffer.height))
-        case 12, 13, 14, 15: return .uint64(0)
+        case 9: return .size(buffer.sizeFilled)
+        case 10: return .size(buffer.width)
+        case 11: return .size(buffer.height)
+        case 12, 13, 14, 15: return .size(0)
         case 16: return .uint64(buffer.sequence)
         case 17: return .bool8(buffer.sizeFilled > 0)
-        case 18: return .uint64(0)
-        case 19: return .uint64(1) // IMAGE payload type
+        case 18: return .size(0)
+        case 19: return .size(1) // IMAGE payload type
         case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
         case 21: return .uint64(4) // PFNC 32-bit namespace.
-        case 22: return .uint64(UInt64(buffer.height))
-        case 23: return .uint64(0) // No chunk payload.
+        case 22: return .size(buffer.height)
+        case 23: return .size(0) // No chunk payload.
         case 24: return .uint64(0) // No chunk layout identifier.
         case 25: return .string("") // Not a file payload.
         case 26: return .int32(0) // Pixel endianness is not applicable to RGB8.
-        case 27: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE.
+        case 27: return .size(buffer.sizeFilled) // DATA_SIZE.
         case 28:
             let (nanoseconds, overflow) = buffer.timestampMicroseconds.multipliedReportingOverflow(by: 1_000)
             return .uint64(overflow ? 0 : nanoseconds)
@@ -535,14 +535,15 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
         switch command {
         case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
-        case 1: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE
-        case 2: return .uint64(1) // PART_DATATYPE_2D_IMAGE
+        case 1: return .size(buffer.sizeFilled) // DATA_SIZE
+        case 2: return .size(1) // PARTDATATYPE_2D_IMAGE is SIZET
         case 3: return .uint64(0x02180014) // PFNC RGB8 packed
         case 4: return .uint64(4) // PFNC 32-bit namespace
-        case 5: return .uint64(UInt64(buffer.width))
-        case 6: return .uint64(UInt64(buffer.height))
-        case 7, 8, 9, 10, 12, 13: return .uint64(0)
-        case 11: return .uint64(UInt64(buffer.height))
+        case 5: return .size(buffer.width)
+        case 6: return .size(buffer.height)
+        case 7, 8, 9: return .size(0)
+        case 10, 12, 13: return .uint64(0)
+        case 11: return .size(buffer.height)
         default: throw GC_ERROR.invalidParameter
         }
     }
@@ -561,10 +562,10 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
         switch command {
         case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
-        case 1: return .uint64(UInt64(buffer.size)) // SIZE
+        case 1: return .size(buffer.size) // SIZE
         case 2: return .bool8(buffer.isIncomplete) // IS_INCOMPLETE
-        case 3: return .uint64(UInt64(buffer.sizeFilled)) // SIZE_FILLED
-        case 4: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE
+        case 3: return .size(buffer.sizeFilled) // SIZE_FILLED
+        case 4: return .size(buffer.sizeFilled) // DATA_SIZE
         default: throw GC_ERROR.invalidParameter
         }
     }
