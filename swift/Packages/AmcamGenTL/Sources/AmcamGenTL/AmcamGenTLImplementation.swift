@@ -696,12 +696,11 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
             throw GC_ERROR.invalidHandle
         }
 
-        if case .dataStream(let streamHandle) = source,
-           let stream = dataStreams[streamHandle.rawValue] {
-            stream.unregisterEvent(match.value)
-        } else {
-            match.value.unregister()
+        guard case .dataStream(let streamHandle) = source,
+              let stream = dataStreams[streamHandle.rawValue] else {
+            throw GC_ERROR.invalidHandle
         }
+        stream.unregisterEvent(match.value)
         events.removeValue(forKey: match.key)
     }
 
@@ -716,15 +715,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
         lock.unlock()
 
-        guard let record else { throw GC_ERROR.invalidHandle }
-        let payload = try record.next(timeoutMilliseconds: timeout)
-
-        if record.eventType == GenTLEventType.newBuffer.rawValue {
-            guard let stream else { throw GC_ERROR.invalidHandle }
-            try stream.deliverNewBufferEvent(payload)
-        }
-
-        return payload
+        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        return try stream.nextEventData(record, timeoutMilliseconds: timeout)
     }
 
     public func EventGetDataInfo(
@@ -747,9 +739,16 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
         lock.lock()
         let record = events[event.rawValue]
+        let stream: AmcamDataStreamRecord?
+        if let record, case .dataStream(let streamHandle) = record.source {
+            stream = dataStreams[streamHandle.rawValue]
+        } else {
+            stream = nil
+        }
         lock.unlock()
-        guard let record else { throw GC_ERROR.invalidHandle }
-        return try record.info(command: command)
+
+        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        return try stream.eventInfo(record, command: command)
     }
 
     public func EventFlush(_ event: EVENT_HANDLE) throws {
@@ -763,17 +762,23 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         }
         lock.unlock()
 
-        guard let record else { throw GC_ERROR.invalidHandle }
-        guard let stream else { throw GC_ERROR.invalidHandle }
-        stream.flushEvent(record)
+        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        try stream.flushEvent(record)
     }
 
     public func EventKill(_ event: EVENT_HANDLE) throws {
         lock.lock()
         let record = events[event.rawValue]
+        let stream: AmcamDataStreamRecord?
+        if let record, case .dataStream(let streamHandle) = record.source {
+            stream = dataStreams[streamHandle.rawValue]
+        } else {
+            stream = nil
+        }
         lock.unlock()
-        guard let record else { throw GC_ERROR.invalidHandle }
-        record.abortOneRead()
+
+        guard let record, let stream else { throw GC_ERROR.invalidHandle }
+        try stream.abortOneEventRead(record)
     }
 
     // MARK: Unsupported physical-port mapping
