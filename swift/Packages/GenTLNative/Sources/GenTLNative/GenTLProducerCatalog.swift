@@ -42,10 +42,9 @@ public enum GenTLProducerCatalog {
 
         if let value = environment[standardSearchPathEnvironmentVariable], !value.isEmpty {
             // GenICam search paths use the host platform's path-list separator.
-            // macOS is POSIX, so ':' is the standard separator. Accept ';' as
-            // an additional convenience for paths copied from Windows setups.
+            // This package targets macOS, where POSIX uses ':'.
             let components = value
-                .components(separatedBy: CharacterSet(charactersIn: ":;"))
+                .components(separatedBy: ":")
                 .filter { !$0.isEmpty }
 
             requestedPaths.append(contentsOf: components.map {
