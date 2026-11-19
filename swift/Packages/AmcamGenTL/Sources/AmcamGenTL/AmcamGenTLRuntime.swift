@@ -133,6 +133,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     private(set) var numUnderrun: UInt64 = 0
     private(set) var numStarted: UInt64 = 0
     private(set) var payloadSize: Int = 0
+    private var finiteAcquisitionCount: UInt64?
+    private var finiteStopScheduled = false
 
     init(handle: DS_HANDLE, deviceHandle: DEV_HANDLE, session: AmcamCameraSession) {
         self.handle = handle
@@ -267,6 +269,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             throw GC_ERROR.invalidBuffer
         }
         isGrabbing = true
+        finiteAcquisitionCount = numberToAcquire == 0 ? nil : numberToAcquire
+        finiteStopScheduled = false
         numDelivered = 0
         numStarted = 0
         condition.unlock()
@@ -284,6 +288,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         } catch {
             condition.lock()
             isGrabbing = false
+            finiteAcquisitionCount = nil
             condition.unlock()
             throw error
         }
@@ -416,24 +421,34 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
     private func receive(_ frame: AmcamFrame) {
         condition.lock()
-        defer { condition.unlock() }
-        guard isGrabbing else { return }
-        guard let raw = inputQueue.first, let buffer = buffers[raw] else {
-            numUnderrun &+= 1
+        guard isGrabbing else {
+            condition.unlock()
             return
         }
+
+        guard let raw = inputQueue.first, let buffer = buffers[raw] else {
+            numUnderrun &+= 1
+            condition.unlock()
+            return
+        }
+
         inputQueue.removeFirst()
         buffer.isQueued = false
         buffer.isAcquiring = true
 
         let frameBytes = frame.bytes.count
-        guard frameBytes <= buffer.size else {
+        guard frameBytes <= buffer.size,
+              frame.width > 0,
+              frame.height > 0,
+              frame.bytesPerRow >= frame.width * 3,
+              frameBytes >= frame.bytesPerRow * frame.height else {
             buffer.isAcquiring = false
             buffer.isIncomplete = true
             buffer.newData = true
             buffer.sizeFilled = 0
             outputQueue.append(raw)
             publishBufferEvent(buffer)
+            condition.unlock()
             return
         }
 
@@ -445,7 +460,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         buffer.width = frame.width
         buffer.height = frame.height
         buffer.sizeFilled = frameBytes
-        buffer.sequence = UInt64(frame.sequence ?? UInt32(numDelivered &+ 1))
+        buffer.sequence = UInt64(frame.sequence ?? UInt32(truncatingIfNeeded: numDelivered &+ 1))
         buffer.timestampMicroseconds = frame.deviceTimestampMicroseconds ?? 0
         buffer.isIncomplete = false
         buffer.newData = true
@@ -454,6 +469,36 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         numDelivered &+= 1
         numStarted &+= 1
         publishBufferEvent(buffer)
+
+        let mustStop = finiteAcquisitionCount.map { numDelivered >= $0 } ?? false
+        if mustStop && !finiteStopScheduled {
+            finiteStopScheduled = true
+            isGrabbing = false
+        }
+        condition.unlock()
+
+        if mustStop {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.stopAfterFiniteAcquisition()
+            }
+        }
+    }
+
+    private func stopAfterFiniteAcquisition() {
+        do {
+            try session.stop()
+            condition.lock()
+            finiteAcquisitionCount = nil
+            finiteStopScheduled = false
+            condition.broadcast()
+            condition.unlock()
+        } catch {
+            publishErrorEvent()
+            condition.lock()
+            finiteAcquisitionCount = nil
+            finiteStopScheduled = false
+            condition.unlock()
+        }
     }
 
     private func publishBufferEvent(_ buffer: AmcamBufferRecord) {
