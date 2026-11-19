@@ -328,19 +328,22 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
     func close() throws {
         condition.lock()
-        guard !isGrabbing else {
-            condition.unlock()
-            throw GC_ERROR.busy
-        }
-        guard buffers.isEmpty else {
-            condition.unlock()
-            throw GC_ERROR.resourceInUse
-        }
+        defer { condition.unlock() }
+
+        guard !isGrabbing else { throw GC_ERROR.busy }
         guard events.values.allSatisfy({ $0.isEmpty }) else {
-            condition.unlock()
             throw GC_ERROR.resourceInUse
         }
-        condition.unlock()
+
+        // GenTL DSClose revokes all remaining announced buffers. The producer
+        // frees buffers it allocated; consumer-owned memory remains caller-owned.
+        for buffer in buffers.values where buffer.allocatedByProvider {
+            buffer.releaseMemoryIfOwned()
+        }
+        buffers.removeAll()
+        announcedOrder.removeAll()
+        inputQueue.removeAll()
+        outputQueue.removeAll()
     }
 
     func revoke(_ handle: BUFFER_HANDLE) throws -> GenTLRevokedBuffer {
