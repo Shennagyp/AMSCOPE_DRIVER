@@ -1302,11 +1302,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 )
             }
 
-            guard case .uint64(let value) = value,
-                  value <= UInt64(64 * 1024 * 1024) else {
+            guard case .size(let value) = value,
+                  value >= 0, value <= 64 * 1024 * 1024 else {
                 throw GC_ERROR.invalidValue
             }
-            return Int(value)
+            return value
         }
 
         // Even an event type with an empty payload needs a non-NULL buffer:
@@ -1523,8 +1523,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         case .float64: return .float64(try value(Double.self))
         case .pointer: return .pointer(try value(UInt.self))
         case .bool8: return .bool8((try value(UInt8.self)) != 0)
-        case .size: return .uint64(UInt64(try value(UInt.self)))
-        case .pointerDifference: return .int64(Int64(try value(Int.self)))
+        case .size:
+            let rawSize = try value(UInt.self)
+            guard rawSize <= UInt(Int.max) else { throw GC_ERROR.invalidValue }
+            return .size(Int(rawSize))
+        case .pointerDifference: return .pointerDifference(try value(Int.self))
         }
     }
 
