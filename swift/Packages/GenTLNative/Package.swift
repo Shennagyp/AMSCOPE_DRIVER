@@ -18,6 +18,10 @@ let package = Package(
                 "GenTLABI",
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
+        ),
+        .testTarget(
+            name: "GenTLNativeTests",
+            dependencies: ["GenTLNative"]
         )
     ]
 )
