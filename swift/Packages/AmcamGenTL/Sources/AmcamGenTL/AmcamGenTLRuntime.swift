@@ -415,13 +415,78 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 18: return .uint64(0)
         case 19: return .uint64(1) // IMAGE payload type
         case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
-        case 21: return .uint64(0) // PFNC namespace.
+        case 21: return .uint64(4) // PFNC 32-bit namespace.
         case 22: return .uint64(UInt64(buffer.height))
         case 23, 24, 25, 26, 27, 28, 29, 30, 31:
             return .uint64(0)
         default:
             throw GC_ERROR.invalidParameter
         }
+    }
+
+    func numberOfBufferParts(_ handle: BUFFER_HANDLE) throws -> UInt32 {
+        condition.lock()
+        defer { condition.unlock() }
+        guard buffers[handle.rawValue] != nil else { throw GC_ERROR.invalidBuffer }
+        // Amcam produces one complete packed 2D image per acquired frame.
+        return 1
+    }
+
+    func bufferPartInfo(_ handle: BUFFER_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+
+        switch command {
+        case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
+        case 1: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE
+        case 2: return .uint64(1) // PART_DATATYPE_2D_IMAGE
+        case 3: return .uint64(0x02180014) // PFNC RGB8 packed
+        case 4: return .uint64(4) // PFNC 32-bit namespace
+        case 5: return .uint64(UInt64(buffer.width))
+        case 6: return .uint64(UInt64(buffer.height))
+        case 7, 8, 9, 10, 12, 13: return .uint64(0)
+        case 11: return .uint64(UInt64(buffer.height))
+        default: throw GC_ERROR.invalidParameter
+        }
+    }
+
+    func bufferSegmentCount(_ handle: BUFFER_HANDLE) throws -> UInt32 {
+        condition.lock()
+        defer { condition.unlock() }
+        guard buffers[handle.rawValue] != nil else { throw GC_ERROR.invalidBuffer }
+        return 1
+    }
+
+    func bufferSegmentInfo(_ handle: BUFFER_HANDLE, command: Int32) throws -> GenTLInfoValue {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let buffer = buffers[handle.rawValue] else { throw GC_ERROR.invalidBuffer }
+
+        switch command {
+        case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
+        case 1: return .uint64(UInt64(buffer.size)) // SIZE
+        case 2: return .uint32(buffer.isIncomplete ? 1 : 0) // IS_INCOMPLETE
+        case 3: return .uint64(UInt64(buffer.sizeFilled)) // SIZE_FILLED
+        case 4: return .uint64(UInt64(buffer.sizeFilled)) // DATA_SIZE
+        default: throw GC_ERROR.invalidParameter
+        }
+    }
+
+    func bufferInfoStacked(
+        _ handle: BUFFER_HANDLE,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue] {
+        try commands.map { try bufferInfo(handle, command: $0) }
+    }
+
+    func bufferPartInfoStacked(
+        _ handle: BUFFER_HANDLE,
+        partIndex: UInt32,
+        commands: [Int32]
+    ) throws -> [GenTLInfoValue] {
+        guard partIndex == 0 else { throw GC_ERROR.invalidIndex }
+        try commands.map { try bufferPartInfo(handle, command: $0) }
     }
 
     private func receive(_ frame: AmcamFrame) {
