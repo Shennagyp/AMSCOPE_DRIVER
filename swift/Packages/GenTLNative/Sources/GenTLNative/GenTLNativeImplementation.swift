@@ -268,6 +268,13 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     private var initialized = false
     /// EventGetData can block until its timeout (or indefinitely). It must not
     /// hold the API-wide lock, but GCCloseLib must not run while a read is active.
+    private struct RegisteredEvent {
+        let source: EVENTSRC_HANDLE
+        let eventType: Int32
+    }
+
+    private var registeredEventsByHandle: [UInt: RegisteredEvent] = [:]
+    private var activeEventDataReadsByHandle: [UInt: Int] = [:]
     private var activeEventDataReads = 0
 
     public let genTLVersion = GenTLVersion.v1_6
@@ -374,7 +381,8 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
-        guard activeEventDataReads == 0 else {
+        guard activeEventDataReads == 0,
+              registeredEventsByHandle.isEmpty else {
             throw GC_ERROR.resourceInUse
         }
         try check(functions.gcCloseLib())
@@ -1228,7 +1236,15 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             var event: UnsafeMutableRawPointer?
             try check(functions.gcRegisterEvent(try eventSourcePointer(source), eventType, &event))
             guard let event else { throw GC_ERROR.invalidHandle }
-            return EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+            let handle = EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+            guard registeredEventsByHandle[handle.rawValue] == nil else {
+                throw GC_ERROR.resourceInUse
+            }
+            registeredEventsByHandle[handle.rawValue] = RegisteredEvent(
+                source: source,
+                eventType: eventType
+            )
+            return handle
         }
     }
 
@@ -1237,7 +1253,20 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         eventType: Int32
     ) throws {
         try withLock {
+            let matchingHandles = registeredEventsByHandle.compactMap { handle, record in
+                record.source == source && record.eventType == eventType ? handle : nil
+            }
+            guard matchingHandles.allSatisfy({
+                activeEventDataReadsByHandle[$0, default: 0] == 0
+            }) else {
+                throw GC_ERROR.resourceInUse
+            }
+
             try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
+            for handle in matchingHandles {
+                registeredEventsByHandle.removeValue(forKey: handle)
+                activeEventDataReadsByHandle.removeValue(forKey: handle)
+            }
         }
     }
 
@@ -1245,7 +1274,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         // Do not hold the global API lock while waiting. EventKill must be able
         // to enter the producer concurrently to wake an infinite-timeout read.
         let eventPointer = try beginEventDataRead(event)
-        defer { endEventDataRead() }
+        defer { endEventDataRead(event.rawValue) }
 
         var size = 0
         let query = functions.eventGetData(eventPointer, nil, &size, timeout)
@@ -1268,7 +1297,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            let eventPointer = try pointer(event)
+            let eventPointer = try registeredEventPointer(event)
             return try inputData.withUnsafeBytes { input in
                 try readInfo { type, output, size in
                     functions.eventGetDataInfo(
@@ -1282,18 +1311,23 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
-            try readInfo { type, buffer, size in
-                functions.eventGetInfo(try pointer(event), command, type, buffer, size)
+            let eventPointer = try registeredEventPointer(event)
+            return try readInfo { type, buffer, size in
+                functions.eventGetInfo(eventPointer, command, type, buffer, size)
             }
         }
     }
 
     public func EventFlush(_ event: EVENT_HANDLE) throws {
-        try withLock { try check(functions.eventFlush(try pointer(event))) }
+        try withLock {
+            try check(functions.eventFlush(try registeredEventPointer(event)))
+        }
     }
 
     public func EventKill(_ event: EVENT_HANDLE) throws {
-        try withLock { try check(functions.eventKill(try pointer(event))) }
+        try withLock {
+            try check(functions.eventKill(try registeredEventPointer(event)))
+        }
     }
 
     // MARK: Helpers
@@ -1309,15 +1343,29 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
-        let eventPointer = try pointer(event)
+        let eventPointer = try registeredEventPointer(event)
         activeEventDataReads += 1
+        activeEventDataReadsByHandle[event.rawValue, default: 0] += 1
         return eventPointer
     }
 
-    private func endEventDataRead() {
+    private func endEventDataRead(_ eventHandle: UInt) {
         lock.lock()
         defer { lock.unlock() }
-        activeEventDataReads -= 1
+        activeEventDataReads = max(0, activeEventDataReads - 1)
+        let current = activeEventDataReadsByHandle[eventHandle, default: 0]
+        if current <= 1 {
+            activeEventDataReadsByHandle.removeValue(forKey: eventHandle)
+        } else {
+            activeEventDataReadsByHandle[eventHandle] = current - 1
+        }
+    }
+
+    private func registeredEventPointer(_ event: EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
+        guard registeredEventsByHandle[event.rawValue] != nil else {
+            throw GC_ERROR.invalidHandle
+        }
+        return try pointer(event)
     }
 
     private func requireInitialized() throws {
