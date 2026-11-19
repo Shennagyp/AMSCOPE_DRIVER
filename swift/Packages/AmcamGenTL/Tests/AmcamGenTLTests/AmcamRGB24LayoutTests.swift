@@ -2,12 +2,22 @@ import XCTest
 @testable import AmcamGenTL
 
 final class AmcamRGB24LayoutTests: XCTestCase {
-    func testRowsUseTheSDKDefaultDWORDAlignment() {
-        XCTAssertEqual(AmcamRGB24Layout(width: 1, height: 3), .init(bytesPerRow: 4, payloadSize: 12))
-        XCTAssertEqual(AmcamRGB24Layout(width: 2, height: 3), .init(bytesPerRow: 8, payloadSize: 24))
-        XCTAssertEqual(AmcamRGB24Layout(width: 3, height: 3), .init(bytesPerRow: 12, payloadSize: 36))
-        XCTAssertEqual(AmcamRGB24Layout(width: 4, height: 3), .init(bytesPerRow: 12, payloadSize: 36))
-        XCTAssertEqual(AmcamRGB24Layout(width: 5, height: 2), .init(bytesPerRow: 16, payloadSize: 32))
+    func testRowsUseTheSDKDefaultDWORDAlignment() throws {
+        let cases: [(width: Int, height: Int, rowBytes: Int, payloadBytes: Int)] = [
+            (1, 3, 4, 12),
+            (2, 3, 8, 24),
+            (3, 3, 12, 36),
+            (4, 3, 12, 36),
+            (5, 2, 16, 32)
+        ]
+
+        for testCase in cases {
+            let layout = try XCTUnwrap(
+                AmcamRGB24Layout(width: testCase.width, height: testCase.height)
+            )
+            XCTAssertEqual(layout.bytesPerRow, testCase.rowBytes)
+            XCTAssertEqual(layout.payloadSize, testCase.payloadBytes)
+        }
     }
 
     func testRejectsInvalidOrOverflowingDimensions() {
