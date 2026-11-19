@@ -44,6 +44,26 @@ public struct GenTLDiscoveryReport: Sendable {
     public var isComplete: Bool { failures.isEmpty }
 }
 
+/// Result of scanning standard/explicit GenTL paths and registering producers.
+public struct GenTLProducerRegistrationReport: Sendable {
+    public let searchResult: GenTLProducerSearchResult
+    public let registeredBackendIDs: [String]
+    public let alreadyRegisteredBackendIDs: [String]
+    public let failures: [GenTLProviderFailure]
+
+    public init(
+        searchResult: GenTLProducerSearchResult,
+        registeredBackendIDs: [String],
+        alreadyRegisteredBackendIDs: [String],
+        failures: [GenTLProviderFailure]
+    ) {
+        self.searchResult = searchResult
+        self.registeredBackendIDs = registeredBackendIDs
+        self.alreadyRegisteredBackendIDs = alreadyRegisteredBackendIDs
+        self.failures = failures
+    }
+}
+
 /// A discovered device remains bound to the exact GenTLAPI implementation
 /// and interface handle that discovered it. The app still uses GenTL function
 /// calls; backend selection is not repeated at individual call sites.
@@ -217,6 +237,54 @@ public final class GenTLRouter: @unchecked Sendable {
         try register(backendID: backendID) {
             AmcamGenTLImplementation(sdkLibraryURL: sdkLibraryURL)
         }
+    }
+
+    /// Discovers .cti files using GENICAM_GENTL64_PATH plus explicit paths,
+    /// then registers each producer under its normalized absolute file path.
+    /// Calling this repeatedly is safe: previously registered paths are skipped.
+    public func registerDiscoveredNativeProducers(
+        searchPaths: [URL] = [],
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> GenTLProducerRegistrationReport {
+        let searchResult = GenTLProducerCatalog.discover(
+            searchPaths: searchPaths,
+            environment: environment
+        )
+
+        var existing = Set(backendIDs)
+        var registered: [String] = []
+        var alreadyRegistered: [String] = []
+        var failures = searchResult.issues.map {
+            GenTLProviderFailure(backendID: $0.path, message: $0.message)
+        }
+
+        for producerURL in searchResult.producers {
+            let backendID = producerURL.standardizedFileURL.path
+            guard existing.insert(backendID).inserted else {
+                alreadyRegistered.append(backendID)
+                continue
+            }
+
+            do {
+                try registerNativeProducer(backendID: backendID, ctiURL: producerURL)
+                registered.append(backendID)
+            } catch {
+                existing.remove(backendID)
+                failures.append(
+                    GenTLProviderFailure(
+                        backendID: backendID,
+                        message: error.localizedDescription
+                    )
+                )
+            }
+        }
+
+        return GenTLProducerRegistrationReport(
+            searchResult: searchResult,
+            registeredBackendIDs: registered,
+            alreadyRegisteredBackendIDs: alreadyRegistered,
+            failures: failures
+        )
     }
 
     public func discover(timeout: UInt64 = 2_000) -> GenTLDiscoveryReport {
