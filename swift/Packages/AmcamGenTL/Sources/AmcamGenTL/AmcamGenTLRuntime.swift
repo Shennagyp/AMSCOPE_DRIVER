@@ -54,6 +54,7 @@ final class AmcamEventRecord: @unchecked Sendable {
     var pendingAbortCount = 0
     var isUnregistered = false
     var activeReaders = 0
+    var waitingReaders = 0
     var firedCount: UInt64 = 0
 
     init(handle: EVENT_HANDLE, eventType: Int32, source: EVENTSRC_HANDLE) {
@@ -160,10 +161,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         defer { condition.unlock() }
         guard !event.isUnregistered else { throw GC_ERROR.invalidHandle }
 
-        // EventKill aborts one currently active EventGetData call. It must not
-        // leave a cancellation token behind when there is no blocked reader,
-        // otherwise the next unrelated read would fail spuriously.
-        if event.activeReaders > event.pendingAbortCount {
+        // EventKill aborts one blocked EventGetData call. The waiter count
+        // excludes readers that already dequeued their event data.
+        if event.waitingReaders > event.pendingAbortCount {
             event.pendingAbortCount += 1
             condition.broadcast()
         }
@@ -205,6 +205,20 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             throw GC_ERROR.abort
         }
         guard !event.isUnregistered else { throw GC_ERROR.abort }
+
+        // EventKill targets a read blocked waiting for event data, not a call
+        // that has already dequeued data and is only finishing its return path.
+        var registeredAsWaiting = false
+        if event.dataQueue.isEmpty {
+            event.waitingReaders += 1
+            registeredAsWaiting = true
+        }
+        defer {
+            if registeredAsWaiting {
+                event.waitingReaders -= 1
+                condition.broadcast()
+            }
+        }
 
         if timeoutMilliseconds == GenTLConstants.infiniteTimeout {
             while event.dataQueue.isEmpty &&
