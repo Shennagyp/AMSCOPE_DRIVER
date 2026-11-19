@@ -1,6 +1,6 @@
 import Foundation
 
-/// Library-level GenTL 1.6 functions.
+/// Library-level GenTL functions.
 public protocol GenTLLibraryFunctions: Sendable {
     func GCInitLib() throws
     func GCCloseLib() throws
