@@ -471,7 +471,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws {
         lock.lock()
         defer { lock.unlock() }
-        guard flags == 0 else { throw GC_ERROR.notAvailable }
+        guard flags == 0 else { throw GC_ERROR.notImplemented }
         try streamRecord(hDS).start(numberToAcquire: numberToAcquire)
     }
 
