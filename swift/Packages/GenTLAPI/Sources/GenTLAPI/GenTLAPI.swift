@@ -1,14 +1,15 @@
-/// Swift-facing GenTL 1.6 API surface.
+/// Swift interface following the GenTL 1.6 function groups.
 ///
-/// Method names and module boundaries follow the GenTL C API. Implementations
-/// are interchangeable: one forwards to a real GenTL Producer through its C
-/// interface; another can translate the same operations to a proprietary SDK.
+/// Both implementations expose this same interface:
+/// - GenTLNative forwards operations to manufacturer CTI Producers.
+/// - AmcamGenTL maps supported operations to the Amcam SDK.
 public protocol GenTLAPI:
     GenTLLibraryFunctions,
     GenTLSystemFunctions,
     GenTLInterfaceFunctions,
     GenTLDeviceFunctions,
     GenTLDataStreamFunctions,
+    GenTLAdvancedDataFunctions,
     GenTLPortFunctions,
     GenTLSignalingFunctions
 {
