@@ -96,7 +96,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 1: return .string("AmScope")
         case 2: return .string("Amcam SDK GenTL API compatibility backend")
         case 3: return .string(AmcamSDK.expectedVersion)
-        case 4: return .string("AMCAM")
+        case 4: return .string("Custom")
         case 5: return .string(sdkLibraryURL.lastPathComponent)
         case 6: return .string(sdkLibraryURL.path)
         case 7: return .string("AmScope Amcam")
@@ -169,7 +169,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         switch command {
         case 0: return .string(interfaceID)
         case 1: return .string("Amcam SDK managed interface")
-        case 2: return .string("AMCAM")
+        case 2: return .string("Custom")
         default: throw GC_ERROR.invalidParameter
         }
     }
@@ -215,7 +215,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         switch command {
         case 0: return .string("amcam-sdk-interface")
         case 1: return .string("Amcam SDK managed interface")
-        case 2: return .string("AMCAM")
+        case 2: return .string("Custom")
         default: throw GC_ERROR.invalidParameter
         }
     }
@@ -793,13 +793,13 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 0: return .string(device.identifier)
         case 1: return .string("AmScope")
         case 2: return .string(device.modelName ?? "Unknown Amcam camera")
-        case 3: return .string("AMCAM")
+        case 3: return .string("Custom")
         case 4: return .string(device.displayName)
         // The Amcam SDK does not expose a non-invasive access-status query.
         // Report UNKNOWN until this backend owns the camera; do not claim it is
         // available for read/write merely because it was discoverable.
         case 5: return .int32(isOpen ? 5 : 0) // OPEN_READWRITE / UNKNOWN
-        case 6: return .string(device.displayName)
+        case 6: throw GC_ERROR.notAvailable
         case 7: return .string(device.identifier)
         default: throw GC_ERROR.notAvailable
         }
