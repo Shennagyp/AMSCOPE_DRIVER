@@ -337,7 +337,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         // GenTL DSFlushQueue clears stream event data before applying the queue
         // transition. Operations that leave buffers in the output queue rebuild
         // their New Buffer notifications after the transition.
-        for event in events.values.flatMap({ $0 }) {
+        // DSFlushQueue affects New Buffer notifications associated with the
+        // input/output pools. It must not discard independent Error events.
+        for event in events[GenTLEventType.newBuffer.rawValue] ?? [] {
             event.dataQueue.removeAll(keepingCapacity: true)
         }
 
@@ -432,6 +434,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             : numberToAcquire
         finiteStopScheduled = false
         numDelivered = 0
+        numUnderrun = 0
         numStarted = 0
         condition.unlock()
 
@@ -616,7 +619,10 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 1: return .size(buffer.size)
         case 2: return .pointer(buffer.privateData.map(UInt.init(bitPattern:)) ?? 0)
         case 3: return .uint64(buffer.timestampMicroseconds)
-        case 4: return .bool8(buffer.newData)
+        case 4:
+            let hadNewData = buffer.newData
+            buffer.newData = false
+            return .bool8(hadNewData)
         case 5: return .bool8(buffer.isQueued)
         case 6: return .bool8(buffer.isAcquiring)
         case 7: return .bool8(buffer.isIncomplete)
