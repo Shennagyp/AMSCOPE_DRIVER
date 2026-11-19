@@ -36,7 +36,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     private var events: [UInt: AmcamEventRecord] = [:]
     private var nextHandle: UInt = 2
 
-    private var lastError = GenTLErrorInfo(code: .success, message: "No Error")
+    private let lastErrorThreadKey = "AmcamGenTLImplementation.lastError.\(UUID().uuidString)"
 
     private let systemHandle = TL_HANDLE(rawValue: 1)
     private let interfaceHandle = IF_HANDLE(rawValue: 1)
@@ -60,7 +60,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         do {
             driver = try AmcamCameraDriver(libraryURL: sdkLibraryURL)
             initialized = true
-            lastError = GenTLErrorInfo(code: .success, message: "No Error")
+            setLastError(.success, message: "No Error")
         } catch {
             try fail(.error, error.localizedDescription)
         }
@@ -83,7 +83,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         interfaceOpen = false
         systemOpen = false
         initialized = false
-        lastError = GenTLErrorInfo(code: .success, message: "No Error")
+        setLastError(.success, message: "No Error")
     }
 
     public func GCGetInfo(command: Int32) throws -> GenTLInfoValue {
@@ -110,7 +110,8 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func GCGetLastError() -> GenTLErrorInfo {
         lock.lock()
         defer { lock.unlock() }
-        return lastError
+        return Thread.current.threadDictionary[lastErrorThreadKey] as? GenTLErrorInfo
+            ?? GenTLErrorInfo(code: .success, message: "No Error")
     }
 
     // MARK: System
@@ -231,7 +232,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
             let updated = try driver.discover()
             let updatedIDs = Set(updated.map(\.identifier))
             discoveredDevices = updated
-            lastError = GenTLErrorInfo(code: .success, message: "No Error")
+            setLastError(.success, message: "No Error")
             return previousIDs != updatedIDs
         } catch {
             try fail(.error, error.localizedDescription)
@@ -837,8 +838,15 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         return record
     }
 
+    private func setLastError(_ code: GC_ERROR, message: String) {
+        Thread.current.threadDictionary[lastErrorThreadKey] = GenTLErrorInfo(
+            code: code,
+            message: message
+        )
+    }
+
     private func fail(_ code: GC_ERROR, _ message: String) throws -> Never {
-        lastError = GenTLErrorInfo(code: code, message: message)
+        setLastError(code, message: message)
         throw code
     }
 }
