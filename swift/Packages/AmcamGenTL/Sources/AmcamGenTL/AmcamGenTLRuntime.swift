@@ -46,123 +46,21 @@ final class AmcamEventRecord: @unchecked Sendable {
     let eventType: Int32
     let source: EVENTSRC_HANDLE
 
-    private let condition = NSCondition()
-    private var dataQueue: [Data] = []
-    private var pendingAbortCount = 0
-    private var unregistered = false
-    private var firedCount: UInt64 = 0
+    // All mutable event state is guarded by the owning AmcamDataStreamRecord's
+    // condition lock. This is deliberate: New Buffer event dequeue and output
+    // buffer queue ownership are one atomic state transition.
+    var dataQueue: [Data] = []
+    var pendingAbortCount = 0
+    var isUnregistered = false
+    var activeReaders = 0
+    var firedCount: UInt64 = 0
 
     init(handle: EVENT_HANDLE, eventType: Int32, source: EVENTSRC_HANDLE) {
         self.handle = handle
         self.eventType = eventType
         self.source = source
     }
-
-    func publish(_ data: Data) {
-        condition.lock()
-        defer { condition.unlock() }
-        guard !unregistered else { return }
-        dataQueue.append(data)
-        firedCount &+= 1
-        condition.broadcast()
-    }
-
-    func next(timeoutMilliseconds: UInt64) throws -> Data {
-        condition.lock()
-        defer { condition.unlock() }
-
-        if pendingAbortCount > 0 {
-            pendingAbortCount -= 1
-            throw GC_ERROR.abort
-        }
-        guard !unregistered else { throw GC_ERROR.abort }
-
-        if timeoutMilliseconds == GenTLConstants.infiniteTimeout {
-            while dataQueue.isEmpty && pendingAbortCount == 0 && !unregistered {
-                condition.wait()
-            }
-        } else {
-            let deadline = Date(
-                timeIntervalSinceNow: Double(timeoutMilliseconds) / 1_000.0
-            )
-            while dataQueue.isEmpty && pendingAbortCount == 0 && !unregistered {
-                if !condition.wait(until: deadline),
-                   dataQueue.isEmpty,
-                   pendingAbortCount == 0,
-                   !unregistered {
-                    throw GC_ERROR.timeout
-                }
-            }
-        }
-
-        if pendingAbortCount > 0 {
-            pendingAbortCount -= 1
-            throw GC_ERROR.abort
-        }
-        guard !unregistered else { throw GC_ERROR.abort }
-        guard !dataQueue.isEmpty else { throw GC_ERROR.noData }
-        return dataQueue.removeFirst()
-    }
-
-    func flush() {
-        condition.lock()
-        dataQueue.removeAll(keepingCapacity: true)
-        condition.broadcast()
-        condition.unlock()
-    }
-
-    /// Removes New Buffer notifications for buffers no longer present in the
-    /// output queue. Payloads start with the opaque BUFFER_HANDLE pointer.
-    func removeBufferEvents(for handles: Set<UInt>) {
-        guard !handles.isEmpty else { return }
-        condition.lock()
-        defer { condition.unlock() }
-        dataQueue.removeAll { payload in
-            guard payload.count >= MemoryLayout<UInt>.size else { return false }
-            let rawHandle = payload.withUnsafeBytes {
-                $0.loadUnaligned(as: UInt.self)
-            }
-            return handles.contains(rawHandle)
-        }
-        condition.broadcast()
-    }
-
-    /// EventKill aborts one EventGetData call. The abort remains pending if
-    /// no reader is currently waiting, and queued event data remains intact.
-    func abortOneRead() {
-        condition.lock()
-        pendingAbortCount += 1
-        condition.broadcast()
-        condition.unlock()
-    }
-
-    /// Unregistration invalidates the event object and aborts every pending read.
-    func unregister() {
-        condition.lock()
-        unregistered = true
-        dataQueue.removeAll(keepingCapacity: false)
-        condition.broadcast()
-        condition.unlock()
-    }
-
-    func info(command: Int32) throws -> GenTLInfoValue {
-        condition.lock()
-        defer { condition.unlock() }
-        switch command {
-        case 0: return .int32(eventType) // EVENT_EVENT_TYPE
-        case 1: return .size(dataQueue.count) // EVENT_NUM_IN_QUEUE
-        case 2: return .uint64(firedCount) // EVENT_NUM_FIRED
-        case 3:
-            let maximumSize = eventType == GenTLEventType.newBuffer.rawValue
-                ? 2 * UInt64(MemoryLayout<UInt>.size)
-                : 0
-            return .size(Int(maximumSize)) // EVENT_SIZE_MAX
-        case 4: return .size(0) // No event-specific info payload currently exposed.
-        default: throw GC_ERROR.invalidParameter
-        }
-    }
 }
-
 final class AmcamDataStreamRecord: @unchecked Sendable {
     let handle: DS_HANDLE
     let deviceHandle: DEV_HANDLE
@@ -216,15 +114,25 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         events[event.eventType, default: []].append(event)
     }
 
-    /// Unregisters a stream event. Pending New Buffer notifications are discarded,
-    /// and buffers still in the output queue become unqueued as required by GenTL.
+    /// Event queues and the output buffer queue share this condition lock so
+    /// dequeue, flush and unregistration cannot split a buffer/event transition.
     func unregisterEvent(_ event: AmcamEventRecord) {
         condition.lock()
         defer { condition.unlock() }
-        events[event.eventType]?.removeAll { $0.handle == event.handle }
-        event.unregister()
 
+        event.isUnregistered = true
+        event.dataQueue.removeAll(keepingCapacity: false)
+        condition.broadcast()
+
+        // Wake every EventGetData waiter and wait for its read lease to end
+        // before releasing the associated output buffers.
+        while event.activeReaders > 0 {
+            condition.wait()
+        }
+
+        events[event.eventType]?.removeAll { $0.handle == event.handle }
         guard event.eventType == GenTLEventType.newBuffer.rawValue else { return }
+
         let pendingHandles = outputQueue
         outputQueue.removeAll()
         for rawHandle in pendingHandles {
@@ -233,17 +141,16 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         condition.broadcast()
     }
 
-    /// GenTL EventFlush on a New Buffer event discards its data queue and the
-    /// associated DataStream output queue. Error-event flushes only clear data.
-    func flushEvent(_ event: AmcamEventRecord) {
-        // receive() holds the stream condition while publishing to an event.
-        // Use the same lock order here so a concurrently arriving frame cannot
-        // enqueue a fresh New Buffer event between event flush and queue clear.
+    func flushEvent(_ event: AmcamEventRecord) throws {
         condition.lock()
         defer { condition.unlock() }
-        event.flush()
+        guard !event.isUnregistered else { throw GC_ERROR.invalidHandle }
 
-        guard event.eventType == GenTLEventType.newBuffer.rawValue else { return }
+        event.dataQueue.removeAll(keepingCapacity: true)
+        guard event.eventType == GenTLEventType.newBuffer.rawValue else {
+            condition.broadcast()
+            return
+        }
 
         let discardedHandles = outputQueue
         outputQueue.removeAll()
@@ -253,6 +160,104 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             buffer.newData = false
         }
         condition.broadcast()
+    }
+
+    func abortOneEventRead(_ event: AmcamEventRecord) throws {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !event.isUnregistered else { throw GC_ERROR.invalidHandle }
+        event.pendingAbortCount += 1
+        condition.broadcast()
+    }
+
+    func eventInfo(_ event: AmcamEventRecord, command: Int32) throws -> GenTLInfoValue {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !event.isUnregistered else { throw GC_ERROR.invalidHandle }
+        switch command {
+        case 0: return .int32(event.eventType)
+        case 1: return .size(event.dataQueue.count)
+        case 2: return .uint64(event.firedCount)
+        case 3:
+            return .size(
+                event.eventType == GenTLEventType.newBuffer.rawValue
+                    ? 2 * MemoryLayout<UInt>.size
+                    : 0
+            )
+        case 4: return .size(0)
+        default: throw GC_ERROR.invalidParameter
+        }
+    }
+
+    func nextEventData(
+        _ event: AmcamEventRecord,
+        timeoutMilliseconds: UInt64
+    ) throws -> Data {
+        condition.lock()
+        event.activeReaders += 1
+        defer {
+            event.activeReaders -= 1
+            condition.broadcast()
+            condition.unlock()
+        }
+
+        if event.pendingAbortCount > 0 {
+            event.pendingAbortCount -= 1
+            throw GC_ERROR.abort
+        }
+        guard !event.isUnregistered else { throw GC_ERROR.abort }
+
+        if timeoutMilliseconds == GenTLConstants.infiniteTimeout {
+            while event.dataQueue.isEmpty &&
+                  event.pendingAbortCount == 0 &&
+                  !event.isUnregistered {
+                condition.wait()
+            }
+        } else {
+            let deadline = Date(
+                timeIntervalSinceNow: Double(timeoutMilliseconds) / 1_000.0
+            )
+            while event.dataQueue.isEmpty &&
+                  event.pendingAbortCount == 0 &&
+                  !event.isUnregistered {
+                if !condition.wait(until: deadline),
+                   event.dataQueue.isEmpty,
+                   event.pendingAbortCount == 0,
+                   !event.isUnregistered {
+                    throw GC_ERROR.timeout
+                }
+            }
+        }
+
+        if event.pendingAbortCount > 0 {
+            event.pendingAbortCount -= 1
+            throw GC_ERROR.abort
+        }
+        guard !event.isUnregistered else { throw GC_ERROR.abort }
+        guard !event.dataQueue.isEmpty else { throw GC_ERROR.noData }
+
+        let payload = event.dataQueue.removeFirst()
+        if event.eventType == GenTLEventType.newBuffer.rawValue {
+            guard payload.count >= MemoryLayout<UInt>.size else {
+                throw GC_ERROR.invalidValue
+            }
+            let rawHandle = payload.withUnsafeBytes {
+                $0.loadUnaligned(as: UInt.self)
+            }
+            guard let buffer = buffers[rawHandle] else { throw GC_ERROR.invalidBuffer }
+            guard let queueIndex = outputQueue.firstIndex(of: rawHandle),
+                  buffer.isQueued else {
+                throw GC_ERROR.noData
+            }
+
+            // Dequeueing event data and transitioning the buffer out of the
+            // Output Buffer Queue happen under the same condition lock.
+            outputQueue.remove(at: queueIndex)
+            buffer.isQueued = false
+        }
+
+        condition.broadcast()
+        return payload
     }
 
     func announce(
@@ -291,6 +296,22 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         inputQueue.append(handle.rawValue)
     }
 
+    /// Removes pending event notifications for buffers whose ownership is
+    /// changing. Caller must hold the stream condition lock.
+    private func removeBufferEvents(for handles: Set<UInt>) {
+        guard !handles.isEmpty else { return }
+        for event in events[GenTLEventType.newBuffer.rawValue] ?? [] {
+            event.dataQueue.removeAll { payload in
+                guard payload.count >= MemoryLayout<UInt>.size else { return false }
+                let rawHandle = payload.withUnsafeBytes {
+                    $0.loadUnaligned(as: UInt.self)
+                }
+                return handles.contains(rawHandle)
+            }
+        }
+        condition.broadcast()
+    }
+
     private func prepareForInput(_ buffer: AmcamBufferRecord) {
         buffer.isQueued = true
         buffer.isAcquiring = false
@@ -317,7 +338,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         // transition. Operations that leave buffers in the output queue rebuild
         // their New Buffer notifications after the transition.
         for event in events.values.flatMap({ $0 }) {
-            event.flush()
+            event.dataQueue.removeAll(keepingCapacity: true)
         }
 
         switch operation {
@@ -496,8 +517,14 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         finiteAcquisitionCount = nil
         finiteStopScheduled = false
 
-        for event in events.values.flatMap({ $0 }) {
-            event.unregister()
+        let closingEvents = events.values.flatMap({ $0 })
+        for event in closingEvents {
+            event.isUnregistered = true
+            event.dataQueue.removeAll(keepingCapacity: false)
+        }
+        condition.broadcast()
+        while closingEvents.contains(where: { $0.activeReaders > 0 }) {
+            condition.wait()
         }
         events.removeAll()
 
@@ -540,32 +567,6 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             baseAddress: returnedMemory,
             privateData: buffer.privateData
         )
-    }
-
-    /// Completes delivery of a New Buffer event. GenTL removes the associated
-    /// buffer from the Output Buffer Queue when EventGetData returns its event
-    /// payload, not when the frame first enters that queue.
-    func deliverNewBufferEvent(_ payload: Data) throws {
-        guard payload.count >= MemoryLayout<UInt>.size else {
-            throw GC_ERROR.invalidValue
-        }
-        let rawHandle = payload.withUnsafeBytes {
-            $0.loadUnaligned(as: UInt.self)
-        }
-
-        condition.lock()
-        defer { condition.unlock() }
-        guard let buffer = buffers[rawHandle] else { throw GC_ERROR.invalidBuffer }
-        guard let queueIndex = outputQueue.firstIndex(of: rawHandle),
-              buffer.isQueued else {
-            // The buffer may have been discarded concurrently by EventFlush or
-            // DSFlushQueue after the event data was dequeued.
-            throw GC_ERROR.noData
-        }
-
-        outputQueue.remove(at: queueIndex)
-        buffer.isQueued = false
-        condition.broadcast()
     }
 
     func buffer(_ handle: BUFFER_HANDLE) throws -> AmcamBufferRecord {
@@ -865,17 +866,24 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         var payload = Data()
         withUnsafeBytes(of: &bufferHandle) { payload.append(contentsOf: $0) }
         withUnsafeBytes(of: &userPointer) { payload.append(contentsOf: $0) }
-        for event in events[GenTLEventType.newBuffer.rawValue] ?? [] {
-            event.publish(payload)
+
+        for event in events[GenTLEventType.newBuffer.rawValue] ?? []
+        where !event.isUnregistered {
+            event.dataQueue.append(payload)
+            event.firedCount &+= 1
         }
         condition.broadcast()
     }
 
     private func publishErrorEvent() {
-        let payload = Data()
         condition.lock()
-        let errorEvents = events[GenTLEventType.error.rawValue] ?? []
-        condition.unlock()
-        errorEvents.forEach { $0.publish(payload) }
+        defer { condition.unlock() }
+        let payload = Data()
+        for event in events[GenTLEventType.error.rawValue] ?? []
+        where !event.isUnregistered {
+            event.dataQueue.append(payload)
+            event.firedCount &+= 1
+        }
+        condition.broadcast()
     }
 }
