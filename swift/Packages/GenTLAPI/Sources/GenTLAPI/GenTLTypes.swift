@@ -1,57 +1,95 @@
 import Foundation
 
 /// GenTL 1.6 return codes. Raw values are defined by the EMVA GenTL header.
-public enum GC_ERROR: Int32, Error, CaseIterable, Sendable {
-    case success = 0
-    case error = -1001
-    case notInitialized = -1002
-    case notImplemented = -1003
-    case resourceInUse = -1004
-    case accessDenied = -1005
-    case invalidHandle = -1006
-    case invalidID = -1007
-    case noData = -1008
-    case invalidParameter = -1009
-    case io = -1010
-    case timeout = -1011
-    case abort = -1012
-    case invalidBuffer = -1013
-    case notAvailable = -1014
-    case invalidAddress = -1015
-    case bufferTooSmall = -1016
-    case invalidIndex = -1017
-    case parsingChunkData = -1018
-    case invalidValue = -1019
-    case resourceExhausted = -1020
-    case outOfMemory = -1021
-    case busy = -1022
-    case ambiguous = -1023
-    case customID = -10000
+public struct GC_ERROR: RawRepresentable, Error, Hashable, Sendable, CustomStringConvertible {
+    public let rawValue: Int32
 
-    public static let GC_ERR_SUCCESS = Self.success
-    public static let GC_ERR_ERROR = Self.error
-    public static let GC_ERR_NOT_INITIALIZED = Self.notInitialized
-    public static let GC_ERR_NOT_IMPLEMENTED = Self.notImplemented
-    public static let GC_ERR_RESOURCE_IN_USE = Self.resourceInUse
-    public static let GC_ERR_ACCESS_DENIED = Self.accessDenied
-    public static let GC_ERR_INVALID_HANDLE = Self.invalidHandle
-    public static let GC_ERR_INVALID_ID = Self.invalidID
-    public static let GC_ERR_NO_DATA = Self.noData
-    public static let GC_ERR_INVALID_PARAMETER = Self.invalidParameter
-    public static let GC_ERR_IO = Self.io
-    public static let GC_ERR_TIMEOUT = Self.timeout
-    public static let GC_ERR_ABORT = Self.abort
-    public static let GC_ERR_INVALID_BUFFER = Self.invalidBuffer
-    public static let GC_ERR_NOT_AVAILABLE = Self.notAvailable
-    public static let GC_ERR_INVALID_ADDRESS = Self.invalidAddress
-    public static let GC_ERR_BUFFER_TOO_SMALL = Self.bufferTooSmall
-    public static let GC_ERR_INVALID_INDEX = Self.invalidIndex
-    public static let GC_ERR_PARSING_CHUNK_DATA = Self.parsingChunkData
-    public static let GC_ERR_INVALID_VALUE = Self.invalidValue
-    public static let GC_ERR_RESOURCE_EXHAUSTED = Self.resourceExhausted
-    public static let GC_ERR_OUT_OF_MEMORY = Self.outOfMemory
-    public static let GC_ERR_BUSY = Self.busy
-    public static let GC_ERR_AMBIGUOUS = Self.ambiguous
+    public init(rawValue: Int32) {
+        self.rawValue = rawValue
+    }
+
+    public var description: String {
+        Self.knownNames[rawValue] ?? "GC_ERROR(\\(rawValue))"
+    }
+
+    private static let knownNames: [Int32: String] = [
+        0: "GC_ERR_SUCCESS",
+        -1001: "GC_ERR_ERROR",
+        -1002: "GC_ERR_NOT_INITIALIZED",
+        -1003: "GC_ERR_NOT_IMPLEMENTED",
+        -1004: "GC_ERR_RESOURCE_IN_USE",
+        -1005: "GC_ERR_ACCESS_DENIED",
+        -1006: "GC_ERR_INVALID_HANDLE",
+        -1007: "GC_ERR_INVALID_ID",
+        -1008: "GC_ERR_NO_DATA",
+        -1009: "GC_ERR_INVALID_PARAMETER",
+        -1010: "GC_ERR_IO",
+        -1011: "GC_ERR_TIMEOUT",
+        -1012: "GC_ERR_ABORT",
+        -1013: "GC_ERR_INVALID_BUFFER",
+        -1014: "GC_ERR_NOT_AVAILABLE",
+        -1015: "GC_ERR_INVALID_ADDRESS",
+        -1016: "GC_ERR_BUFFER_TOO_SMALL",
+        -1017: "GC_ERR_INVALID_INDEX",
+        -1018: "GC_ERR_PARSING_CHUNK_DATA",
+        -1019: "GC_ERR_INVALID_VALUE",
+        -1020: "GC_ERR_RESOURCE_EXHAUSTED",
+        -1021: "GC_ERR_OUT_OF_MEMORY",
+        -1022: "GC_ERR_BUSY",
+        -1023: "GC_ERR_AMBIGUOUS",
+        -10000: "GC_ERR_CUSTOM_ID"
+    ]
+
+    public static let success = GC_ERROR(rawValue: 0)
+    public static let error = GC_ERROR(rawValue: -1001)
+    public static let notInitialized = GC_ERROR(rawValue: -1002)
+    public static let notImplemented = GC_ERROR(rawValue: -1003)
+    public static let resourceInUse = GC_ERROR(rawValue: -1004)
+    public static let accessDenied = GC_ERROR(rawValue: -1005)
+    public static let invalidHandle = GC_ERROR(rawValue: -1006)
+    public static let invalidID = GC_ERROR(rawValue: -1007)
+    public static let noData = GC_ERROR(rawValue: -1008)
+    public static let invalidParameter = GC_ERROR(rawValue: -1009)
+    public static let io = GC_ERROR(rawValue: -1010)
+    public static let timeout = GC_ERROR(rawValue: -1011)
+    public static let abort = GC_ERROR(rawValue: -1012)
+    public static let invalidBuffer = GC_ERROR(rawValue: -1013)
+    public static let notAvailable = GC_ERROR(rawValue: -1014)
+    public static let invalidAddress = GC_ERROR(rawValue: -1015)
+    public static let bufferTooSmall = GC_ERROR(rawValue: -1016)
+    public static let invalidIndex = GC_ERROR(rawValue: -1017)
+    public static let parsingChunkData = GC_ERROR(rawValue: -1018)
+    public static let invalidValue = GC_ERROR(rawValue: -1019)
+    public static let resourceExhausted = GC_ERROR(rawValue: -1020)
+    public static let outOfMemory = GC_ERROR(rawValue: -1021)
+    public static let busy = GC_ERROR(rawValue: -1022)
+    public static let ambiguous = GC_ERROR(rawValue: -1023)
+    public static let customID = GC_ERROR(rawValue: -10000)
+
+    public static let GC_ERR_SUCCESS = success
+    public static let GC_ERR_ERROR = error
+    public static let GC_ERR_NOT_INITIALIZED = notInitialized
+    public static let GC_ERR_NOT_IMPLEMENTED = notImplemented
+    public static let GC_ERR_RESOURCE_IN_USE = resourceInUse
+    public static let GC_ERR_ACCESS_DENIED = accessDenied
+    public static let GC_ERR_INVALID_HANDLE = invalidHandle
+    public static let GC_ERR_INVALID_ID = invalidID
+    public static let GC_ERR_NO_DATA = noData
+    public static let GC_ERR_INVALID_PARAMETER = invalidParameter
+    public static let GC_ERR_IO = io
+    public static let GC_ERR_TIMEOUT = timeout
+    public static let GC_ERR_ABORT = abort
+    public static let GC_ERR_INVALID_BUFFER = invalidBuffer
+    public static let GC_ERR_NOT_AVAILABLE = notAvailable
+    public static let GC_ERR_INVALID_ADDRESS = invalidAddress
+    public static let GC_ERR_BUFFER_TOO_SMALL = bufferTooSmall
+    public static let GC_ERR_INVALID_INDEX = invalidIndex
+    public static let GC_ERR_PARSING_CHUNK_DATA = parsingChunkData
+    public static let GC_ERR_INVALID_VALUE = invalidValue
+    public static let GC_ERR_RESOURCE_EXHAUSTED = resourceExhausted
+    public static let GC_ERR_OUT_OF_MEMORY = outOfMemory
+    public static let GC_ERR_BUSY = busy
+    public static let GC_ERR_AMBIGUOUS = ambiguous
 }
 
 public struct GenTLVersion: Hashable, Sendable {
