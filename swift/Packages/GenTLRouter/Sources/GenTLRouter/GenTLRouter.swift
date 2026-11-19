@@ -76,7 +76,7 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
         self.context = context
     }
 
-    public func open(accessFlags: UInt32) throws -> GenTLDeviceSession {
+    public func open(accessFlags: Int32) throws -> GenTLDeviceSession {
         let handle = try api.IFOpenDevice(
             interfaceHandle,
             deviceID: deviceID,
