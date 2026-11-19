@@ -9,7 +9,7 @@ public struct GC_ERROR: RawRepresentable, Error, Hashable, Sendable, CustomStrin
     }
 
     public var description: String {
-        Self.knownNames[rawValue] ?? "GC_ERROR(\\(rawValue))"
+        Self.knownNames[rawValue] ?? "GC_ERROR(\(rawValue))"
     }
 
     private static let knownNames: [Int32: String] = [
@@ -195,4 +195,96 @@ public struct GenTLRevokedBuffer: @unchecked Sendable {
         self.baseAddress = baseAddress
         self.privateData = privateData
     }
+}
+
+
+/// GenTL INFO function data-type identifiers (INFO_DATATYPE in GenTL 1.6).
+public enum GenTLInfoDataType: Int32, Sendable {
+    case unknown = 0
+    case string = 1
+    case stringList = 2
+    case int16 = 3
+    case uint16 = 4
+    case int32 = 5
+    case uint32 = 6
+    case int64 = 7
+    case uint64 = 8
+    case float64 = 9
+    case pointer = 10
+    case bool8 = 11
+    case size = 12
+    case buffer = 13
+    case pointerDifference = 14
+}
+
+/// Standard GenTL 1.6 command identifiers used by INFO functions.
+public enum GenTLInfoCommand {
+    public enum TransportLayer: Int32, Sendable {
+        case id = 0, vendor = 1, model = 2, version = 3, transportType = 4
+        case fileName = 5, pathName = 6, displayName = 7, charEncoding = 8
+    }
+    public enum Interface: Int32, Sendable {
+        case id = 0, displayName = 1, transportType = 2
+    }
+    public enum Device: Int32, Sendable {
+        case id = 0, vendor = 1, model = 2, transportType = 3
+        case displayName = 4, accessStatus = 5, userDefinedName = 6
+        case serialNumber = 7, version = 8, timestampFrequency = 9
+    }
+    public enum Port: Int32, Sendable {
+        case id = 0, vendor = 1, model = 2, transportType = 3
+        case module = 4, littleEndian = 5, bigEndian = 6
+        case accessRead = 7, accessWrite = 8, accessNotAvailable = 9
+        case accessNotImplemented = 10, version = 11, portName = 12
+    }
+    public enum Stream: Int32, Sendable {
+        case id = 0, numDelivered = 1, numUnderrun = 2, numAnnounced = 3
+        case numQueued = 4, numAwaitDelivery = 5, numStarted = 6
+        case payloadSize = 7, isGrabbing = 8, definesPayloadSize = 9
+        case transportType = 10
+    }
+    public enum Buffer: Int32, Sendable {
+        case base = 0, size = 1, userPointer = 2, timestamp = 3
+        case newData = 4, isQueued = 5, isAcquiring = 6, isIncomplete = 7
+        case transportType = 8, sizeFilled = 9, width = 10, height = 11
+        case xOffset = 12, yOffset = 13, xPadding = 14, yPadding = 15
+        case pixelFormat = 16, pixelFormatNamespace = 17, deliveredImageHeight = 18
+        case deliveredChunkPayloadSize = 19, chunkLayoutID = 20
+        case payloadType = 21, timestampFrequency = 22, timestamp tick = 23
+    }
+    public enum Event: Int32, Sendable {
+        case eventType = 0, numInQueue = 1, numFired = 2, maxSize = 3
+        case infoDataSizeMax = 4
+    }
+    public enum EventData: Int32, Sendable {
+        case id = 0, value = 1, numericID = 2
+    }
+}
+
+/// Standard GenTL event identifiers.
+public enum GenTLEventType: Int32, Sendable {
+    case error = 0
+    case newBuffer = 1
+    case featureInvalidate = 2
+    case featureChange = 3
+    case remoteDevice = 4
+    case module = 5
+}
+
+/// Standard GenTL acquisition queue operations.
+public enum GenTLQueueOperation: Int32, Sendable {
+    case inputToOutput = 0
+    case outputDiscard = 1
+    case allToInput = 2
+    case unqueuedToInput = 3
+    case allDiscard = 4
+}
+
+/// Standard GenTL device access modes.
+public enum GenTLDeviceAccess: Int32, Sendable {
+    case unknown = 0
+    case none = 1
+    case readOnly = 2
+    case control = 3
+    case exclusive = 4
 }
