@@ -71,8 +71,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
 
         try requireInitialized()
-        guard openDevices.isEmpty, dataStreams.isEmpty else {
-            try fail(.resourceInUse, "Close all Amcam devices and data streams before GCCloseLib.")
+        guard !systemOpen, !interfaceOpen,
+              openDevices.isEmpty, dataStreams.isEmpty, events.isEmpty else {
+            try fail(.resourceInUse, "Close all Amcam systems, interfaces, devices, streams and events before GCCloseLib.")
         }
 
         driver = nil
@@ -126,10 +127,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try requireSystem(hTL)
-        guard openDevices.isEmpty, dataStreams.isEmpty else {
-            try fail(.resourceInUse, "Close all devices and streams before TLClose.")
+        guard !interfaceOpen, openDevices.isEmpty, dataStreams.isEmpty else {
+            try fail(.resourceInUse, "Close the interface, devices and streams before TLClose.")
         }
-        interfaceOpen = false
         discoveredDevices.removeAll(keepingCapacity: false)
         systemOpen = false
     }
@@ -442,17 +442,21 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
 
     public func DSStartAcquisition(
         _ hDS: DS_HANDLE,
-        flags: UInt32,
+        flags: Int32,
         numberToAcquire: UInt64
     ) throws {
         lock.lock()
         defer { lock.unlock() }
+        guard flags == 0 else { throw GC_ERROR.notAvailable }
         try streamRecord(hDS).start(numberToAcquire: numberToAcquire)
     }
 
     public func DSStopAcquisition(_ hDS: DS_HANDLE, flags: Int32) throws {
         lock.lock()
         defer { lock.unlock() }
+        // Amcam_Stop provides the SDK's orderly stop operation. It does not
+        // expose a distinct immediate-kill semantic.
+        guard flags == 0 else { throw GC_ERROR.notImplemented }
         try streamRecord(hDS).stop()
     }
 
