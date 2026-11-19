@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import GenTLNative
@@ -74,6 +75,50 @@ final class GenTLProducerCatalogTests: XCTestCase {
 
         XCTAssertTrue(result.issues.isEmpty)
         XCTAssertEqual(result.producers.map(\.standardizedFileURL), [producer.standardizedFileURL])
+    }
+
+    func testDirectoryScanContinuesAfterBrokenCTISymlink() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GenTLBrokenEntryTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let producer = root.appendingPathComponent("valid.cti")
+        let brokenLink = root.appendingPathComponent("broken.cti")
+        XCTAssertTrue(FileManager.default.createFile(atPath: producer.path, contents: Data()))
+        try FileManager.default.createSymbolicLink(
+            atPath: brokenLink.path,
+            withDestinationPath: root.appendingPathComponent("missing.cti").path
+        )
+
+        let result = GenTLProducerCatalog.discover(
+            searchPaths: [root],
+            environment: [:]
+        )
+
+        XCTAssertEqual(result.producers.map(\.lastPathComponent), ["valid.cti"])
+        XCTAssertEqual(result.issues.count, 1)
+        XCTAssertEqual(result.issues.first?.path, brokenLink.path)
+    }
+
+    func testExplicitCTIPathMustBeARegularFile() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GenTLNonRegularEntryTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let fifo = root.appendingPathComponent("not-a-library.cti")
+        let status = fifo.path.withCString { mkfifo($0, mode_t(0o600)) }
+        XCTAssertEqual(status, 0)
+
+        let result = GenTLProducerCatalog.discover(
+            searchPaths: [fifo],
+            environment: [:]
+        )
+
+        XCTAssertTrue(result.producers.isEmpty)
+        XCTAssertEqual(result.issues.count, 1)
+        XCTAssertTrue(result.issues[0].message.contains("regular file"))
     }
 
     func testDirectCTIPathsAndSymlinkAliasesAreRegisteredOnce() throws {
