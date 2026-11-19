@@ -331,10 +331,11 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             condition.unlock()
             throw GC_ERROR.resourceInUse
         }
-        let registeredEvents = events.values.flatMap { $0 }
-        events.removeAll()
+        guard events.values.allSatisfy({ $0.isEmpty }) else {
+            condition.unlock()
+            throw GC_ERROR.resourceInUse
+        }
         condition.unlock()
-        registeredEvents.forEach { $0.kill() }
     }
 
     func revoke(_ handle: BUFFER_HANDLE) throws -> GenTLRevokedBuffer {
