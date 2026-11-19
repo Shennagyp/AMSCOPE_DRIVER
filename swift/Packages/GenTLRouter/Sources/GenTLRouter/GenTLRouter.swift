@@ -87,7 +87,11 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     private let context: GenTLProviderContext
 
     public var id: String {
-        "\(backendID)|\(interfaceID)|\(deviceID)"
+        // Length-prefix each opaque GenTL identifier. Vendor IDs may contain
+        // separator characters, so delimiter-only concatenation can collide.
+        [backendID, interfaceID, deviceID]
+            .map { "\($0.utf8.count):\($0)" }
+            .joined()
     }
 
     fileprivate init(
