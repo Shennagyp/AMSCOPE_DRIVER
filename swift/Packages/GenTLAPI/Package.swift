@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "GenTLAPI", targets: ["GenTLAPI"])
     ],
     targets: [
-        .target(name: "GenTLAPI")
+        .target(name: "GenTLAPI"),
+        .testTarget(name: "GenTLAPITests", dependencies: ["GenTLAPI"])
     ]
 )
