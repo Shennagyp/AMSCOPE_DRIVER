@@ -91,6 +91,10 @@ private typealias DSStopAcquisitionFunction = @convention(c) (UnsafeMutableRawPo
 private typealias DSGetBufferIDFunction = @convention(c) (
     UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
 ) -> Int32
+private typealias DSGetBufferInfoFunction = @convention(c) (
+    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32,
+    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
+) -> Int32
 private typealias DSRevokeBufferFunction = @convention(c) (
     UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
     UnsafeMutablePointer<UnsafeMutableRawPointer?>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
@@ -179,7 +183,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let dsStopAcquisition: DSStopAcquisitionFunction
         let dsGetInfo: ModuleInfoFunction
         let dsGetBufferID: DSGetBufferIDFunction
-        let dsGetBufferInfo: ModuleInfoFunction
+        let dsGetBufferInfo: DSGetBufferInfoFunction
         let dsRevokeBuffer: DSRevokeBufferFunction
         let dsGetParentDev: DSGetParentDevFunction
         let dsClose: DSCloseFunction
@@ -260,7 +264,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             dsStopAcquisition: load("DSStopAcquisition", as: DSStopAcquisitionFunction.self),
             dsGetInfo: load("DSGetInfo", as: ModuleInfoFunction.self),
             dsGetBufferID: load("DSGetBufferID", as: DSGetBufferIDFunction.self),
-            dsGetBufferInfo: load("DSGetBufferInfo", as: ModuleInfoFunction.self),
+            dsGetBufferInfo: load("DSGetBufferInfo", as: DSGetBufferInfoFunction.self),
             dsRevokeBuffer: load("DSRevokeBuffer", as: DSRevokeBufferFunction.self),
             dsGetParentDev: load("DSGetParentDev", as: DSGetParentDevFunction.self),
             dsClose: load("DSClose", as: DSCloseFunction.self),
@@ -638,7 +642,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             return try readInfo { type, output, size in
-                functions.dsGetBufferInfo(stream, command, type, output, size)
+                functions.dsGetBufferInfo(stream, bufferHandle, command, type, output, size)
             }
         }
     }
