@@ -291,6 +291,18 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 case .success(let frame):
                     self.receive(frame)
                 case .failure:
+                    // The SDK session has already stopped frame delivery on a
+                    // fatal callback. Mirror that state before notifying clients
+                    // so DSStop/DSClose are not left believing acquisition is live.
+                    self.condition.lock()
+                    self.isGrabbing = false
+                    self.finiteAcquisitionCount = nil
+                    self.finiteStopScheduled = false
+                    for raw in self.inputQueue {
+                        self.buffers[raw]?.isAcquiring = false
+                    }
+                    self.condition.broadcast()
+                    self.condition.unlock()
                     self.publishErrorEvent()
                 }
             }
