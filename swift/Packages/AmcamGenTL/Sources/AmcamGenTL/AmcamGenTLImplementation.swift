@@ -363,7 +363,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         guard record.dataStreamHandle == nil else { throw GC_ERROR.resourceInUse }
 
         let handle = DS_HANDLE(rawValue: allocateHandle())
-        let stream = AmcamDataStreamRecord(
+        let stream = try AmcamDataStreamRecord(
             handle: handle,
             deviceHandle: hDevice,
             session: record.session
@@ -525,6 +525,15 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let stream = try streamRecord(hDS)
+
+        let streamEvents = events.filter { _, record in
+            record.source == .dataStream(hDS)
+        }
+        for (eventHandle, record) in streamEvents {
+            stream.unregisterEvent(record)
+            events.removeValue(forKey: eventHandle)
+        }
+
         try stream.close()
         dataStreams.removeValue(forKey: hDS.rawValue)
         if let record = openDevices[stream.deviceHandle.rawValue] {
@@ -687,9 +696,10 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
 
         if case .dataStream(let streamHandle) = source,
            let stream = dataStreams[streamHandle.rawValue] {
-            stream.removeEvent(match.value)
+            stream.unregisterEvent(match.value)
+        } else {
+            match.value.unregister()
         }
-        match.value.unregister()
         events.removeValue(forKey: match.key)
     }
 
