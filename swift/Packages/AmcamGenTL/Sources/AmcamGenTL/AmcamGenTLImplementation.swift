@@ -660,13 +660,16 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
 
         let type = eventType
+        guard GenTLEventType(rawValue: type) != nil else {
+            throw GC_ERROR.invalidParameter
+        }
         guard type == GenTLEventType.newBuffer.rawValue ||
               type == GenTLEventType.error.rawValue else {
-            throw GC_ERROR.notAvailable
+            throw GC_ERROR.notImplemented
         }
 
         guard case .dataStream(let streamHandle) = source else {
-            throw GC_ERROR.notAvailable
+            throw GC_ERROR.notImplemented
         }
         guard !events.values.contains(where: {
             $0.source == source && $0.eventType == type
