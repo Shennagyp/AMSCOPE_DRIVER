@@ -181,6 +181,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     private(set) var payloadSize: Int = 0
     private var finiteAcquisitionCount: UInt64?
     private var finiteStopScheduled = false
+    /// True from DSStartAcquisition until its required matching DSStopAcquisition,
+    /// even when a finite acquisition has stopped automatically.
+    private var acquisitionStartOutstanding = false
 
     init(handle: DS_HANDLE, deviceHandle: DEV_HANDLE, session: AmcamCameraSession) throws {
         self.handle = handle
@@ -380,7 +383,11 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
 
     func start(numberToAcquire: UInt64) throws {
         condition.lock()
-        guard !isGrabbing else {
+        guard numberToAcquire != 0 else {
+            condition.unlock()
+            throw GC_ERROR.invalidParameter
+        }
+        guard !isGrabbing, !acquisitionStartOutstanding else {
             condition.unlock()
             throw GC_ERROR.resourceInUse
         }
@@ -389,7 +396,10 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
             throw GC_ERROR.invalidBuffer
         }
         isGrabbing = true
-        finiteAcquisitionCount = numberToAcquire == 0 ? nil : numberToAcquire
+        acquisitionStartOutstanding = true
+        finiteAcquisitionCount = numberToAcquire == GenTLConstants.infiniteCount
+            ? nil
+            : numberToAcquire
         finiteStopScheduled = false
         numDelivered = 0
         numStarted = 0
@@ -420,6 +430,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         } catch {
             condition.lock()
             isGrabbing = false
+            acquisitionStartOutstanding = false
             finiteAcquisitionCount = nil
             condition.unlock()
             throw error
@@ -431,21 +442,25 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         while finiteStopScheduled {
             condition.wait()
         }
-        guard isGrabbing else {
+        guard acquisitionStartOutstanding else {
             condition.unlock()
             throw GC_ERROR.notAvailable
         }
         condition.unlock()
 
         do {
-            try session.stop()
+            // This is also valid after the finite-count engine has stopped
+            // automatically, and cleans callback state after a fatal SDK event.
+            try session.stopIfNeeded()
         } catch {
             throw GC_ERROR.error
         }
 
         condition.lock()
         isGrabbing = false
+        acquisitionStartOutstanding = false
         finiteAcquisitionCount = nil
+        finiteStopScheduled = false
         for raw in inputQueue {
             buffers[raw]?.isAcquiring = false
         }
@@ -469,6 +484,7 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         defer { condition.unlock() }
 
         isGrabbing = false
+        acquisitionStartOutstanding = false
         finiteAcquisitionCount = nil
         finiteStopScheduled = false
 
