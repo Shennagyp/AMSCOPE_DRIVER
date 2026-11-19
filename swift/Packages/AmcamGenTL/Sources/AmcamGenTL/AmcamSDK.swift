@@ -24,6 +24,20 @@ private typealias SetSpeedFunction = @convention(c) (UnsafeMutableRawPointer?, U
 private typealias GetFrameRateFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?, UnsafeMutablePointer<UInt32>?, UnsafeMutablePointer<UInt32>?) -> Int32
 public typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
+/// Keeps an Amcam SDK loaded when a camera handle could not be closed safely.
+private final class AmcamSDKRetainer: @unchecked Sendable {
+    static let shared = AmcamSDKRetainer()
+
+    private let lock = NSLock()
+    private var retainedSDKs: [AmcamSDK] = []
+
+    func retain(_ sdk: AmcamSDK) {
+        lock.lock()
+        defer { lock.unlock() }
+        retainedSDKs.append(sdk)
+    }
+}
+
 final class AmcamSDK: @unchecked Sendable {
     static let expectedVersion = "58.28273.20250415"
     static let maximumDevices = 128
@@ -116,6 +130,12 @@ final class AmcamSDK: @unchecked Sendable {
     }
 
     deinit { dlclose(library) }
+
+    /// Called only if final camera-session cleanup fails. Unloading this dynamic
+    /// library could invalidate callbacks or handles still owned by the SDK.
+    func retainForProcessLifetimeAfterCleanupFailure() {
+        AmcamSDKRetainer.shared.retain(self)
+    }
 
     var resolutionChangeAvailable: Bool {
         api.putResolution != nil
