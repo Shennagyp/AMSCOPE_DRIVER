@@ -268,7 +268,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     public func IFOpenDevice(
         _ hIF: IF_HANDLE,
         deviceID: String,
-        accessFlags: UInt32
+        accessFlags: Int32
     ) throws -> DEV_HANDLE {
         lock.lock()
         defer { lock.unlock() }
@@ -434,10 +434,10 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         try streamRecord(hDS).queue(buffer)
     }
 
-    public func DSFlushQueue(_ hDS: DS_HANDLE, operation: UInt32) throws {
+    public func DSFlushQueue(_ hDS: DS_HANDLE, operation: Int32) throws {
         lock.lock()
         defer { lock.unlock() }
-        try streamRecord(hDS).flush(operation: Int32(operation))
+        try streamRecord(hDS).flush(operation: operation)
     }
 
     public func DSStartAcquisition(
@@ -450,7 +450,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         try streamRecord(hDS).start(numberToAcquire: numberToAcquire)
     }
 
-    public func DSStopAcquisition(_ hDS: DS_HANDLE, flags: UInt32) throws {
+    public func DSStopAcquisition(_ hDS: DS_HANDLE, flags: Int32) throws {
         lock.lock()
         defer { lock.unlock() }
         try streamRecord(hDS).stop()
@@ -508,13 +508,13 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
 
     public func GCRegisterEvent(
         _ source: EVENTSRC_HANDLE,
-        eventType: UInt32
+        eventType: Int32
     ) throws -> EVENT_HANDLE {
         lock.lock()
         defer { lock.unlock() }
 
-        guard let type = Int32(exactly: eventType),
-              type == GenTLEventType.newBuffer.rawValue ||
+        let type = eventType
+        guard type == GenTLEventType.newBuffer.rawValue ||
               type == GenTLEventType.error.rawValue else {
             throw GC_ERROR.notAvailable
         }
@@ -537,7 +537,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws {
         lock.lock()
         defer { lock.unlock() }
-        guard let type = Int32(exactly: eventType) else { throw GC_ERROR.invalidParameter }
+        let type = eventType
 
         guard let match = events.first(where: {
             $0.value.source == source && $0.value.eventType == type
