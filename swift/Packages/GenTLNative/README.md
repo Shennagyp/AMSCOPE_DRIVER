@@ -1,17 +1,19 @@
 # GenTLNative
 
-Native GenTL Consumer integration for macOS.
+Native GenTL Consumer implementation for macOS.
 
-The package loads manufacturer-supplied `.cti` GenTL Producers and resolves their exported GenTL C functions. It does not implement a Producer and does not contain any camera-vendor SDK.
+This package implements the shared `GenTLAPI` contract by loading manufacturer-supplied GenTL Producer libraries (`.cti`) and forwarding calls through their GenTL C ABI.
 
 ## Current implementation
 
-- Loads a CTI dynamic library with `dlopen`.
-- Verifies the required GenTL library/system entry points.
-- Resolves exported GenTL symbols by their standard names.
-- Uses the EMVA GenTL 1.6 reference C header for ABI declarations.
+- Loads a producer with `dlopen` and resolves the standard GenTL symbols.
+- Forwards library, system, interface, device, data-stream, buffer, port and event operations.
+- Preserves producer handles as opaque pointers.
+- Uses the pinned GenTL 1.6 C declarations and validates the consumer-side ABI layouts before loading a producer.
+- Implements GenTL 1.6 stacked buffer/part information using the standard packed structures.
+- Resolves functions introduced by later GenTL revisions opportunistically. When a producer does not export a versioned extension, the corresponding Swift API call returns `GC_ERR_NOT_IMPLEMENTED`; it does not prevent use of the producer's supported baseline.
 
-The module-to-Swift-function forwarding layer is the next implementation milestone. Do not treat symbol loading alone as a working GenTL Consumer.
+This package is a **GenTL Consumer**. It does not implement a GenTL Producer, does not create `.cti` files, and does not include camera-vendor SDKs.
 
 ## Header provenance
 

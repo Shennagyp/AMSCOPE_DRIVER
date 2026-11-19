@@ -210,14 +210,14 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let ifUpdateDeviceList: IFUpdateDeviceListFunction
         let ifGetDeviceInfo: IFGetDeviceInfoFunction
         let ifOpenDevice: IFOpenDeviceFunction
-        let ifGetParentTL: IFGetParentTLFunction
+        let ifGetParentTL: IFGetParentTLFunction?
 
         let devGetPort: DevGetPortFunction
         let devGetNumDataStreams: DevGetNumDataStreamsFunction
         let devGetDataStreamID: DevGetDataStreamIDFunction
         let devOpenDataStream: DevOpenDataStreamFunction
         let devGetInfo: ModuleInfoFunction
-        let devGetParentIF: DevGetParentIFFunction
+        let devGetParentIF: DevGetParentIFFunction?
         let devClose: DevCloseFunction
 
         let dsAnnounceBuffer: DSAnnounceBufferFunction
@@ -230,14 +230,14 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let dsGetBufferID: DSGetBufferIDFunction
         let dsGetBufferInfo: DSGetBufferInfoFunction
         let dsRevokeBuffer: DSRevokeBufferFunction
-        let dsGetParentDev: DSGetParentDevFunction
+        let dsGetParentDev: DSGetParentDevFunction?
         let dsClose: DSCloseFunction
 
         let gcReadPort: GCReadPortFunction
         let gcWritePort: GCWritePortFunction
         let gcGetPortURL: GCGetPortURLFunction
-        let gcGetNumPortURLs: GCGetNumPortURLsFunction
-        let gcGetPortURLInfo: GCGetPortURLInfoFunction
+        let gcGetNumPortURLs: GCGetNumPortURLsFunction?
+        let gcGetPortURLInfo: GCGetPortURLInfoFunction?
         let gcGetPortInfo: ModuleInfoFunction
 
         let gcRegisterEvent: GCRegisterEventFunction
@@ -248,18 +248,18 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let eventFlush: EventSimpleFunction
         let eventKill: EventSimpleFunction
 
-        let gcReadPortStacked: GCReadPortStackedFunction
-        let gcWritePortStacked: GCWritePortStackedFunction
-        let dsGetBufferChunkData: DSGetBufferChunkDataFunction
-        let dsGetNumBufferParts: DSGetNumBufferPartsFunction
-        let dsGetBufferPartInfo: DSGetBufferPartInfoFunction
-        let dsGetBufferInfoStacked: DSGetBufferInfoStackedFunction
-        let dsGetBufferPartInfoStacked: DSGetBufferPartInfoStackedFunction
-        let dsAnnounceCompositeBuffer: DSAnnounceCompositeBufferFunction
-        let dsGetNumFlows: DSGetNumFlowsFunction
-        let dsGetFlowInfo: DSGetFlowInfoFunction
-        let dsGetNumBufferSegments: DSGetNumBufferSegmentsFunction
-        let dsGetBufferSegmentInfo: DSGetBufferSegmentInfoFunction
+        let gcReadPortStacked: GCReadPortStackedFunction?
+        let gcWritePortStacked: GCWritePortStackedFunction?
+        let dsGetBufferChunkData: DSGetBufferChunkDataFunction?
+        let dsGetNumBufferParts: DSGetNumBufferPartsFunction?
+        let dsGetBufferPartInfo: DSGetBufferPartInfoFunction?
+        let dsGetBufferInfoStacked: DSGetBufferInfoStackedFunction?
+        let dsGetBufferPartInfoStacked: DSGetBufferPartInfoStackedFunction?
+        let dsAnnounceCompositeBuffer: DSAnnounceCompositeBufferFunction?
+        let dsGetNumFlows: DSGetNumFlowsFunction?
+        let dsGetFlowInfo: DSGetFlowInfoFunction?
+        let dsGetNumBufferSegments: DSGetNumBufferSegmentsFunction?
+        let dsGetBufferSegmentInfo: DSGetBufferSegmentInfoFunction?
     }
 
     private let library: GenTLProducerLibrary
@@ -307,14 +307,14 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             ifUpdateDeviceList: load("IFUpdateDeviceList", as: IFUpdateDeviceListFunction.self),
             ifGetDeviceInfo: load("IFGetDeviceInfo", as: IFGetDeviceInfoFunction.self),
             ifOpenDevice: load("IFOpenDevice", as: IFOpenDeviceFunction.self),
-            ifGetParentTL: load("IFGetParentTL", as: IFGetParentTLFunction.self),
+            ifGetParentTL: try? load("IFGetParentTL", as: IFGetParentTLFunction.self),
 
             devGetPort: load("DevGetPort", as: DevGetPortFunction.self),
             devGetNumDataStreams: load("DevGetNumDataStreams", as: DevGetNumDataStreamsFunction.self),
             devGetDataStreamID: load("DevGetDataStreamID", as: DevGetDataStreamIDFunction.self),
             devOpenDataStream: load("DevOpenDataStream", as: DevOpenDataStreamFunction.self),
             devGetInfo: load("DevGetInfo", as: ModuleInfoFunction.self),
-            devGetParentIF: load("DevGetParentIF", as: DevGetParentIFFunction.self),
+            devGetParentIF: try? load("DevGetParentIF", as: DevGetParentIFFunction.self),
             devClose: load("DevClose", as: DevCloseFunction.self),
 
             dsAnnounceBuffer: load("DSAnnounceBuffer", as: DSAnnounceBufferFunction.self),
@@ -327,14 +327,14 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             dsGetBufferID: load("DSGetBufferID", as: DSGetBufferIDFunction.self),
             dsGetBufferInfo: load("DSGetBufferInfo", as: DSGetBufferInfoFunction.self),
             dsRevokeBuffer: load("DSRevokeBuffer", as: DSRevokeBufferFunction.self),
-            dsGetParentDev: load("DSGetParentDev", as: DSGetParentDevFunction.self),
+            dsGetParentDev: try? load("DSGetParentDev", as: DSGetParentDevFunction.self),
             dsClose: load("DSClose", as: DSCloseFunction.self),
 
             gcReadPort: load("GCReadPort", as: GCReadPortFunction.self),
             gcWritePort: load("GCWritePort", as: GCWritePortFunction.self),
             gcGetPortURL: load("GCGetPortURL", as: GCGetPortURLFunction.self),
-            gcGetNumPortURLs: load("GCGetNumPortURLs", as: GCGetNumPortURLsFunction.self),
-            gcGetPortURLInfo: load("GCGetPortURLInfo", as: GCGetPortURLInfoFunction.self),
+            gcGetNumPortURLs: try? load("GCGetNumPortURLs", as: GCGetNumPortURLsFunction.self),
+            gcGetPortURLInfo: try? load("GCGetPortURLInfo", as: GCGetPortURLInfoFunction.self),
             gcGetPortInfo: load("GCGetPortInfo", as: ModuleInfoFunction.self),
 
             gcRegisterEvent: load("GCRegisterEvent", as: GCRegisterEventFunction.self),
@@ -345,18 +345,18 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             eventFlush: load("EventFlush", as: EventSimpleFunction.self),
             eventKill: load("EventKill", as: EventSimpleFunction.self),
 
-            gcReadPortStacked: load("GCReadPortStacked", as: GCReadPortStackedFunction.self),
-            gcWritePortStacked: load("GCWritePortStacked", as: GCWritePortStackedFunction.self),
-            dsGetBufferChunkData: load("DSGetBufferChunkData", as: DSGetBufferChunkDataFunction.self),
-            dsGetNumBufferParts: load("DSGetNumBufferParts", as: DSGetNumBufferPartsFunction.self),
-            dsGetBufferPartInfo: load("DSGetBufferPartInfo", as: DSGetBufferPartInfoFunction.self),
-            dsGetBufferInfoStacked: load("DSGetBufferInfoStacked", as: DSGetBufferInfoStackedFunction.self),
-            dsGetBufferPartInfoStacked: load("DSGetBufferPartInfoStacked", as: DSGetBufferPartInfoStackedFunction.self),
-            dsAnnounceCompositeBuffer: load("DSAnnounceCompositeBuffer", as: DSAnnounceCompositeBufferFunction.self),
-            dsGetNumFlows: load("DSGetNumFlows", as: DSGetNumFlowsFunction.self),
-            dsGetFlowInfo: load("DSGetFlowInfo", as: DSGetFlowInfoFunction.self),
-            dsGetNumBufferSegments: load("DSGetNumBufferSegments", as: DSGetNumBufferSegmentsFunction.self),
-            dsGetBufferSegmentInfo: load("DSGetBufferSegmentInfo", as: DSGetBufferSegmentInfoFunction.self)
+            gcReadPortStacked: try? load("GCReadPortStacked", as: GCReadPortStackedFunction.self),
+            gcWritePortStacked: try? load("GCWritePortStacked", as: GCWritePortStackedFunction.self),
+            dsGetBufferChunkData: try? load("DSGetBufferChunkData", as: DSGetBufferChunkDataFunction.self),
+            dsGetNumBufferParts: try? load("DSGetNumBufferParts", as: DSGetNumBufferPartsFunction.self),
+            dsGetBufferPartInfo: try? load("DSGetBufferPartInfo", as: DSGetBufferPartInfoFunction.self),
+            dsGetBufferInfoStacked: try? load("DSGetBufferInfoStacked", as: DSGetBufferInfoStackedFunction.self),
+            dsGetBufferPartInfoStacked: try? load("DSGetBufferPartInfoStacked", as: DSGetBufferPartInfoStackedFunction.self),
+            dsAnnounceCompositeBuffer: try? load("DSAnnounceCompositeBuffer", as: DSAnnounceCompositeBufferFunction.self),
+            dsGetNumFlows: try? load("DSGetNumFlows", as: DSGetNumFlowsFunction.self),
+            dsGetFlowInfo: try? load("DSGetFlowInfo", as: DSGetFlowInfoFunction.self),
+            dsGetNumBufferSegments: try? load("DSGetNumBufferSegments", as: DSGetNumBufferSegmentsFunction.self),
+            dsGetBufferSegmentInfo: try? load("DSGetBufferSegmentInfo", as: DSGetBufferSegmentInfoFunction.self)
         )
     }
 
@@ -568,8 +568,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func IFGetParentTL(_ hIF: IF_HANDLE) throws -> TL_HANDLE {
         try withLock {
+            guard let getParent = functions.ifGetParentTL else { throw GC_ERROR.notImplemented }
             var system: UnsafeMutableRawPointer?
-            try check(functions.ifGetParentTL(try pointer(hIF), &system))
+            try check(getParent(try pointer(hIF), &system))
             guard let system else { throw GC_ERROR.invalidHandle }
             return TL_HANDLE(rawValue: UInt(bitPattern: system))
         }
@@ -624,8 +625,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func DevGetParentIF(_ hDevice: DEV_HANDLE) throws -> IF_HANDLE {
         try withLock {
+            guard let getParent = functions.devGetParentIF else { throw GC_ERROR.notImplemented }
             var interface: UnsafeMutableRawPointer?
-            try check(functions.devGetParentIF(try pointer(hDevice), &interface))
+            try check(getParent(try pointer(hDevice), &interface))
             guard let interface else { throw GC_ERROR.invalidHandle }
             return IF_HANDLE(rawValue: UInt(bitPattern: interface))
         }
@@ -738,8 +740,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func DSGetParentDev(_ hDS: DS_HANDLE) throws -> DEV_HANDLE {
         try withLock {
+            guard let getParent = functions.dsGetParentDev else { throw GC_ERROR.notImplemented }
             var device: UnsafeMutableRawPointer?
-            try check(functions.dsGetParentDev(try pointer(hDS), &device))
+            try check(getParent(try pointer(hDS), &device))
             guard let device else { throw GC_ERROR.invalidHandle }
             return DEV_HANDLE(rawValue: UInt(bitPattern: device))
         }
@@ -757,6 +760,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> [Data] {
         try withLock {
             guard !requests.isEmpty else { return [] }
+            guard let readStacked = functions.gcReadPortStacked else { throw GC_ERROR.notImplemented }
             let port = try pointer(hPort)
             var allocations: [UnsafeMutableRawPointer] = []
             defer { allocations.forEach { $0.deallocate() } }
@@ -779,7 +783,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             var count = entries.count
             let result = entries.withUnsafeMutableBufferPointer {
-                functions.gcReadPortStacked(port, $0.baseAddress, &count)
+                readStacked(port, $0.baseAddress, &count)
             }
             try check(result)
             guard count == requests.count else { throw GC_ERROR.invalidValue }
@@ -796,6 +800,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     ) throws {
         try withLock {
             guard !requests.isEmpty else { return }
+            guard let writeStacked = functions.gcWritePortStacked else { throw GC_ERROR.notImplemented }
             let port = try pointer(hPort)
             var allocations: [UnsafeMutableRawPointer] = []
             defer { allocations.forEach { $0.deallocate() } }
@@ -823,7 +828,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             var count = entries.count
             let result = entries.withUnsafeMutableBufferPointer {
-                functions.gcWritePortStacked(port, $0.baseAddress, &count)
+                writeStacked(port, $0.baseAddress, &count)
             }
             try check(result)
             guard count == requests.count else { throw GC_ERROR.invalidValue }
@@ -835,10 +840,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         buffer: BUFFER_HANDLE
     ) throws -> [GenTLChunkData] {
         try withLock {
+            guard let getChunkData = functions.dsGetBufferChunkData else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             var count = 0
-            let query = functions.dsGetBufferChunkData(stream, bufferHandle, nil, &count)
+            let query = getChunkData(stream, bufferHandle, nil, &count)
             try checkInfoSizeQuery(query, size: count)
             guard count <= 1_000_000 else { throw GC_ERROR.invalidValue }
             guard count > 0 else { return [] }
@@ -856,7 +862,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             let chunks = memory.bindMemory(to: SINGLE_CHUNK_DATA.self, capacity: count)
             var actualCount = count
-            try check(functions.dsGetBufferChunkData(stream, bufferHandle, chunks, &actualCount))
+            try check(getChunkData(stream, bufferHandle, chunks, &actualCount))
             guard actualCount >= 0, actualCount <= count else { throw GC_ERROR.invalidValue }
 
             return (0..<actualCount).map { index in
@@ -874,8 +880,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         buffer: BUFFER_HANDLE
     ) throws -> UInt32 {
         try withLock {
+            guard let getNumParts = functions.dsGetNumBufferParts else { throw GC_ERROR.notImplemented }
             var count: UInt32 = 0
-            try check(functions.dsGetNumBufferParts(try pointer(hDS), try pointer(buffer), &count))
+            try check(getNumParts(try pointer(hDS), try pointer(buffer), &count))
             return count
         }
     }
@@ -887,12 +894,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
+            guard let getPartInfo = functions.dsGetBufferPartInfo else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             return try readInfo { type, output, size in
-                functions.dsGetBufferPartInfo(
-                    stream, bufferHandle, partIndex, command, type, output, size
-                )
+                getPartInfo(stream, bufferHandle, partIndex, command, type, output, size)
             }
         }
     }
@@ -904,6 +910,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> BUFFER_HANDLE {
         try withLock {
             guard !segments.isEmpty else { throw GC_ERROR.invalidParameter }
+            guard let announceComposite = functions.dsAnnounceCompositeBuffer else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             var pointers = segments.map { Optional($0.memory.baseAddress) }
             var sizes = segments.map { $0.memory.size }
@@ -911,7 +918,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             let result = pointers.withUnsafeMutableBufferPointer { pointerBuffer in
                 sizes.withUnsafeMutableBufferPointer { sizeBuffer in
-                    functions.dsAnnounceCompositeBuffer(
+                    announceComposite(
                         stream,
                         segments.count,
                         pointerBuffer.baseAddress,
@@ -933,6 +940,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         commands: [Int32]
     ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
         try withLock {
+            guard let getBufferInfoStacked = functions.dsGetBufferInfoStacked else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             guard !commands.isEmpty else { return [] }
@@ -948,7 +956,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             }
 
             let queryStatus = entries.withUnsafeMutableBufferPointer {
-                functions.dsGetBufferInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+                getBufferInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
             }
             try checkStackedInfoCall(queryStatus)
 
@@ -988,7 +996,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             if !outputEntries.isEmpty {
                 let readStatus = outputEntries.withUnsafeMutableBufferPointer {
-                    functions.dsGetBufferInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+                    getBufferInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
                 }
                 try checkStackedInfoCall(readStatus)
 
@@ -1015,6 +1023,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         requests: [GenTLBufferPartInfoStackedRequest]
     ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
         try withLock {
+            guard let getBufferPartInfoStacked = functions.dsGetBufferPartInfoStacked else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             guard !requests.isEmpty else { return [] }
@@ -1031,7 +1040,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             }
 
             let queryStatus = entries.withUnsafeMutableBufferPointer {
-                functions.dsGetBufferPartInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+                getBufferPartInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
             }
             try checkStackedInfoCall(queryStatus)
 
@@ -1071,7 +1080,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             if !outputEntries.isEmpty {
                 let readStatus = outputEntries.withUnsafeMutableBufferPointer {
-                    functions.dsGetBufferPartInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
+                    getBufferPartInfoStacked(stream, bufferHandle, $0.baseAddress, $0.count)
                 }
                 try checkStackedInfoCall(readStatus)
 
@@ -1094,8 +1103,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 {
         try withLock {
+            guard let getNumFlows = functions.dsGetNumFlows else { throw GC_ERROR.notImplemented }
             var count: UInt32 = 0
-            try check(functions.dsGetNumFlows(try pointer(hDS), &count))
+            try check(getNumFlows(try pointer(hDS), &count))
             return count
         }
     }
@@ -1106,8 +1116,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            try readInfo { type, output, size in
-                functions.dsGetFlowInfo(try pointer(hDS), flowIndex, command, type, output, size)
+            guard let getFlowInfo = functions.dsGetFlowInfo else { throw GC_ERROR.notImplemented }
+            return try readInfo { type, output, size in
+                getFlowInfo(try pointer(hDS), flowIndex, command, type, output, size)
             }
         }
     }
@@ -1117,8 +1128,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         buffer: BUFFER_HANDLE
     ) throws -> UInt32 {
         try withLock {
+            guard let getNumSegments = functions.dsGetNumBufferSegments else { throw GC_ERROR.notImplemented }
             var count: UInt32 = 0
-            try check(functions.dsGetNumBufferSegments(try pointer(hDS), try pointer(buffer), &count))
+            try check(getNumSegments(try pointer(hDS), try pointer(buffer), &count))
             return count
         }
     }
@@ -1130,12 +1142,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
+            guard let getSegmentInfo = functions.dsGetBufferSegmentInfo else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             return try readInfo { type, output, size in
-                functions.dsGetBufferSegmentInfo(
-                    stream, bufferHandle, segmentIndex, command, type, output, size
-                )
+                getSegmentInfo(stream, bufferHandle, segmentIndex, command, type, output, size)
             }
         }
     }
@@ -1179,8 +1190,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
     public func GCGetNumPortURLs(_ hPort: PORT_HANDLE) throws -> UInt32 {
         try withLock {
+            guard let getNumPortURLs = functions.gcGetNumPortURLs else { throw GC_ERROR.notImplemented }
             var count: UInt32 = 0
-            try check(functions.gcGetNumPortURLs(try pointer(hPort), &count))
+            try check(getNumPortURLs(try pointer(hPort), &count))
             return count
         }
     }
@@ -1191,8 +1203,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            try readInfo { type, buffer, size in
-                functions.gcGetPortURLInfo(try pointer(hPort), index, command, type, buffer, size)
+            guard let getPortURLInfo = functions.gcGetPortURLInfo else { throw GC_ERROR.notImplemented }
+            return try readInfo { type, buffer, size in
+                getPortURLInfo(try pointer(hPort), index, command, type, buffer, size)
             }
         }
     }
