@@ -1284,9 +1284,6 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         // Query the maximum size through EventGetInfo instead, then perform one
         // real data retrieval. Do not hold the API lock while waiting: EventKill
         // must be able to interrupt an infinite-timeout read.
-        let eventPointer = try beginEventDataRead(event)
-        defer { endEventDataRead() }
-
         let maximumSize = try withLock {
             let registeredPointer = try registeredEventPointer(event)
             let value = try readInfo { type, buffer, size in
@@ -1305,6 +1302,11 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             }
             return value
         }
+
+        // Mark the read only after its size query succeeds, then enter the
+        // blocking Producer call without another API operation in between.
+        let eventPointer = try beginEventDataRead(event)
+        defer { endEventDataRead() }
 
         // Even an event type with an empty payload needs a non-NULL buffer:
         // NULL means discard, not "deliver an empty event".
