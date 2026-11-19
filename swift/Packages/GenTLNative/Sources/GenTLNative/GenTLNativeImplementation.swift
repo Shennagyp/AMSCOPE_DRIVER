@@ -917,7 +917,10 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         privateData: UnsafeMutableRawPointer?
     ) throws -> BUFFER_HANDLE {
         try withLock {
-            guard !segments.isEmpty else { throw GC_ERROR.invalidParameter }
+            guard !segments.isEmpty,
+                  segments.allSatisfy({ $0.memory.size > 0 }) else {
+                throw GC_ERROR.invalidParameter
+            }
             guard let announceComposite = functions.dsAnnounceCompositeBuffer else { throw GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             var pointers = segments.map { Optional($0.memory.baseAddress) }
@@ -1185,6 +1188,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 functions.gcWritePort(port, address, input.baseAddress, &size)
             }
             try check(result)
+            guard size == data.count else { throw GC_ERROR.error }
         }
     }
 
