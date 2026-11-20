@@ -120,7 +120,8 @@ int32_t Amcam_get_AutoExpoEnable(void *handle, int32_t *value) {
 }
 int32_t Amcam_put_AutoExpoEnable(void *handle, int32_t value) {
     if (!handle || exposure_unavailable) return -1;
-    if (value < 0 || value > 2) return -1;\n    auto_exposure = value;
+    if (value < 0 || value > 2) return -1;
+    auto_exposure = value;
     return 0;
 }
 int32_t Amcam_get_ExpoTime(void *handle, uint32_t *value) {
