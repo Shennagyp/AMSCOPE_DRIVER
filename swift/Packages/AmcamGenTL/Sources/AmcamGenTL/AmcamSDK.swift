@@ -1,4 +1,5 @@
 import AmcamABI
+import AmcamCameraModel
 import Darwin
 import Foundation
 

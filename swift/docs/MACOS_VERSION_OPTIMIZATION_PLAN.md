@@ -332,3 +332,8 @@ Corrections committed:
 
 These changes are a response to compiler diagnostics from the actual hosted run. They are not yet verified; the next hosted macOS run must establish whether the corrections compile and whether further test failures remain.
 
+
+
+## 2026-11-20 — Camera model package boundary
+
+Extracted Amcam camera value types, capability descriptors, control snapshots and model-profile policy into the SDK-independent `AmcamCameraModel` Swift package. AmcamGenTL imports and re-exports that package for source compatibility. AmcamImagingApp now depends on AmcamCameraModel, GenTLABI, GenTLAPI and GenTLRouter only; its sources no longer import AmcamGenTL. This keeps vendor SDK implementation ownership in the backend while preserving the UI's camera presentation types.

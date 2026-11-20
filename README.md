@@ -9,7 +9,7 @@ The application uses one GenTL API contract with two interchangeable implementat
 1. **GenTLNative** loads manufacturer-supplied GenTL Producer libraries (.cti) and calls their actual exported GenTL C functions.
 2. **AmcamGenTL** implements the same GenTL operations by translating them to the Amcam SDK. It does not create, export or require an AmScope .cti file.
 
-**GenTLRouter** selects and manages the backend. The target application architecture is GenTLAPI + GenTLRouter, with backend-specific behavior kept behind the selected implementation. The imaging app has been moved into its own Swift package to remove the dependency-cycle obstacle; its model still contains legacy direct Amcam calls and is being migrated in subsequent commits.
+**GenTLRouter** selects and manages the backend. The target application architecture is GenTLAPI + GenTLRouter, with backend-specific behavior kept behind the selected implementation. The imaging app uses GenTLAPI through GenTLRouter. Its camera presentation models are isolated in AmcamCameraModel; the app package has no dependency on the Amcam backend implementation.
 
 ## Packages
 

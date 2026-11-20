@@ -9,6 +9,7 @@ let package = Package(
         .executable(name: "amcam-camera-probe", targets: ["AmcamCameraProbe"]),
     ],
     dependencies: [
+        .package(path: "../AmcamCameraModel"),
         .package(path: "../GenTLAPI"),
         .package(path: "../GenTLABI")
     ],
@@ -18,6 +19,7 @@ let package = Package(
             name: "AmcamGenTL",
             dependencies: [
                 "AmcamABI",
+                .product(name: "AmcamCameraModel", package: "AmcamCameraModel"),
                 .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]

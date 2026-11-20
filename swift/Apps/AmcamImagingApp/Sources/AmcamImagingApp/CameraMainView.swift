@@ -1,4 +1,4 @@
-import AmcamGenTL
+import AmcamCameraModel
 import SwiftUI
 
 struct CameraMainView: View {

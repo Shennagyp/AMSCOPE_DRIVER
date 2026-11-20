@@ -85,6 +85,21 @@ jobs:
           path: ${{ runner.temp }}/amcam-camera-probe/
           retention-days: 14
 
+      - name: Enforce routed application dependency boundary
+        if: matrix.package == 'AmcamGenTL'
+        shell: bash
+        run: |
+          if grep -R -nE 'import AmcamGenTL|AmcamCameraDriver|AmcamCameraSession' swift/Apps/AmcamImagingApp/Sources; then
+            echo "The application must not depend on or instantiate backend implementation types." >&2
+            exit 1
+          fi
+          if grep -q 'AmcamGenTL' swift/Apps/AmcamImagingApp/Package.swift; then
+            echo "The application package must not depend on AmcamGenTL." >&2
+            exit 1
+          fi
+          grep -q 'GenTLRouter' swift/Apps/AmcamImagingApp/Package.swift
+          grep -q 'AmcamCameraModel' swift/Apps/AmcamImagingApp/Package.swift
+
       - name: Build macOS imaging application
         if: matrix.package == 'AmcamGenTL'
         run: |

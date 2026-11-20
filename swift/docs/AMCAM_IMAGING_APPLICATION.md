@@ -194,3 +194,8 @@ The app is ad-hoc signed for local testing, not notarized, and does not bundle t
 The current suite has 21 tests across ABI string-bound checks, RGB24 layout, capability/profile resolution, and native C mock-SDK integration. The latest regression for auto-exposure mode remaining usable when manual exposure range queries fail was added before the implementation change and passed in CI.
 
 The entire development history is not strictly TDD: some earlier controls were implemented before their tests. Future feature work and the multiplatform extraction must follow the explicit failing-test → implementation → full regression → refactor sequence. A passing test alone is not proof that the entire feature was developed test-first.
+
+
+## Package dependency boundary (2026-11-20)
+
+Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.

@@ -1,5 +1,5 @@
 import AppKit
-import AmcamGenTL
+import AmcamCameraModel
 import Darwin
 import Foundation
 import GenTLABI

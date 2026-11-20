@@ -1,4 +1,5 @@
 import AmcamABI
+import AmcamCameraModel
 import Foundation
 
 private final class AmcamCallbackContext {

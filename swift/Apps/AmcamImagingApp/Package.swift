@@ -11,7 +11,7 @@ let package = Package(
         .package(path: "../../Packages/GenTLABI"),
         .package(path: "../../Packages/GenTLAPI"),
         .package(path: "../../Packages/GenTLRouter"),
-        .package(path: "../../Packages/AmcamGenTL")
+        .package(path: "../../Packages/AmcamCameraModel")
     ],
     targets: [
         .executableTarget(
@@ -20,7 +20,7 @@ let package = Package(
                 .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLAPI", package: "GenTLAPI"),
                 .product(name: "GenTLRouter", package: "GenTLRouter"),
-                .product(name: "AmcamGenTL", package: "AmcamGenTL")
+                .product(name: "AmcamCameraModel", package: "AmcamCameraModel")
             ]
         )
     ]

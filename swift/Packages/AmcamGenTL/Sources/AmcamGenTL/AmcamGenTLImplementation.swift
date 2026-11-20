@@ -1,4 +1,5 @@
 import Foundation
+import AmcamCameraModel
 @_spi(BackendConvenience) import GenTLAPI
 
 private final class AmcamOpenDeviceRecord: @unchecked Sendable {

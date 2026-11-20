@@ -1,4 +1,5 @@
 import Foundation
+import AmcamCameraModel
 
 public final class AmcamCameraDriver: @unchecked Sendable {
     private let sdk: AmcamSDK
