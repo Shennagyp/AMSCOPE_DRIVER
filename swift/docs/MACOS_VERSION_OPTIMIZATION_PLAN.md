@@ -396,3 +396,15 @@ This is hosted software validation only. No local Xcode run or physical camera a
 **Consequence**
 - Cleanup errors remain visible and retryable. The application does not trade a locally convenient state reset for a provider handle leak or an invalid parent-before-child close.
 
+### 2026-11-20 — Recoverable GenTL event timeout semantics
+
+**Review finding**
+- The app used a finite 5-second New Buffer event wait and treated every non-stop error as fatal. A camera waiting for an external/software trigger or a slow frame interval could therefore be closed despite a healthy acquisition session.
+
+**Correction**
+- GenTLAcquisitionSession now maps GenTL `GC_ERR_TIMEOUT` from EventGetData(NewBuffer) to the explicit `eventTimeout` outcome.
+- The app capture loop treats `eventTimeout` as “no frame yet” and continues waiting. Stop/close interruption remains `acquisitionStopped`; all other errors remain fatal and trigger cleanup.
+
+**TDD**
+- The fake Producer can force an event timeout. The new test starts acquisition, observes the typed timeout, disables the fault, then receives a valid frame on the same acquisition session without restarting.
+- Hosted macOS validation for this increment is pending.
