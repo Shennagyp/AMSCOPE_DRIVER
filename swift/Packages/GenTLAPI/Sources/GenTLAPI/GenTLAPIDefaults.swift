@@ -1,5 +1,6 @@
 /// Explicit defaults for GenTL 1.6 operations a particular backend cannot supply.
-public extension GenTLAPI {
+@_spi(BackendConvenience)
+public extension GenTLBackendConvenience {
     var genTLVersion: GenTLVersion { .v1_6 }
 
     func GCInitLib() throws { throw GC_ERROR.notImplemented }
