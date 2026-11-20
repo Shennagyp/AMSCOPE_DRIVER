@@ -106,6 +106,32 @@ final class AmcamSDKIntegrationTests: XCTestCase {
     }
 
 
+    func testAcquisitionPrefersV4AndUsesItsTightRowPitchContract() throws {
+        let libraryURL = try buildMockSDK()
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        let bufferSize = 640 * 480 * 3
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: bufferSize, alignment: 64)
+        buffer.initializeMemory(as: UInt8.self, repeating: 0, count: bufferSize)
+        defer {
+            buffer.deallocate()
+            sdk.close(opened.handle)
+        }
+
+        XCTAssertEqual(sdk.pullImageOperationName, "Amcam_PullImageV4")
+        var frameInfo = AmcamFrameInfoV2()
+        XCTAssertGreaterThanOrEqual(
+            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &frameInfo),
+            0
+        )
+        XCTAssertEqual(frameInfo.width, 640)
+        XCTAssertEqual(frameInfo.height, 480)
+        XCTAssertEqual(frameInfo.seq, 1)
+        XCTAssertEqual(buffer.load(as: UInt8.self), 0x5a)
+    }
+
+
 
     func testExposureControlsAndResolutionReadback() throws {
         let libraryURL = try buildMockSDK()
