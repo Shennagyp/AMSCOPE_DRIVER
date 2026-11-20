@@ -118,7 +118,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertFalse(manualExposure.isUsable, "A profile allow-list cannot override unavailable hardware.")
         XCTAssertFalse(autoExposure.isUsable, "Features outside the explicit allow-list remain unavailable.")
         XCTAssertFalse(liveCapture.isUsable, "A profile cannot fabricate a missing data stream.")
-        XCTAssertTrue(manualExposure.reason?.contains("runtime") == true)
+        XCTAssertTrue(manualExposure.reason?.contains("probe") == true)
         XCTAssertTrue(autoExposure.reason?.contains("allow-list") == true)
     }
 
