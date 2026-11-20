@@ -34,11 +34,56 @@ public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
 /// This class only loads and resolves the Producer's GenTL C ABI. Module
 /// operations are implemented by the GenTLNative API adapter, not by this loader.
 public final class GenTLProducerLibrary: @unchecked Sendable {
+    /// Functions required by the GenTL 1.0 base API. Symbols introduced by
+    /// later revisions are resolved optionally by GenTLNativeImplementation.
     public static let requiredEntryPoints = [
+        "GCGetInfo",
+        "GCGetLastError",
         "GCInitLib",
         "GCCloseLib",
+        "GCReadPort",
+        "GCWritePort",
+        "GCGetPortURL",
+        "GCGetPortInfo",
+        "GCRegisterEvent",
+        "GCUnregisterEvent",
+        "EventGetData",
+        "EventGetDataInfo",
+        "EventGetInfo",
+        "EventFlush",
+        "EventKill",
         "TLOpen",
-        "TLClose"
+        "TLClose",
+        "TLGetInfo",
+        "TLGetNumInterfaces",
+        "TLGetInterfaceID",
+        "TLGetInterfaceInfo",
+        "TLOpenInterface",
+        "TLUpdateInterfaceList",
+        "IFClose",
+        "IFGetInfo",
+        "IFGetNumDevices",
+        "IFGetDeviceID",
+        "IFUpdateDeviceList",
+        "IFGetDeviceInfo",
+        "IFOpenDevice",
+        "DevGetPort",
+        "DevGetNumDataStreams",
+        "DevGetDataStreamID",
+        "DevOpenDataStream",
+        "DevGetInfo",
+        "DevClose",
+        "DSAnnounceBuffer",
+        "DSAllocAndAnnounceBuffer",
+        "DSFlushQueue",
+        "DSStartAcquisition",
+        "DSStopAcquisition",
+        "DSGetInfo",
+        "DSGetBufferID",
+        "DSClose",
+        "DSRevokeBuffer",
+        "DSQueueBuffer",
+        "DSGetBufferInfo"
     ]
 
     public let url: URL
