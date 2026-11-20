@@ -302,7 +302,6 @@ public final class AmcamCameraSession: @unchecked Sendable {
             0x0000000008000000 | 0x0000000010000000 | 0x0000000020000000 |
             0x0000000100000000 | 0x0000000200000000 | 0x0000000400000000
         probes[.pixelFormatSelection] =
-            (modelFlags.map { ($0 & pixelFormatFlags) != 0 } ?? false) &&
             (try? sdk.readOption(activeHandle, option: AmcamSDK.optionPixelFormat)) != nil &&
             (try? sdk.readSupportedPixelFormats(activeHandle).isEmpty) == false
         probes[.resolution] = !resolutions.isEmpty && sdk.resolutionChangeAvailable
