@@ -283,7 +283,7 @@ final class CameraApplicationModel: ObservableObject {
             featureDescriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
             updateSelectedDeviceResolutions(from: featureDescriptors)
             await updateCurrentResolution()
-            cameraCapabilities = makeCapabilities(
+            cameraCapabilities = stateResolver.capabilities(
                 for: device,
                 descriptors: featureDescriptors,
                 hasDataStream: await cameraLifecycle.supportsAcquisition()
