@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 import GenTLABI
-@_spi(BackendConvenience) import GenTLAPI
+import GenTLAPI
 @testable import GenTLRouter
 
 private struct CallCounts {
@@ -499,7 +499,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
 
         let report = router.discover()
         let candidate = try XCTUnwrap(report.devices.first)
-        let session = try candidate.open(accessFlags: GenTLDeviceAccess.exclusive.rawValue)
+        let session = try candidate.open(access: .exclusive)
         defer { try? session.close() }
 
         XCTAssertTrue(session.supportsFeatureAccess)
@@ -524,7 +524,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         let router = GenTLRouter()
         try router.register(backendID: "acquisition-backend") { api }
         let candidate = try XCTUnwrap(router.discover().devices.first)
-        let device = try candidate.open(accessFlags: GenTLDeviceAccess.exclusive.rawValue)
+        let device = try candidate.open(access: .exclusive)
         let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
         defer {
             try? acquisition.close()
