@@ -59,12 +59,20 @@ public struct AmcamCameraStateResolver: Sendable {
         switch value {
         case .integer(let number):
             if let range = descriptor.numericRange,
+               !isValidNumericRange(range) {
+                return .invalidValue("\(name) has an invalid numeric range descriptor.")
+            }
+            if let range = descriptor.numericRange,
                !isWithinRange(Double(number), range: range) {
                 return .invalidValue(rangeValidationMessage(name, range: range))
             }
         case .floatingPoint(let number):
             guard number.isFinite else {
                 return .invalidValue("\(name) must be a finite number.")
+            }
+            if let range = descriptor.numericRange,
+               !isValidNumericRange(range) {
+                return .invalidValue("\(name) has an invalid numeric range descriptor.")
             }
             if let range = descriptor.numericRange,
                !isWithinRange(number, range: range) {
@@ -104,8 +112,19 @@ public struct AmcamCameraStateResolver: Sendable {
         return "\(name) must be between \(range.minimum) and \(range.maximum)."
     }
 
+    private func isValidNumericRange(_ range: CameraFeatureNumericRange) -> Bool {
+        guard range.minimum.isFinite,
+              range.maximum.isFinite,
+              range.maximum >= range.minimum else {
+            return false
+        }
+        guard let increment = range.increment else { return true }
+        return increment.isFinite && increment > 0
+    }
+
     private func isWithinRange(_ value: Double, range: CameraFeatureNumericRange) -> Bool {
-        guard value.isFinite,
+        guard isValidNumericRange(range),
+              value.isFinite,
               value >= range.minimum,
               value <= range.maximum else {
             return false
