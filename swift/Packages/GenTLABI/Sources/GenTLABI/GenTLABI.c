@@ -45,3 +45,7 @@ int GenTLABI_LayoutValid(void) {
            sizeof(DS_BUFFER_INFO_STACKED) == 28 &&
            sizeof(DS_BUFFER_PART_INFO_STACKED) == 32;
 }
+
+GC_ERROR GenTLABI_ErrorNotImplemented(void) {
+    return (GC_ERROR)GC_ERR_NOT_IMPLEMENTED;
+}
