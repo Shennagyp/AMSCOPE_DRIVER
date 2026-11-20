@@ -168,6 +168,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Add AmcamImagingState for testable control snapshots, readback conversion and resolution parsing; inject an async feature reader so it has no GenTL or AppKit dependency.
 - [x] Validate feature writes against the current descriptor's existence, availability, writability and value kind before calling the backend.
 - [x] Gate every control and current-resolution readback on the current feature descriptor's availability and readability; never probe an unavailable or unreadable feature.
+- [x] Exclude unavailable descriptors from generated control state as well, so stale ranges/options cannot expose controls for unsupported features.
 - [x] Add state-resolver regression tests proving unavailable/unreadable features are not read and unavailable resolution features do not trigger backend I/O.
 - [x] Keep observation boundaries explicit: lifecycle state changes use AsyncStream events, image delivery uses a latest-frame-only AsyncStream, and UI-facing camera/control state is published as value snapshots.
 - [ ] Define platform-neutral camera application commands and state before adding another frontend.
