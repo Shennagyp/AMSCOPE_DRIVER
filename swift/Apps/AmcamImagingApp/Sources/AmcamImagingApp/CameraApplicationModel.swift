@@ -203,6 +203,9 @@ final class CameraApplicationModel: ObservableObject {
             if !streaming, status.hasPrefix("Live") {
                 status = "Stopped — \(selectedDevice?.displayName ?? "camera")"
             }
+            // Feature writability can depend on acquisition state (for example,
+            // resolution and pixel format are writable only while stopped).
+            refreshControls()
         case .failure(let message):
             status = "Camera stopped — acquisition error"
             errorMessage = message
