@@ -190,7 +190,10 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         let descriptor = CameraFeatureDescriptor(
             name: "AmcamResolutionIndex", displayName: "Resolution", kind: .enumeration,
             isAvailable: true, isReadable: true, isWritable: true,
-            enumerationValues: ["0:640x480", "1:1920x1080", "broken", "2:badx720"]
+            enumerationValues: [
+                "0:640x480", "1:1920x1080", "broken", "2:badx720",
+                "-1:640x480", "3:0x480", "4:640x0"
+            ]
         )
         XCTAssertEqual(
             resolver.resolutions(from: [descriptor]),
