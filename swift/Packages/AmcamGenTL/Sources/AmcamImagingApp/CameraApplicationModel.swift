@@ -165,6 +165,22 @@ final class CameraApplicationModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func setColorMatrixEnabled(_ enabled: Bool) {
+        guard let session else { return }
+        do {
+            controls = try session.setColorMatrixEnabled(enabled)
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func setPixelFormat(_ code: Int32) {
+        guard let session, !isStreaming else { return }
+        do {
+            controls = try session.setPixelFormat(code: code)
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func setWhiteBalanceRGBGain(_ values: [Int32]) {
         guard let session else { return }
         do {
