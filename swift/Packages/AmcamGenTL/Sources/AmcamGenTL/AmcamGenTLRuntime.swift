@@ -1,5 +1,5 @@
 import Foundation
-import GenTLAPI
+@_spi(BackendConvenience) import GenTLAPI
 
 final class AmcamBufferRecord: @unchecked Sendable {
     let handle: BUFFER_HANDLE
