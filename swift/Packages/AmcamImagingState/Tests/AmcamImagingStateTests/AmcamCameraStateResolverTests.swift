@@ -252,6 +252,11 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 numericRange: CameraFeatureNumericRange(minimum: 1, maximum: 11, increment: 0.5)
             ),
             CameraFeatureDescriptor(
+                name: "LargeSteppedRate", displayName: "Large rate", kind: .floatingPoint,
+                isAvailable: true, isReadable: true, isWritable: true,
+                numericRange: CameraFeatureNumericRange(minimum: 0, maximum: 1_000_000_000, increment: 1)
+            ),
+            CameraFeatureDescriptor(
                 name: "ExposureMode", displayName: "Exposure mode", kind: .enumeration,
                 isAvailable: true, isReadable: true, isWritable: true,
                 enumerationValues: ["Off", "Once"]
@@ -290,6 +295,14 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         )
         XCTAssertNil(
             resolver.validateWrite(.floatingPoint(10.5), named: "SteppedRate", descriptors: descriptors)
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(
+                .floatingPoint(999_999_999.5),
+                named: "LargeSteppedRate",
+                descriptors: descriptors
+            ),
+            .invalidValue("LargeSteppedRate must be between 0.0 and 1000000000.0 in increments of 1.0.")
         )
         XCTAssertEqual(
             resolver.validateWrite(.floatingPoint(.nan), named: "SteppedRate", descriptors: descriptors),
