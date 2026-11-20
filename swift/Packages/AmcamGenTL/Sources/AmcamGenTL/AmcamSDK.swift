@@ -606,6 +606,7 @@ final class AmcamSDK: @unchecked Sendable {
             let result = pullWithPitch(handle, buffer, Self.requestedPullBits, -1, frameInfo)
             if result != Self.notImplementedHRESULT {
                 if result >= 0 {
+                    tightlyPackedRows?.pointee = true
                     metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
                 }
                 return result
