@@ -128,7 +128,7 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
     info->v3.width = width;
     info->v3.height = height;
-    info->v3.flag = 0x0003;
+    info->v3.flag = 0x01ff;
     info->v3.seq = ++pull_count;
     info->v3.timestamp = (int64_t)(123456789u + pull_count);
     info->v3.shutterseq = 7;
