@@ -558,6 +558,10 @@ final class AmcamSDK: @unchecked Sendable {
 
     func close(_ handle: UnsafeMutableRawPointer) { api.close(handle) }
     func startPull(_ handle: UnsafeMutableRawPointer, callback: AmcamEventCallback, context: UnsafeMutableRawPointer) -> Int32 { api.startPull(handle, callback, context) }
+    var pullImageUsesTightlyPackedRows: Bool {
+        api.pullImageV4 != nil || api.pullImageV3 != nil || api.pullImageWithRowPitchV2 != nil
+    }
+
     var pullImageOperationName: String {
         if api.pullImageV4 != nil { return "Amcam_PullImageV4" }
         if api.pullImageV3 != nil { return "Amcam_PullImageV3" }
