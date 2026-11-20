@@ -136,6 +136,9 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
 
     private let deviceSession: GenTLDeviceSession
     private let api: any GenTLAPI
+    /// Serializes start/stop/close transitions. Recursive because close may
+    /// perform stop as its first teardown step.
+    private let lifecycleLock = NSRecursiveLock()
     private let stateLock = NSLock()
     private let readerLock = NSLock()
 
@@ -179,6 +182,8 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
     /// Starts continuous acquisition by default. Pass a finite count for a
     /// finite GenTL acquisition. A value of UInt64.max requests continuous mode.
     public func start(numberToAcquire: UInt64 = UInt64.max) throws {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
         guard numberToAcquire > 0 else {
             throw GenTLAcquisitionError.genTLCallFailed(
                 operation: "DSStartAcquisition",
@@ -310,6 +315,8 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
 
     /// Stops acquisition and interrupts a blocked New Buffer event read.
     public func stop() throws {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
         stateLock.lock()
         guard !isClosed else {
             stateLock.unlock()
@@ -362,6 +369,8 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
     /// Releases stream resources in GenTL ownership order. If any operation
     /// fails, remaining handles are retained so close can be retried safely.
     public func close() throws {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
         stateLock.lock()
         let alreadyClosed = isClosed
         let acquiring = isAcquiring
