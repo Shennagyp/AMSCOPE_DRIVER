@@ -559,4 +559,9 @@ The macOS workflow was triggered on push (run 54, commit \texttt{8512306e3c8d0cb
 
 GitHub Actions hosted-runner provisioning or repository billing/permissions must be repaired. A subsequent run included both macOS and Ubuntu jobs, and all jobs again reported runner ID zero with no steps, so the blocker is not specific to the macOS image. Alternatively, the exact package commands must be run locally on macOS with Xcode command-line tools. Until a job contains executed steps and logs, the CI conclusion must not be interpreted as a code test result.
 
+
+
+\section{Native argument fault-injection}
+The integration suite now deliberately sends invalid sentinel inputs to the three instrumented functions. An invalid \texttt{GCGetInfo} command must return its configured custom error without changing datatype, payload, or size. An invalid \texttt{GCReadPort} address must return its configured error without changing output bytes or size. An invalid \texttt{GCWritePort} payload must return its configured error while preserving the input size. These checks verify that native error values are not normalized away and that rejected operations do not manufacture output data.
+
 \end{document}
