@@ -6,7 +6,8 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [
         .library(name: "AmcamGenTL", targets: ["AmcamGenTL"]),
-        .executable(name: "amcam-camera-probe", targets: ["AmcamCameraProbe"])
+        .executable(name: "amcam-camera-probe", targets: ["AmcamCameraProbe"]),
+        .executable(name: "amcam-imaging", targets: ["AmcamImagingApp"])
     ],
     dependencies: [
         .package(path: "../GenTLAPI"),
@@ -21,6 +22,10 @@ let package = Package(
                 .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
+        ),
+        .executableTarget(
+            name: "AmcamImagingApp",
+            dependencies: ["AmcamGenTL"]
         ),
         .executableTarget(
             name: "AmcamCameraProbe",
