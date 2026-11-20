@@ -241,8 +241,8 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    func shutdown() {
-        Task { _ = await closeSession() }
+    func shutdown() async -> Bool {
+        await closeSession()
     }
 
     func refreshControls() {
@@ -349,6 +349,7 @@ final class CameraApplicationModel: ObservableObject {
                 errorMessage = nil
             }
         } catch {
+            _ = await closeSession()
             status = "Unable to open camera through GenTLRouter"
             errorMessage = error.localizedDescription
         }

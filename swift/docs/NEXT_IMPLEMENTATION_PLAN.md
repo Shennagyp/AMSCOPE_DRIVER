@@ -30,6 +30,9 @@ Current dependency direction:
 ```text
 AmcamImagingApp
   -> AmcamImagingCore
+  -> AmcamImagingRuntime
+  -> AmcamImagingGenTLAdapter
+  -> GenTLRouter
   -> AmcamCameraModel
   -> GenTLAPI + GenTLABI
   -> GenTLRouter
@@ -55,7 +58,7 @@ AmcamImagingApp
 Rules:
 
 1. The app must not import or instantiate `AmcamCameraDriver` or `AmcamCameraSession`.
-2. Backend selection and session ownership remain in GenTLRouter.
+2. Backend registration, provider contexts, discovery and candidate creation remain in GenTLRouter; active camera session and acquisition ownership belong to AmcamImagingRuntime.
 3. Camera-independent contracts remain in GenTLAPI/GenTLABI.
 4. Vendor SDK behavior remains in AmcamGenTL.
 5. Camera UI and model-facing policy remain in AmcamCameraModel and AmcamImagingApp.
@@ -149,7 +152,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
 - [ ] Add another frontend only after its backend path is proven on that OS.
 
-Do not describe the current application as cross-platform: the AppKit executable and native camera integrations remain macOS-specific, and the existing UI model still uses Combine. AmcamImagingCore and AmcamImagingRuntime are Foundation-only portable packages. AmcamImagingGenTLAdapter binds the lifecycle contract to the macOS GenTLRouter backend; the AppKit model migration is still pending. This is a portable data/lifecycle foundation, not a portable camera driver. UI separation is progress toward portability, not proof of portable camera access.
+Do not describe the current application as cross-platform: the AppKit executable and native camera integrations remain macOS-specific, and the existing UI model still uses Combine. AmcamImagingCore and AmcamImagingRuntime are Foundation-only portable packages. AmcamImagingGenTLAdapter binds the runtime contract to the macOS GenTLRouter backend. The AppKit model delegates device opening, acquisition, frame reading and resource cleanup to the runtime library, while GenTL discovery and feature-control policy remain in the current app model. This is a portable data/lifecycle foundation, not a portable camera driver. UI separation is progress toward portability, not proof of portable camera access.
 
 ## 4. Verification policy
 

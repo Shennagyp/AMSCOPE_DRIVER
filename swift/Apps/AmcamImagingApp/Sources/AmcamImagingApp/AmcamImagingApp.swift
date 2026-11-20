@@ -56,5 +56,13 @@ final class AmcamImagingAppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleFullScreen() { window?.toggleFullScreen(nil) }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ notification: Notification) { model?.shutdown() }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+        Task { @MainActor in
+            let resourcesClosed = await model.shutdown()
+            NSApp.reply(toApplicationShouldTerminate: resourcesClosed)
+        }
+        return .terminateLater
+    }
 }
