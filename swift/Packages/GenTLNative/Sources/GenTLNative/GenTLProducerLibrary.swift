@@ -11,7 +11,7 @@ enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
     case symbolNotFound(String)
     case unsupportedABI
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .fileNotFound(let path):
             return "GenTL Producer library was not found at '\(path)'."
