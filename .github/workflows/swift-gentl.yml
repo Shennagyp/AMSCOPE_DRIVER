@@ -29,7 +29,7 @@ permissions:
 # Keep only the newest pending validation run for this branch. A currently
 # running run is allowed to finish; superseded queued runs are replaced.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-lifecycle-v2
+  group: ${{ github.workflow }}-${{ github.ref }}-lifecycle-v3
   cancel-in-progress: false
 
 jobs:
