@@ -295,6 +295,17 @@ public enum GenTLDeviceAccess: Int32, Sendable {
     case exclusive = 4
 }
 
+/// Device availability reported by DEVICE_INFO_ACCESS_STATUS.
+public enum GenTLDeviceAccessStatus: Int32, Sendable {
+    case unknown = 0
+    case readWrite = 1
+    case readOnly = 2
+    case noAccess = 3
+    case busy = 4
+    case openReadWrite = 5
+    case openReadOnly = 6
+}
+
 
 /// Register-stack read request. Each entry is one independent address/size operation.
 public struct GenTLPortReadRequest: Sendable, Equatable {
