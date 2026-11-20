@@ -209,17 +209,28 @@ final class CameraApplicationModel: ObservableObject {
         Task { await refreshControlsOwned() }
     }
 
-    private func refreshControlsOwned() async {
-        guard (await cameraLifecycle.snapshot()).hasSession else { return }
-        featureDescriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
-        updateSelectedDeviceResolutions(from: featureDescriptors)
+    private func refreshControlsOwned(expectedGeneration: UInt64? = nil) async {
+        let operation = expectedGeneration ?? cameraSelectionGeneration
+        guard isCurrentCameraSelectionOperation(operation),
+              (await cameraLifecycle.snapshot()).hasSession,
+              isCurrentCameraSelectionOperation(operation) else { return }
+
+        let descriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
+        guard isCurrentCameraSelectionOperation(operation) else { return }
+        featureDescriptors = descriptors
+        updateSelectedDeviceResolutions(from: descriptors)
+
         await updateCurrentResolution()
+        guard isCurrentCameraSelectionOperation(operation) else { return }
+
+        let hasDataStream = await cameraLifecycle.supportsAcquisition()
+        guard isCurrentCameraSelectionOperation(operation) else { return }
         cameraCapabilities = stateResolver.capabilities(
             for: selectedDevice,
-            descriptors: featureDescriptors,
-            hasDataStream: await cameraLifecycle.supportsAcquisition()
+            descriptors: descriptors,
+            hasDataStream: hasDataStream
         )
-        controls = await makeControlSnapshotOwned()
+        await makeControlSnapshotOwned()
     }
 
     func setAutoExposureMode(_ mode: AmcamAutoExposureMode) {
@@ -309,7 +320,7 @@ final class CameraApplicationModel: ObservableObject {
                 descriptors: descriptors,
                 hasDataStream: hasDataStream
             )
-            controls = await makeControlSnapshotOwned()
+            await makeControlSnapshotOwned()
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
 
             status = "Ready — \(device.displayName)"
@@ -380,7 +391,10 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func writeFeature(_ value: CameraFeatureValue, named name: String) async {
-        guard (await cameraLifecycle.snapshot()).hasSession else {
+        let operation = cameraSelectionGeneration
+        guard isCurrentCameraSelectionOperation(operation),
+              (await cameraLifecycle.snapshot()).hasSession,
+              isCurrentCameraSelectionOperation(operation) else {
             errorMessage = "Open a camera before changing its features."
             return
         }
@@ -391,25 +405,36 @@ final class CameraApplicationModel: ObservableObject {
         }
         do {
             try await cameraLifecycle.writeFeature(value, named: name)
-            await refreshControlsOwned()
+            guard isCurrentCameraSelectionOperation(operation) else { return }
+            await refreshControlsOwned(expectedGeneration: operation)
+            guard isCurrentCameraSelectionOperation(operation) else { return }
             errorMessage = nil
         } catch {
+            guard isCurrentCameraSelectionOperation(operation) else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     private func makeControlSnapshotOwned() async {
+        let operation = cameraSelectionGeneration
+        let descriptors = featureDescriptors
         let lifecycle = cameraLifecycle
-        controls = await stateResolver.controlSnapshot(descriptors: featureDescriptors) { name in
+        let snapshot = await stateResolver.controlSnapshot(descriptors: descriptors) { name in
             try await lifecycle.readFeature(name)
         }
+        guard isCurrentCameraSelectionOperation(operation) else { return }
+        controls = snapshot
     }
 
     private func updateCurrentResolution() async {
+        let operation = cameraSelectionGeneration
+        let device = selectedDevice
         let lifecycle = cameraLifecycle
-        currentResolution = await stateResolver.currentResolution(for: selectedDevice) { name in
+        let resolution = await stateResolver.currentResolution(for: device) { name in
             try await lifecycle.readFeature(name)
         }
+        guard isCurrentCameraSelectionOperation(operation) else { return }
+        currentResolution = resolution
     }
 
     private func updateSelectedDeviceResolutions(from descriptors: [CameraFeatureDescriptor]) {
