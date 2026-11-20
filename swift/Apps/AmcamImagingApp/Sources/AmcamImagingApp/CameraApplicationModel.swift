@@ -295,10 +295,14 @@ final class CameraApplicationModel: ObservableObject {
         Task { await writeFeature(.integerVector(values.map(Int64.init)), named: "AmcamWhiteBalanceRGBGain") }
     }
 
-    func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
+    func setWhiteBalanceTemperature(_ temperature: Int32) {
         Task {
             await writeFeature(.integer(Int64(temperature)), named: "AmcamWhiteBalanceTemperature")
-            guard errorMessage == nil else { return }
+        }
+    }
+
+    func setWhiteBalanceTint(_ tint: Int32) {
+        Task {
             await writeFeature(.integer(Int64(tint)), named: "AmcamWhiteBalanceTint")
         }
     }
