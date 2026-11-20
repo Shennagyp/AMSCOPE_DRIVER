@@ -502,3 +502,42 @@ Corrections now committed:
 - Remove duplicate Amcam raw-handle helpers; retain the identity-validating helper.
 
 The earlier Linux API pass remains valid for commit `430ccf9da3b098cedb79fd932874c031943317cd`. Latest source commit: `6364f89117ea3fc76fe4cb62663913eab100f6a1`; workflow [44676898035](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44676898035) completed the Ubuntu 24.04 ABI/API job successfully: the GenTL ABI package built and all 9 GenTLAPI tests passed. The four macOS package jobs remain queued. **The Amcam/native backend and macOS integration changes are not yet CI-verified.**
+
+
+## macOS AmScope camera priority — 2026-11-20
+
+The immediate acceptance target is reliable operation of the AmScope MU503 on macOS. Cross-platform native-loader work is deferred. Keep the two backends distinct: \`GenTLNative\` loads a real vendor \`.cti\`; \`AmcamGenTL\` maps the shared Swift API to the Amcam SDK and is not a GenTL Producer.
+
+### Deterministic SDK integration fixture
+
+Added \`Tests/AmcamGenTLTests/Fixtures/MockAmcamSDK.c\`, compiled at test time as a macOS dynamic library and loaded through the real \`AmcamSDK\` \`dlopen\`/\`dlsym\` path. It models MU503 preview modes 2560×1922, 1280×960, and 640×480. Its start function deliberately invokes the image callback synchronously before returning, exercising callback reentrancy.
+
+Verified evidence:
+- Workflow run [44680215484](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44680215484), commit \`4969dbcbfbeb7e0b713df2b6cf852a22c73d6bb0\`.
+- The \`AmcamGenTL tests\` job's \`Run package tests\` step completed successfully on macOS 15.8.2 arm64 / Swift 6.1.2.
+- Six test cases were scheduled and completed: three RGB24 layout tests and three integration tests covering discovery/open, repeated stream start-stop, synchronous callback delivery, disconnect cleanup, exposure controls/readback, resolution changes/readback, frame delivery, and the GenTL data-stream buffer/event lifecycle.
+- The overall workflow was not green because the separate \`GenTLNative\` and \`GenTLRouter\` jobs failed. Do not attribute those failures to the Amcam package job.
+
+### Additional tests currently pending CI
+
+After the verified run:
+- \`AmcamFrameInfoV2.timestamp\` was changed to signed 64-bit to match the SDK structure; negative values are represented as unavailable rather than reinterpreted as unsigned.
+- Added an undersized-buffer safety test. It checks that a buffer smaller than the incoming frame is marked incomplete/data-larger-than-buffer and its memory remains unchanged.
+- Corrected test diagnostic interpolation.
+
+The latest source commit is \`7e7c10f203cb0c7f620bac9a0e730567b0f8b5f3\`; its workflow run is [44680315441](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44680315441). Its Amcam test result is pending and must be checked before these additions are called verified.
+
+### Hardware acceptance — not yet completed
+
+The mock fixture validates the software ABI path but does not validate the physical camera. The next hardware gate is to load the actual arm64-compatible vendor \`libamcam.dylib\`, verify the SDK version/symbols, enumerate the MU503 (previously observed VID:PID \`0547:4511\`), open it, read back exposure/resolution, acquire frames at supported modes, and test sustained streaming plus repeated start/stop/disconnect.
+
+The previous Mac hardware profile recorded a USB 2.0 High Speed connection at 480 Mbit/s through the observed hub path. The reported Windows result of 101 fps at 640×480 is a reference target, not an expected result on the current Mac connection. Measure actual frame delivery and payload goodput; do not infer usable bandwidth from the USB signaling rate or published FPS. Exposure and gain remain explicit camera controls and must not be altered to compensate for transport limits.
+
+Priority order:
+1. Amcam SDK load/version/ABI correctness on macOS.
+2. Discovery, open/close, resolution and exposure controls with readback.
+3. Frame callback, RGB24 layout, buffer sizing/ownership, and event delivery.
+4. Disconnect/error recovery and sustained acquisition.
+5. Physical MU503 smoke/performance test on the user's Mac.
+
+Linux/Windows native-loader work and cross-platform mock-producer refactoring are deferred until this camera path is reliable.
