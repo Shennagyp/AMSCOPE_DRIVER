@@ -6,23 +6,22 @@ SHELL := /bin/bash
 
 help:
 	@printf '%s\n' \
-	  'make run         Download and launch the latest public macOS release' \
-	  'make run-probe   Download and run the latest hosted camera diagnostic probe' \
-	  'make build-local Build the imaging app with the local Swift toolchain (Xcode required)' \
-	  'make run-local   Build and launch the imaging app locally (Xcode required)' \
-	  'make test-local  Run every Swift package test suite locally (Xcode required)'
+	  'make run         Build every Swift library and launch Amcam Imaging' \
+	  'make run-probe   Build and run the Amcam camera diagnostic locally' \
+	  'make build-local Build every Swift library and the imaging executable' \
+	  'make run-local   Alias for make run' \
+	  'make test-local  Run every Swift package test suite locally'
 
 run:
-	@bash scripts/run-macos-artifact.sh app
+	@bash scripts/build-and-run-macos.sh
 
 run-probe:
-	@bash scripts/run-macos-artifact.sh probe
+	swift run --package-path swift/Packages/AmcamGenTL amcam-camera-probe $(PROBE_ARGS)
 
 build-local:
-	swift build --package-path swift/Apps/AmcamImagingApp --product amcam-imaging
+	@BUILD_ONLY=1 bash scripts/build-and-run-macos.sh
 
-run-local:
-	swift run --package-path swift/Apps/AmcamImagingApp amcam-imaging
+run-local: run
 
 test-local:
 	@set -e; \
