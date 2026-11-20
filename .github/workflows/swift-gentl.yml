@@ -125,7 +125,7 @@ jobs:
           fi
           grep -q 'GenTLRouter' swift/Apps/AmcamImagingApp/Package.swift
           grep -q 'AmcamCameraModel' swift/Apps/AmcamImagingApp/Package.swift
-          if grep -R -nE 'NSOpenPanel|chooseSDK|sdkPath|configureSDK\(at:' swift/Apps/AmcamImagingApp/Sources; then
+          if grep -R -nE 'NSOpenPanel|chooseSDK|sdkPath|configureSDK[(]at:' swift/Apps/AmcamImagingApp/Sources; then
             echo "The UI must not select or retain native vendor library paths." >&2
             exit 1
           fi
