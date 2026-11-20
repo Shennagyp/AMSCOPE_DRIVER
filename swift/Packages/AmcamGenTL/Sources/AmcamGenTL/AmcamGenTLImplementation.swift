@@ -1144,7 +1144,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
     private func infoBytes(_ value: GenTLInfoValue) -> (GenTLABI.INFO_DATATYPE, Data) {
         switch value {
         case .string(let string):
-            return (1, Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
+            return (GenTLABI.INFO_DATATYPE_STRING, Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
         case .stringList(let strings):
             var bytes: [UInt8] = []
             for string in strings {
@@ -1152,20 +1152,20 @@ extension AmcamGenTLImplementation: GenTLAPI {
                 bytes.append(0)
             }
             bytes.append(0)
-            return (2, Data(bytes))
-        case .int16(let value): return (3, dataBytes(of: value))
-        case .uint16(let value): return (4, dataBytes(of: value))
-        case .int32(let value): return (5, dataBytes(of: value))
-        case .uint32(let value): return (6, dataBytes(of: value))
-        case .int64(let value): return (7, dataBytes(of: value))
-        case .uint64(let value): return (8, dataBytes(of: value))
-        case .float64(let value): return (9, dataBytes(of: value))
-        case .pointer(let value): return (10, dataBytes(of: value))
-        case .bool8(let value): return (11, dataBytes(of: UInt8(value ? 1 : 0)))
-        case .size(let value): return (12, dataBytes(of: UInt(value)))
-        case .raw(let data): return (13, data)
+            return (GenTLABI.INFO_DATATYPE_STRINGLIST, Data(bytes))
+        case .int16(let value): return (GenTLABI.INFO_DATATYPE_INT16, dataBytes(of: value))
+        case .uint16(let value): return (GenTLABI.INFO_DATATYPE_UINT16, dataBytes(of: value))
+        case .int32(let value): return (GenTLABI.INFO_DATATYPE_INT32, dataBytes(of: value))
+        case .uint32(let value): return (GenTLABI.INFO_DATATYPE_UINT32, dataBytes(of: value))
+        case .int64(let value): return (GenTLABI.INFO_DATATYPE_INT64, dataBytes(of: value))
+        case .uint64(let value): return (GenTLABI.INFO_DATATYPE_UINT64, dataBytes(of: value))
+        case .float64(let value): return (GenTLABI.INFO_DATATYPE_FLOAT64, dataBytes(of: value))
+        case .pointer(let value): return (GenTLABI.INFO_DATATYPE_PTR, dataBytes(of: value))
+        case .bool8(let value): return (GenTLABI.INFO_DATATYPE_BOOL8, dataBytes(of: UInt8(value ? 1 : 0)))
+        case .size(let value): return (GenTLABI.INFO_DATATYPE_SIZET, dataBytes(of: UInt(value)))
+        case .raw(let data): return (GenTLABI.INFO_DATATYPE_BUFFER, data)
         case .opaque(let dataType, let data): return (dataType, data)
-        case .pointerDifference(let value): return (14, dataBytes(of: value))
+        case .pointerDifference(let value): return (GenTLABI.INFO_DATATYPE_PTRDIFF, dataBytes(of: value))
         }
     }
 
