@@ -53,15 +53,16 @@ Rules:
 
 ## 3. Immediate implementation sequence
 
-### Phase A — Make the repository runnable
+### Phase A — Source build and local launch
 
 - [x] Add a root Makefile with explicit app, probe, local build and local test targets.
-- [x] Add an Xcode-free hosted-build launcher that downloads public GitHub Release assets anonymously.
-- [ ] Verify the launcher against a fresh public GitHub Release on an Apple Silicon Mac.
-- [ ] Add a CI contract check that the app and probe release assets are published with the exact names expected by the launcher.
-- [ ] Add a small smoke check that the app bundle contains an arm64 executable and that the probe executable is present.
+- [x] Build the app from source with Swift Package Manager; do not download release binaries or Actions artifacts.
+- [x] Replace the SwiftUI application shell with AppKit so Command Line Tools builds do not require the SwiftUI macro plug-in.
+- [x] Assemble and ad-hoc sign a local `Amcam Imaging.app` bundle.
+- [ ] Pass the hosted macOS app-build job on the latest branch commit.
+- [ ] Run `make run` on the target Mac and verify the app opens.
 
-Acceptance: a clean checkout can run `make run` without GitHub authentication, Xcode or a manually copied artifact, provided a successful workflow has published a public release asset.
+Acceptance: a clean macOS 13+ checkout with Apple's Swift compiler, macOS SDK and AppKit can build and launch with `make run`. Full Xcode, GitHub CLI authentication and downloaded binaries are not required. The vendor `libamcam.dylib` is required for actual camera access.
 
 ### Phase B — Physical MU503 acceptance
 
@@ -117,9 +118,19 @@ Acceptance: every visible control has a documented source, availability rule, un
 
 Acceptance: the same app workflow can select the CTI backend without Amcam-specific calls or fabricated GenApi behavior.
 
-### Phase G — Multiplatform decision
+### Phase G — Cross-platform application boundary
 
-Do not begin multiplatform work before macOS physical acceptance. First isolate platform-specific dynamic loading, camera presentation, image display and packaging boundaries. Then decide whether a separate platform adapter is needed; do not move the GenTL contract or vendor SDK semantics into UI code.
+The current executable and camera backends are macOS-specific. AppKit is only the macOS frontend; it is not a cross-platform UI framework.
+
+- [x] Keep `NSWindow`, `NSOpenPanel`, `NSImage`, bitmap conversion and full-screen behavior in the AppKit frontend.
+- [x] Remove AppKit types and window/file-panel operations from `CameraApplicationModel`.
+- [x] Pass validated RGB8 frames to the frontend as a value object containing dimensions, row stride, bytes and a sequence number.
+- [ ] Move the application state model out of the executable target into a separately testable package with an explicitly chosen observation/event contract.
+- [ ] Define platform-neutral camera application commands and state before adding another frontend.
+- [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
+- [ ] Add another frontend only after its backend path is proven on that OS.
+
+Do not describe the current application as cross-platform: the state model still uses Combine, the executable package targets macOS, and the current native camera integrations use macOS dynamic libraries. UI separation is progress toward portability, not proof of portable camera access.
 
 ## 4. Verification policy
 
