@@ -38,7 +38,7 @@ public struct AmcamDevice: Hashable, Sendable, Identifiable {
 }
 
 
-public enum AmcamAutoExposureMode: Int, Codable, CaseIterable, Sendable {
+public enum AmcamAutoExposureMode: Int32, Codable, CaseIterable, Sendable {
     case manual = 0
     case continuous = 1
     case once = 2
