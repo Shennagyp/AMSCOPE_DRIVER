@@ -52,6 +52,25 @@ jobs:
       - name: Run package tests
         run: swift test --package-path "${{ matrix.path }}" --parallel
 
+      - name: Build macOS camera probe
+        if: matrix.package == 'AmcamGenTL'
+        run: |
+          swift build --package-path "${{ matrix.path }}" --configuration release --product amcam-camera-probe
+          bin_path="$(swift build --package-path "${{ matrix.path }}" --configuration release --show-bin-path)"
+          mkdir -p "$RUNNER_TEMP/amcam-camera-probe"
+          cp "$bin_path/amcam-camera-probe" "$RUNNER_TEMP/amcam-camera-probe/"
+          cp swift/docs/AMCAM_MACOS_CAMERA_PROBE.md "$RUNNER_TEMP/amcam-camera-probe/README.md"
+          file "$bin_path/amcam-camera-probe"
+          "$bin_path/amcam-camera-probe" --help
+
+      - name: Upload macOS camera probe
+        if: matrix.package == 'AmcamGenTL'
+        uses: actions/upload-artifact@v4
+        with:
+          name: amcam-camera-probe-macos-arm64
+          path: ${{ runner.temp }}/amcam-camera-probe/
+          retention-days: 14
+
   portable-contract-tests:
     name: GenTL ABI and API contract (Linux)
     runs-on: ubuntu-24.04
