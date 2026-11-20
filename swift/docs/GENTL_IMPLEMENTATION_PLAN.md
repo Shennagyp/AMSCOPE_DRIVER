@@ -293,3 +293,8 @@ The native mock now checks more than function identity. `GCGetInfo` validates it
 ### Optional export negative-path coverage (2026-11-20)
 
 The optional-export variant now omits all 17 later-revision symbols and invokes all 17 corresponding `GenTLAPI` methods. Each must return `GC_ERR_NOT_IMPLEMENTED`; sentinel output values for counts, sizes, datatypes, and handles must remain unchanged. Compilation and execution remain pending.
+
+
+### Required symbol omission matrix (2026-11-20)
+
+The test fixture can now omit any one of the 47 required GenTL 1.0 symbols by compile-time flag. The integration suite iterates the loader's required-symbol list, builds each negative variant, and verifies the exact missing symbol is reported. This test source is committed but not yet executed.
