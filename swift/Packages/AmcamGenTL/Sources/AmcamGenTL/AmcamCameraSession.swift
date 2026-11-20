@@ -289,9 +289,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         probes[.analogGain] = sdk.exposureGainControlAvailable &&
             (try? sdk.readExposureGain(activeHandle)) != nil
-        let temperatureTintAvailable = sdk.whiteBalanceControlAvailable &&
+        let temperatureTintAvailable = sdk.temperatureTintControlAvailable &&
             (try? sdk.readTemperatureTint(activeHandle)) != nil
-        let rgbGainAvailable = sdk.whiteBalanceControlAvailable &&
+        let rgbGainAvailable = sdk.rgbWhiteBalanceControlAvailable &&
             (try? sdk.readWhiteBalanceGain(activeHandle))?.count == 3
         probes[.whiteBalance] = temperatureTintAvailable || rgbGainAvailable
         probes[.colorCorrection] =
@@ -581,14 +581,15 @@ public final class AmcamCameraSession: @unchecked Sendable {
         }
         let whiteBalanceReadback = try? sdk.readTemperatureTint(handle)
         let whiteBalanceRGBGain = try? sdk.readWhiteBalanceGain(handle)
-        let whiteBalance = whiteBalanceReadback.map {
-            AmcamWhiteBalanceControl(
-                temperature: $0.temperature,
-                tint: $0.tint,
+        let whiteBalance: AmcamWhiteBalanceControl?
+        if whiteBalanceReadback != nil || whiteBalanceRGBGain?.count == 3 {
+            whiteBalance = AmcamWhiteBalanceControl(
+                temperature: whiteBalanceReadback?.temperature,
+                tint: whiteBalanceReadback?.tint,
                 rgbGain: whiteBalanceRGBGain?.count == 3 ? whiteBalanceRGBGain : nil
             )
-        } ?? whiteBalanceRGBGain.map {
-            AmcamWhiteBalanceControl(temperature: 6_503, tint: 1_000, rgbGain: $0)
+        } else {
+            whiteBalance = nil
         }
         let gainReadback = try? sdk.readExposureGain(handle)
         let gain = gainReadback.map {
