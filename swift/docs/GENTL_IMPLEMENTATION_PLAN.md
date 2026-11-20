@@ -288,3 +288,8 @@ Static source comparison confirms 64 header declarations, 64 protocol requiremen
 ### Native argument and memory sentinel expansion (2026-11-20)
 
 The native mock now checks more than function identity. `GCGetInfo` validates its command and output writes; `GCReadPort` validates an opaque handle, 64-bit address, output pointer/capacity, and payload write; `GCWritePort` validates the handle, address, input pointer, exact bytes, and size. The all-operation dispatch matrix has 58 unique return-code assertions, these two additional port probes, and four lifecycle calls, with call counters covering all 64 operations. Full argument permutation and output-buffer coverage remains outstanding.
+
+
+### Optional export negative-path coverage (2026-11-20)
+
+The optional-export variant now omits all 17 later-revision symbols and invokes all 17 corresponding `GenTLAPI` methods. Each must return `GC_ERR_NOT_IMPLEMENTED`; sentinel output values for counts, sizes, datatypes, and handles must remain unchanged. Compilation and execution remain pending.
