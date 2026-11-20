@@ -295,6 +295,13 @@ final class AmcamCameraSession: @unchecked Sendable {
             requestedFrameRate: requestedFrameRate,
             requestedSpeedLevel: requestedSpeedLevel
         )
+        guard snapshot.exposure.readbackMicroseconds == microseconds else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "exposure time",
+                requested: "\(microseconds) µs",
+                actual: "\(snapshot.exposure.readbackMicroseconds) µs"
+            )
+        }
         requestedExposureMicroseconds = microseconds
         return snapshot
     }
