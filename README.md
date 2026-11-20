@@ -14,16 +14,16 @@ The application uses one GenTL API contract with two interchangeable implementat
 ## Packages
 
 - **GenTLABI** — shared imported C declarations from the pinned EMVA GenTL header, including ABI structure-layout checks. This is the single ABI source of truth.
-- **GenTLAPI** — the one application-facing GenTL contract; conversion of its current Swift wrapper to the imported GenTL declarations is in progress.
+- **GenTLAPI** — the one application-facing Swift protocol. It mirrors the GenTL function surface and uses the imported GenTL C ABI types; it is a contract, not a Producer implementation.
 - **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
 - **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions.
 
-The shared GenTLABI package is extracted. GenTLAPI now mirrors all 64 GenTL 1.6 function prototypes using imported C ABI types and raw GenTL-style return codes. Both backends implement the 64-operation contract, and the router exposes that contract on candidates and sessions. A source-level prototype comparison found exact signature matches; build, runtime and device verification remain pending. The older Swift convenience API is retained behind internal BackendConvenience SPI during cleanup.
+The shared GenTLABI package is extracted. GenTLAPI declares all 64 GenTL 1.6 operations as a Swift protocol using imported C ABI types and raw GenTL-style return codes. GenTLNative forwards those calls to the actual C function pointers exported by dynamically loaded .cti Producers. GenTLRouter and application code call the Swift protocol; they do not call C function pointers directly. Both backends implement the same contract. A source-level prototype comparison found exact signature matches; build, runtime and device verification remain pending. Older typed-handle and throwing convenience helpers remain internal behind BackendConvenience SPI.
 
 ## Implementation plan
 
-The implementation must bind to GenTL rather than recreate a parallel Swift version of it. The pinned GenTL 1.6 C header is authoritative for function signatures, types, constants, structures and ABI layout. The GenTL specification remains authoritative for runtime semantics.
+The native backend binds to the real GenTL C ABI rather than reimplementing a CTI Producer. GenTLAPI is intentionally a Swift protocol mirror used as the application's stable contract; it does not export C symbols or replace the Producer. The pinned GenTL 1.6 C header is authoritative for function signatures, types, constants, structures and ABI layout. The GenTL specification remains authoritative for runtime semantics.
 
 See [the GenTL implementation plan](swift/docs/GENTL_IMPLEMENTATION_PLAN.md) for the architecture rules, package dependency graph, phases, current status and completion criteria.
 
