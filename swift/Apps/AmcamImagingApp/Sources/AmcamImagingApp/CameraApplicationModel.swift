@@ -119,7 +119,10 @@ final class CameraApplicationModel: ObservableObject {
         candidatesByID = discoveredCandidates
 
         if !discoveredDevices.contains(where: { $0.identifier == selectedDeviceID }) {
-            closeSession()
+            guard closeSession() else {
+                status = "Camera disappeared; previous session cleanup is incomplete"
+                return
+            }
             selectedDeviceID = discoveredDevices.first?.identifier ?? ""
             latestImage = nil
         }
@@ -146,7 +149,7 @@ final class CameraApplicationModel: ObservableObject {
 
     func selectDevice(_ identifier: String) {
         guard identifier != selectedDeviceID else { return }
-        closeSession()
+        guard closeSession() else { return }
         selectedDeviceID = identifier
         latestImage = nil
         cameraCapabilities = nil
@@ -349,7 +352,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func configureSDK(at url: URL) {
-        closeSession()
+        guard closeSession() else { return }
         router = GenTLRouter()
         candidatesByID.removeAll()
         devices.removeAll()
@@ -366,32 +369,43 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    private func closeSession() {
+    /// Closes resources in ownership order. A failed child close must not be
+    /// followed by closing its parent device session: retain both handles so
+    /// cleanup can be retried without invalidating provider-owned resources.
+    @discardableResult
+    private func closeSession() -> Bool {
         captureTask?.cancel()
         captureTask = nil
 
         if let acquisition {
             do {
                 try acquisition.close()
+                self.acquisition = nil
             } catch {
+                isStreaming = false
+                status = "Camera acquisition cleanup failed"
                 errorMessage = error.localizedDescription
+                return false
             }
         }
-        acquisition = nil
 
         if let deviceSession {
             do {
                 try deviceSession.close()
+                self.deviceSession = nil
             } catch {
+                isStreaming = false
+                status = "Camera device cleanup failed"
                 errorMessage = error.localizedDescription
+                return false
             }
         }
-        deviceSession = nil
 
         isStreaming = false
         cameraCapabilities = nil
         controls = nil
         featureDescriptors = []
+        return true
     }
 
     private func writeFeature(_ value: GenTLFeatureValue, named name: String) {
