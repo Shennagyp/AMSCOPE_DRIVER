@@ -178,11 +178,13 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(api.GCUnregisterEvent(nil, 0), GC_ERR_SUCCESS)
         XCTAssertEqual(api.GCCloseLib(), GC_ERR_SUCCESS)
 
-        let library = dlopen(producerURL.path, RTLD_NOW | RTLD_LOCAL)
-        XCTAssertNotNil(library)
-        defer { if let library { dlclose(library) } }
-        let symbol = dlsym(library, "MockCTI_GetCallCount")
-        XCTAssertNotNil(symbol)
+        guard let library = dlopen(producerURL.path, RTLD_NOW | RTLD_LOCAL) else {
+            return XCTFail("Could not reopen mock CTI for test-control inspection.")
+        }
+        defer { dlclose(library) }
+        guard let symbol = dlsym(library, "MockCTI_GetCallCount") else {
+            return XCTFail("Mock CTI did not export its test-only call counter.")
+        }
         typealias CallCountFunction = @convention(c) (UInt32) -> UInt32
         let callCount = unsafeBitCast(symbol, to: CallCountFunction.self)
 
