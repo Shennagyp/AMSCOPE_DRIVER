@@ -17,14 +17,14 @@ public enum AmcamSDKLibraryLocator {
         #endif
 
         var candidates: [URL] = []
-        if let frameworks = Bundle.main.privateFrameworksURL {
-            for arch in [architecture, "universal"] {
-                candidates.append(
-                    frameworks
-                        .appendingPathComponent("Vendors/amscope/macos/\(arch)", isDirectory: true)
-                        .appendingPathComponent("libamcam.dylib")
-                )
-            }
+        let frameworks = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Frameworks", isDirectory: true)
+        for arch in [architecture, "universal"] {
+            candidates.append(
+                frameworks
+                    .appendingPathComponent("Vendors/amscope/macos/\(arch)", isDirectory: true)
+                    .appendingPathComponent("libamcam.dylib")
+            )
         }
 
         // Source-tree fallback is for development/probing only. A packaged app
