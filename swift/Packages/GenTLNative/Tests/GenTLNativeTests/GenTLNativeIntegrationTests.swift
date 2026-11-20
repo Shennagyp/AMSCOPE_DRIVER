@@ -93,4 +93,19 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             }
         }
     }
+
+    func testAbsentLaterRevisionExportReturnsNotImplementedWithoutChangingOutput() throws {
+        let producerURL = try buildMockProducer()
+        let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
+        let api: any GenTLAPI = implementation
+        var numberOfURLs: UInt32 = 0xDEADBEEF
+
+        let result = withUnsafeMutablePointer(to: &numberOfURLs) { countPointer in
+            api.GCGetNumPortURLs(nil, countPointer)
+        }
+
+        XCTAssertEqual(result, GC_ERR_NOT_IMPLEMENTED)
+        XCTAssertEqual(numberOfURLs, 0xDEADBEEF)
+    }
+
 }
