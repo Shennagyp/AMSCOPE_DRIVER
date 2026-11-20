@@ -137,7 +137,7 @@ jobs:
           AmScope Imaging — Apple Silicon
           
           1. Extract Amcam-Imaging-macos-arm64.zip.
-          2. Open AmScope Imaging.app.
+          2. Open Amcam Imaging.app.
           3. Use SDK… in the camera dock to choose your vendor libamcam.dylib if it is not found automatically.
           4. Select your camera and press Start.
           5. Open Settings to see the controls confirmed for that exact camera.
