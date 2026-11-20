@@ -564,4 +564,9 @@ GitHub Actions hosted-runner provisioning or repository billing/permissions must
 \section{Native argument fault-injection}
 The integration suite now deliberately sends invalid sentinel inputs to the three instrumented functions. An invalid \texttt{GCGetInfo} command must return its configured custom error without changing datatype, payload, or size. An invalid \texttt{GCReadPort} address must return its configured error without changing output bytes or size. An invalid \texttt{GCWritePort} payload must return its configured error while preserving the input size. These checks verify that native error values are not normalized away and that rejected operations do not manufacture output data.
 
+
+
+\section{Invalid dynamic-library loading}
+The loader unit suite now distinguishes three filesystem/load boundaries: missing path, non-regular path, and an existing regular file whose contents are not a valid Mach-O dynamic library. The third case must report \texttt{loadFailed}, not \texttt{fileNotFound} or \texttt{notRegularFile}. This validates error classification before symbol resolution begins.
+
 \end{document}
