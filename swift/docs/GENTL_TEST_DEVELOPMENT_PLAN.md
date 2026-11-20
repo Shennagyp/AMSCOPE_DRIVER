@@ -1,0 +1,303 @@
+# GenTL verification and development plan
+
+**Branch:** \`swift-gentl-api\`  
+**Companion research record:** \`swift/docs/GENTL_ENGINEERING_RESEARCH.tex\`  
+**Status:** implementation plan; no test execution is implied by this document  
+**Priority:** native mock Producer and exhaustive native dispatch verification
+
+## 1. Objective
+
+Establish an automated test environment that validates the existing shared \`GenTLAPI\` contract and, especially, proves that \`GenTLNativeImplementation\` forwards calls through the actual GenTL C ABI to dynamically loaded CTI exports.
+
+A physical GenTL camera is unavailable. This does not block ABI, loader, dispatch, protocol, router, or deterministic acquisition tests. The first major deliverable is a compiled C Mock GenTL Producer loaded by the production native loader.
+
+## 2. Non-negotiable architectural constraints
+
+1. Preserve the existing application-facing \`GenTLAPI\` protocol. Do not replace it or require application rewrites.
+2. Keep one authoritative pinned GenTL header in \`GenTLABI\`.
+3. Native tests must load a compiled shared library using the production \`dlopen\`/\`dlsym\` path. A Swift fake alone is insufficient.
+4. The mock exports real GenTL C symbols with signatures derived from the pinned header.
+5. Keep the Amcam SDK implementation independent; do not create an Amcam CTI.
+6. Run common contract tests against both backends where meaningful, but use capability-aware expectations. Do not require unsupported Amcam features to behave like native Producer features.
+7. Do not claim hardware compatibility, GenTL certification, or complete conformance from mock tests.
+8. Keep \`BackendConvenience\` SPI internal during migration; do not expose it as a second application API.
+
+## 3. Target repository layout
+
+Adapt names to the existing package conventions after inspecting the actual manifests and test targets; do not create duplicate package roots unnecessarily.
+
+\`\`\`text
+swift/
+├── Packages/
+│   ├── GenTLABI/
+│   ├── GenTLAPI/
+│   ├── GenTLNative/
+│   ├── AmcamGenTL/
+│   └── GenTLRouter/
+├── Tests/
+│   ├── MockGenTLProducer/
+│   │   ├── include/
+│   │   │   └── MockGenTLProducer.h
+│   │   ├── Sources/
+│   │   │   └── MockGenTLProducer.c
+│   │   └── README.md
+│   ├── GenTLAPITests/
+│   ├── GenTLABITests/
+│   ├── GenTLNativeTests/
+│   ├── GenTLRouterTests/
+│   └── GenTLIntegrationTests/
+└── docs/
+    ├── GENTL_IMPLEMENTATION_PLAN.md
+    ├── GENTL_ENGINEERING_RESEARCH.tex
+    └── GENTL_TEST_DEVELOPMENT_PLAN.md
+\`\`\`
+
+The Mock Producer may be a C target integrated into an appropriate SwiftPM test package if that is the cleanest build arrangement. The essential requirement is that tests load the resulting shared library as a CTI through the real loader. The layout above is a logical organization, not a mandate to introduce a redundant Swift package.
+
+## 4. Execution phases
+
+### Phase T0 — Establish a reproducible build baseline
+
+**Purpose:** know exactly what is being tested before writing a large fixture.
+
+Tasks:
+- Inspect every package manifest and existing test target.
+- Record supported macOS deployment target and Swift/Xcode toolchain.
+- Build each package and the aggregate package graph.
+- Resolve compile errors before attributing failures to test logic.
+- Confirm the pinned header path, revision, license notice, and SHA-256.
+- Generate an authoritative 64-operation inventory from the header and compare it with protocol requirements and native function-table entries.
+- Generate a required/optional symbol table by GenTL revision from the header/specification, not by assumptions.
+
+Deliverables:
+- reproducible build instructions;
+- machine-readable operation/symbol inventory;
+- baseline compile report.
+
+Exit gate: all package targets compile, or every remaining blocker is isolated and documented.
+
+### Phase T1 — Build the native Mock GenTL Producer
+
+**Purpose:** exercise the real native loading boundary without a physical camera.
+
+Tasks:
+- Implement a C shared library using the pinned GenTL header.
+- Export the complete required GenTL 1.0 base function set with exact ABI signatures.
+- Implement deterministic minimal Producer, System, Interface, Device, Port, Data Stream, Buffer, and Event behavior.
+- Export test-only \`MockCTI_*\` controls for reset, call recording, configurable return codes, delays, and fault injection.
+- Add build variants that omit selected required symbols and optional later-revision symbols.
+- Ensure symbols have correct visibility and calling convention.
+- Compile for the actual host architecture and test the exact dynamic library path/name accepted by \`GenTLNative\`.
+
+Initial topology:
+- one Producer/System;
+- one Interface;
+- one Device;
+- one Data Stream;
+- configurable buffer count;
+- deterministic frame metadata and byte payload.
+
+Exit gate:
+- production native loader loads and initializes the mock;
+- required-symbol omission rejects it;
+- absent optional symbols follow the documented policy;
+- test controls can prove which native export was invoked.
+
+### Phase T2 — Exhaustive native dispatch suite
+
+**Purpose:** prove the Swift contract reaches the correct C function pointer without semantic drift.
+
+For each of the 64 operations:
+- invoke through an \`any GenTLAPI\` value backed by \`GenTLNativeImplementation\`;
+- configure the mock to record invocation and arguments;
+- use distinguishable sentinel values to detect argument reordering;
+- assert output pointer writes and buffer-size semantics;
+- configure and assert exact \`GC_ERROR\` propagation;
+- test null and invalid arguments only where permitted by the standard;
+- test missing optional symbol behavior where applicable.
+
+Deliverables:
+- one test disposition per operation;
+- argument/output/error assertions;
+- coverage report mapped to header revision and module ownership.
+
+Exit gate: no operation is unaccounted for. A test may explicitly mark a feature unsupported or not applicable, but may not silently omit it.
+
+### Phase T3 — Protocol and ABI verification
+
+Tasks:
+- test all default protocol implementations return the exact not-implemented error;
+- verify defaults do not manufacture valid output data;
+- compile-time check imported ABI types and native function-pointer typedefs;
+- test relevant structure sizes, alignments, offsets, and packing against C-side measurements;
+- verify enum/constants and handle assumptions against the pinned header;
+- test C string and output-buffer sizing contracts.
+
+Exit gate: Swift declarations compile against imported types and ABI checks pass on supported platforms.
+
+### Phase T4 — Router and lifecycle testing
+
+Tasks:
+- duplicate/malformed backend registration;
+- repeated discovery and refresh;
+- multiple Producer registrations;
+- mixed native and Amcam backends;
+- candidate/session backend identity;
+- session survival across discovery refresh;
+- idempotent close;
+- initialization rollback;
+- failed-close quarantine and provider retention;
+- concurrent discovery and independent session operations;
+- stale handles and invalid lifecycle ordering.
+
+Exit gate: no backend cross-routing, use-after-close, double initialization, or unsafe unload under tested scenarios.
+
+### Phase T5 — Simulated acquisition integration
+
+Implement and test the path:
+
+\`\`\`text
+Initialize
+ -> Discover
+ -> Open interface/device
+ -> Open stream
+ -> Allocate/announce buffers
+ -> Queue buffers
+ -> Start acquisition
+ -> Wait for event
+ -> Read event payload
+ -> Validate frame metadata and bytes
+ -> Requeue
+ -> Stop
+ -> Flush/revoke buffers
+ -> Close stream/device/interface/Producer
+\`\`\`
+
+Tasks:
+- deterministic frame sequence and payload generation;
+- frame IDs, payload sizes, pixel format, dimensions, completeness status;
+- event delivery and timeout behavior;
+- buffer ownership transitions;
+- multi-frame acquisition;
+- stop and cleanup behavior;
+- failure injection at every step.
+
+Exit gate: complete simulated capture and all failure-path cleanup tests pass.
+
+### Phase T6 — Amcam contract and mapping tests
+
+Tasks:
+- preserve existing frame-layout and lifecycle tests;
+- add an internal injectable SDK-call boundary only if needed for deterministic tests;
+- test GenTL-to-SDK argument mapping, units, ranges, output semantics, and errors;
+- test opaque handle token lifecycle and stale-token rejection;
+- test event payload retry and buffer ownership;
+- verify unsupported GenTL features return the chosen precise errors;
+- keep real SDK/hardware validation separate.
+
+Exit gate: all supported mapping behavior has deterministic tests; unsupported capabilities are explicit and never fabricated.
+
+### Phase T7 — Stress, sanitizers, and sample application
+
+Tasks:
+- repeated load/init/terminate cycles;
+- repeated discovery/open/close cycles;
+- multiple devices and streams;
+- concurrent independent sessions;
+- sustained queue/requeue acquisition;
+- timeout/cancellation races;
+- fault injection during cleanup;
+- run suitable Address Sanitizer and Undefined Behavior Sanitizer configurations for the C fixture where supported;
+- create or finish \`GenTLDemo\` to discover, open, capture a frame from, and close the simulated device.
+
+Exit gate: bounded stress suite is repeatable, no known leaks or invalid lifecycle transitions are observed within its tested scope, and the demo operates against the mock.
+
+### Phase T8 — Hardware compatibility (later)
+
+When hardware becomes available:
+- test at least one real vendor CTI and its reported GenTL version;
+- test Producer load and discovery without assuming a connected camera;
+- test actual device open and stream acquisition;
+- record vendor, CTI version/hash, camera model/firmware, transport, OS, architecture, and test results;
+- add further vendors and transport-specific cases incrementally.
+
+This phase is not a prerequisite for completing the mock-based engineering test suite. It is a prerequisite for claims about the tested hardware/Producer combination.
+
+## 5. Required mock control surface
+
+The mock needs a test-only control API, separate from GenTL exports:
+
+- reset all Producer state;
+- query call count by operation;
+- retrieve last-call argument record;
+- configure a return code for a selected operation;
+- configure delay/barrier for concurrency tests;
+- enable/disable selected symbols in build variants;
+- configure topology (initially one device; later multiple interfaces/devices);
+- configure frame dimensions, format, payload, frame ID, and completeness;
+- inject failures at lifecycle transitions;
+- inspect outstanding handles, buffers, and event registrations.
+
+Control API memory ownership must be explicit. Do not return pointers into mutable internal storage without a defined lifetime. Keep test-control ABI private to the test target.
+
+## 6. Required test matrix
+
+| Area | Minimum cases | Evidence |
+|---|---|---|
+| API defaults | all defaulted operations | exact error and output-state assertions |
+| ABI | layouts, types, function pointer types | C/Swift compile and runtime measurements |
+| Loader | valid, invalid, missing required symbols | production loader integration |
+| Optional exports | absent later-revision functions | successful base load and not-implemented invocation |
+| Dispatch | all 64 operations | call recording, sentinel arguments, output and error assertions |
+| Strings/buffers | exact size, too small, null where permitted | required-size and retry behavior |
+| Router | registration, discovery, sessions, rollback | lifecycle tests |
+| Acquisition | announce, queue, start, event, frame, requeue, stop | deterministic frame assertions |
+| Failure | every lifecycle boundary | state and cleanup assertions |
+| Concurrency | independent sessions and discovery interactions | repeatable synchronization tests |
+| Amcam | mappings and unsupported operations | injected SDK tests plus later hardware tests |
+| Resource safety | load/unload, handles, buffers, events | sanitizer/stress reports |
+| Demo | discover/open/capture/close | executable integration test |
+
+## 7. Test implementation rules
+
+- Derive the operation inventory from the pinned header; do not maintain a handwritten second list as the source of truth.
+- Every test name should identify operation/module/revision or lifecycle transition.
+- Use distinct sentinel values to detect argument order errors.
+- Assert exact GenTL error values, not only success/failure.
+- Never dereference memory in the mock beyond the caller-supplied size.
+- Do not assume every function shares the same buffer-sizing rules.
+- Test legal nullability; do not treat every null pointer as valid.
+- Make mock state reset deterministic and isolate tests that share a loaded dynamic library.
+- Do not run unsafe concurrent operations merely to create load; concurrency tests must reflect documented/implemented synchronization guarantees.
+- Keep test fixture controls out of production API products.
+- A passing test is evidence only for the tested code path and environment.
+
+## 8. Reporting format
+
+Every milestone report should include:
+- commit SHA;
+- OS and architecture;
+- Swift and Xcode versions;
+- C compiler and version;
+- exact build/test commands;
+- test targets and counts;
+- pass/fail/skip totals;
+- coverage mapping for the 64 operations;
+- mock fixture version and build variant;
+- sanitizer configuration/results;
+- unresolved failures;
+- explicit statement whether any physical device was used.
+
+Do not report “all tests pass” without the above context.
+
+## 9. Immediate next actions
+
+1. Inspect actual package manifests and test targets; reconcile the proposed layout with the repository rather than creating a duplicate package hierarchy.
+2. Establish a clean package build baseline.
+3. Extract the 64-operation and required/optional export inventories from the pinned header.
+4. Implement the minimal compiled Mock Producer with test-control exports.
+5. Connect it to the existing production native loader.
+6. Add dispatch tests operation-by-operation, starting with initialization, discovery, open/close, info/string operations, then events and stream/buffer operations.
+7. Add fault-injection and acquisition tests after the core loader/dispatch path is proven.
+
+**Do not begin by writing a large simulated camera implementation before confirming the current package graph compiles.** A small correct mock and verified loader boundary are more valuable than a broad but unbuildable fixture.
