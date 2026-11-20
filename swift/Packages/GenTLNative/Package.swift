@@ -21,7 +21,11 @@ let package = Package(
         ),
         .testTarget(
             name: "GenTLNativeTests",
-            dependencies: ["GenTLNative"]
+            dependencies: [
+                "GenTLNative",
+                .product(name: "GenTLABI", package: "GenTLABI"),
+                .product(name: "GenTLAPI", package: "GenTLAPI")
+            ]
         )
     ]
 )
