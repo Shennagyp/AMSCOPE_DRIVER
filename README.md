@@ -17,7 +17,8 @@ The application uses one GenTL API contract with two interchangeable implementat
 - **GenTLAPI** — the one application-facing Swift protocol. It mirrors the GenTL function surface and uses the imported GenTL C ABI types; it is a contract, not a Producer implementation.
 - **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
-- **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions.
+- **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions, including optional typed feature forwarding.
+- **AmcamImagingApp** — standalone macOS SwiftUI executable under `swift/Apps/AmcamImagingApp`; separated from the backend package so it can depend on GenTLRouter without creating a SwiftPM cycle.
 
 The shared GenTLABI package is extracted. GenTLAPI declares all 64 GenTL 1.6 operations as a Swift protocol using imported C ABI types and raw GenTL-style return codes. GenTLNative forwards those calls to the actual C function pointers exported by dynamically loaded .cti Producers. GenTLRouter and application code call the Swift protocol; they do not call C function pointers directly. Both backends implement the same contract. A source-level prototype comparison found exact signature matches; build, runtime and device verification remain pending. Older typed-handle and throwing convenience helpers remain internal behind BackendConvenience SPI.
 
