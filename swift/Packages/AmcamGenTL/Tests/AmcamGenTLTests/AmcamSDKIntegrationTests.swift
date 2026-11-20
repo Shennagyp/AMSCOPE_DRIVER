@@ -1,6 +1,24 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import AmcamGenTL
+
+private final class FrameCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedFrame: AmcamFrame?
+
+    func store(_ frame: AmcamFrame) {
+        lock.lock()
+        storedFrame = frame
+        lock.unlock()
+    }
+
+    func load() -> AmcamFrame? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedFrame
+    }
+}
 
 final class AmcamSDKIntegrationTests: XCTestCase {
     private var temporaryDirectory: URL!
@@ -38,10 +56,10 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         for expectedSequence in UInt32(1)...UInt32(3) {
             let frameReceived = expectation(description: "frame \(expectedSequence)")
-            var receivedFrame: AmcamFrame?
+            let receivedFrame = FrameCapture()
             try session.start { result in
                 if case .success(let frame) = result {
-                    receivedFrame = frame
+                    receivedFrame.store(frame)
                     frameReceived.fulfill()
                 } else if case .failure(let error) = result {
                     XCTFail("Unexpected frame failure: \(error)")
@@ -49,7 +67,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             }
 
             wait(for: [frameReceived], timeout: 2)
-            let frame = try XCTUnwrap(receivedFrame)
+            let frame = try XCTUnwrap(receivedFrame.load())
             XCTAssertEqual(frame.width, 640)
             XCTAssertEqual(frame.height, 480)
             XCTAssertEqual(frame.bytesPerRow, 1920)
@@ -62,6 +80,25 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             try session.stop()
         }
 
+        // A fatal disconnect event must notify the consumer but retain the SDK
+        // callback registration until Amcam_Stop has completed.
+        let disconnected = expectation(description: "camera disconnected")
+        try session.start { result in
+            if case .failure(.cameraDisconnected) = result {
+                disconnected.fulfill()
+            }
+        }
+        let emitterHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(emitterHandle)
+        defer { if let emitterHandle { dlclose(emitterHandle) } }
+        guard let symbol = dlsym(emitterHandle, "MockAmcam_EmitEvent") else {
+            XCTFail("Mock SDK is missing MockAmcam_EmitEvent")
+            return
+        }
+        let emitEvent = unsafeBitCast(symbol, to: (@convention(c) (UInt32) -> Void).self)
+        emitEvent(0x0081)
+        wait(for: [disconnected], timeout: 2)
+        try session.stop()
         try session.close()
     }
 
