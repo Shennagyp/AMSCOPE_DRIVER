@@ -41,7 +41,8 @@ public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendabl
 
     public var isInformational: Bool {
         switch self {
-        case .cmosSensor, .ccdProgressiveSensor, .ccdInterlacedSensor, .highFullWell,
+        case .monochromeOutput, .frameBuffer, .ddrFrameBuffer,
+             .cmosSensor, .ccdProgressiveSensor, .ccdInterlacedSensor, .highFullWell,
              .globalShutter, .ghoptoSensor, .usb3, .usb3OverUSB2, .gigE, .fiveGigE,
              .tenGigE, .twoPointFiveGigE, .cameraLink, .coaxPress:
             return true
