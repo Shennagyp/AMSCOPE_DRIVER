@@ -755,7 +755,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
             var info = AmcamFrameInfoV2()
             var frameMetadata: AmcamFrameMetadata?
             var pullOperationName: String?
-            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName)
+            var tightlyPackedRows = false
+            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName, tightlyPackedRows: &tightlyPackedRows)
             guard result >= 0 else {
                 streaming = false
                 lock.unlock()
@@ -764,7 +765,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             }
             let frameWidth = Int(info.width)
             let frameHeight = Int(info.height)
-            guard let layout = AmcamRGB24Layout(width: frameWidth, height: frameHeight, tightlyPackedRows: sdk.pullImageUsesTightlyPackedRows),
+            guard let layout = AmcamRGB24Layout(width: frameWidth, height: frameHeight, tightlyPackedRows: tightlyPackedRows),
                   frameWidth == width,
                   frameHeight == height,
                   layout.payloadSize <= bufferCapacity else {
