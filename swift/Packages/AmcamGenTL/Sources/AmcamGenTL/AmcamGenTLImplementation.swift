@@ -1191,8 +1191,10 @@ extension AmcamGenTLImplementation: GenTLAPI {
         let capacity = size.pointee
         guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         size.pointee = data.count
+        // A NULL output pointer is the standard size-query form.
+        guard let output else { return GenTLABI.GC_ERR_SUCCESS }
         guard !data.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
-        guard let output, capacity >= data.count else {
+        guard capacity >= data.count else {
             return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
         }
         data.withUnsafeBytes { source in
@@ -1218,8 +1220,9 @@ extension AmcamGenTLImplementation: GenTLAPI {
         output: UnsafeMutableRawPointer?,
         size: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
+        guard let type, let size else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         let (kind, bytes) = infoBytes(value)
-        type?.pointee = kind
+        type.pointee = kind
         return writeData(bytes, output: output, size: size)
     }
 
@@ -1255,9 +1258,8 @@ extension AmcamGenTLImplementation: GenTLAPI {
         entry.iSize = bytes.count
         guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         guard !bytes.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
-        guard let output = entry.pBuffer, capacity >= bytes.count else {
-            return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
-        }
+        guard let output = entry.pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
+        guard capacity >= bytes.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
         bytes.withUnsafeBytes { source in
             if let base = source.baseAddress {
                 output.copyMemory(from: base, byteCount: source.count)
@@ -1276,9 +1278,8 @@ extension AmcamGenTLImplementation: GenTLAPI {
         entry.iSize = bytes.count
         guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         guard !bytes.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
-        guard let output = entry.pBuffer, capacity >= bytes.count else {
-            return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
-        }
+        guard let output = entry.pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
+        guard capacity >= bytes.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
         bytes.withUnsafeBytes { source in
             if let base = source.baseAddress {
                 output.copyMemory(from: base, byteCount: source.count)
@@ -1320,8 +1321,9 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ sErrText: UnsafeMutablePointer<CChar>?,
         _ piSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
+        guard let piErrorCode, let piSize else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         let value = GCGetLastError()
-        piErrorCode?.pointee = value.code.rawValue
+        piErrorCode.pointee = value.code.rawValue
         return writeCString(value.message, output: sErrText, size: piSize)
     }
 
@@ -1892,25 +1894,24 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
         _ pInfoStacked: UnsafeMutablePointer<GenTLABI.DS_BUFFER_INFO_STACKED>?, _ iNumInfos: Int
     ) -> GenTLABI.GC_ERROR {
-        guard iNumInfos >= 0, iNumInfos == 0 || pInfoStacked != nil else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        guard iNumInfos > 0, let pInfoStacked else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         do {
             let stream = try typedHandle(hDataStream, as: DSModule.self)
             guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
-            let commands = (0..<iNumInfos).map { pInfoStacked![$0].iInfoCmd }
+            let commands = (0..<iNumInfos).map { pInfoStacked[$0].iInfoCmd }
             let values = try DSGetBufferInfoStacked(stream, buffer: buffer, commands: commands)
-            var aggregate: GenTLABI.GC_ERROR = GenTLABI.GC_ERR_SUCCESS
             for index in values.indices {
                 switch values[index] {
                 case .success(let value):
-                    let status = writeStackedInfo(value, entry: &pInfoStacked![index])
-                    pInfoStacked![index].iResult = status
-                    if status != GenTLABI.GC_ERR_SUCCESS { aggregate = status }
+                    pInfoStacked[index].iResult = writeStackedInfo(
+                        value,
+                        entry: &pInfoStacked[index]
+                    )
                 case .failure(let error):
-                    pInfoStacked![index].iResult = error.rawValue
-                    if aggregate == GenTLABI.GC_ERR_SUCCESS { aggregate = error.rawValue }
+                    pInfoStacked[index].iResult = error.rawValue
                 }
             }
-            return aggregate == GenTLABI.GC_ERR_BUFFER_TOO_SMALL ? GenTLABI.GC_ERR_SUCCESS : aggregate
+            return GenTLABI.GC_ERR_SUCCESS
         } catch { return rawError(error) }
     }
 
@@ -1918,27 +1919,26 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
         _ pInfoStacked: UnsafeMutablePointer<GenTLABI.DS_BUFFER_PART_INFO_STACKED>?, _ iNumInfos: Int
     ) -> GenTLABI.GC_ERROR {
-        guard iNumInfos >= 0, iNumInfos == 0 || pInfoStacked != nil else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        guard iNumInfos > 0, let pInfoStacked else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         do {
             let stream = try typedHandle(hDataStream, as: DSModule.self)
             guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
             let requests = (0..<iNumInfos).map {
-                GenTLBufferPartInfoStackedRequest(partIndex: pInfoStacked![$0].iPartIndex, command: pInfoStacked![$0].iInfoCmd)
+                GenTLBufferPartInfoStackedRequest(partIndex: pInfoStacked[$0].iPartIndex, command: pInfoStacked[$0].iInfoCmd)
             }
             let values = try DSGetBufferPartInfoStacked(stream, buffer: buffer, requests: requests)
-            var aggregate: GenTLABI.GC_ERROR = GenTLABI.GC_ERR_SUCCESS
             for index in values.indices {
                 switch values[index] {
                 case .success(let value):
-                    let status = writeStackedPartInfo(value, entry: &pInfoStacked![index])
-                    pInfoStacked![index].iResult = status
-                    if status != GenTLABI.GC_ERR_SUCCESS { aggregate = status }
+                    pInfoStacked[index].iResult = writeStackedPartInfo(
+                        value,
+                        entry: &pInfoStacked[index]
+                    )
                 case .failure(let error):
-                    pInfoStacked![index].iResult = error.rawValue
-                    if aggregate == GenTLABI.GC_ERR_SUCCESS { aggregate = error.rawValue }
+                    pInfoStacked[index].iResult = error.rawValue
                 }
             }
-            return aggregate == GenTLABI.GC_ERR_BUFFER_TOO_SMALL ? GenTLABI.GC_ERR_SUCCESS : aggregate
+            return GenTLABI.GC_ERR_SUCCESS
         } catch { return rawError(error) }
     }
 
@@ -2050,10 +2050,12 @@ extension AmcamGenTLImplementation: GenTLAPI {
             } else {
                 data = try EventGetData(event, timeout: iTimeout)
             }
+            // A NULL data pointer removes the event without delivering payload bytes.
+            guard let pBuffer else {
+                piSize.pointee = 0
+                return GenTLABI.GC_ERR_SUCCESS
+            }
             piSize.pointee = data.count
-
-            // A NULL data pointer discards the queued event payload.
-            guard let pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
 
             guard capacity >= data.count else {
                 eventReadCondition.lock()
@@ -2080,11 +2082,11 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ iInfoCmd: GenTLABI.EVENT_DATA_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
         _ pOutBuffer: UnsafeMutableRawPointer?, _ piOutSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
-        guard let hEvent, iInSize >= 0, (iInSize == 0 || pInBuffer != nil) else {
+        guard let hEvent, let pInBuffer, iInSize > 0 else {
             return GenTLABI.GC_ERR_INVALID_PARAMETER
         }
         let event = EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))
-        let input = pInBuffer.map { Data(bytes: $0, count: iInSize) } ?? Data()
+        let input = Data(bytes: pInBuffer, count: iInSize)
         do {
             let value = try EventGetDataInfo(event, inputData: input, command: iInfoCmd)
             return writeInfo(value, type: piType, output: pOutBuffer, size: piOutSize)
@@ -2098,7 +2100,13 @@ extension AmcamGenTLImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
         do {
-            let value = try EventGetInfo(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent)), command: iInfoCmd)
+            var value = try EventGetInfo(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent)), command: iInfoCmd)
+            if iInfoCmd == GenTLABI.EVENT_NUM_IN_QUEUE, case .size(let queued) = value {
+                eventReadCondition.lock()
+                let hasPendingPayload = pendingRawEventData[UInt(bitPattern: hEvent)] != nil
+                eventReadCondition.unlock()
+                if hasPendingPayload { value = .size(queued + 1) }
+            }
             return writeInfo(value, type: piType, output: pBuffer, size: piSize)
         } catch { return rawError(error) }
     }
