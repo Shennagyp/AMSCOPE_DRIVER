@@ -262,3 +262,27 @@ This branch is complete when:
 8. MU503 physical acceptance is recorded separately from CI results.
 
 **Implementation order is strict:** baseline → router tests → feature-access decision/tests → package boundary → app router migration → feature UI integration → measured optimization → CI/hardware acceptance.
+
+---
+
+## Implementation log
+
+### 2026-11-20 — Router contract test and CI expansion
+
+**Code changes**
+- Added `GenTLRouterRegistrationTests.swift` with coverage for lazy backend construction, duplicate backend identifiers, canonical non-empty identifiers, and provider-factory failure reporting.
+- Kept invocation counters synchronized because backend factories are `@Sendable` closures.
+- Expanded the macOS GitHub Actions package matrix to run tests for `GenTLAPI`, `GenTLNative`, `GenTLRouter`, and `AmcamGenTL`.
+- Enabled push and pull-request validation for `macos-version-optimization`; documentation changes are now included in the workflow path filters.
+- The existing app/probe packaging steps remain attached to the AmcamGenTL package until the app is extracted into its own package.
+
+**TDD classification**
+- These are router contract/characterization tests for behavior already present in the implementation. They are not represented as red-green tests for a new feature.
+- No production behavior was changed in this step.
+- Hosted macOS execution is required. No local Xcode build or test run was performed.
+
+**Validation state**
+- Source and workflow changes are committed to `macos-version-optimization`.
+- GitHub commit status currently reports no status checks, and the available workflow-run lookup did not expose a push-triggered run. Therefore the tests are **not yet claimed as passing**.
+- Next implementation gate: obtain a confirmed green hosted run, then add the routed application/session contract tests before changing application ownership from `AmcamCameraDriver` to `GenTLRouter`.
+
