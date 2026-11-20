@@ -24,7 +24,8 @@ public actor CameraSessionLifecycle {
         )
         continuations[identifier] = pair.continuation
         pair.continuation.onTermination = { @Sendable [weak self] _ in
-            Task { await self?.removeContinuation(identifier) }
+            guard let lifecycle = self else { return }
+            Task { await lifecycle.removeContinuation(identifier) }
         }
         return pair.stream
     }
