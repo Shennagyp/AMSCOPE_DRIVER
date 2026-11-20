@@ -30,6 +30,8 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
             return "The GenTL provider context for backend '\(id)' is no longer available."
         case .genTLCallFailed(let code):
             return "A GenTL API call failed with GC_ERROR \(code)."
+        case .featureAccessUnavailable(let id):
+            return "Backend '\(id)' does not expose typed feature access."
         }
     }
 }
