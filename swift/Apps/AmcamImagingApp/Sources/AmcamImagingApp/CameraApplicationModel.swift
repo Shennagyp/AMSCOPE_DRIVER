@@ -234,17 +234,25 @@ final class CameraApplicationModel: ObservableObject {
 
     /// UI command. Stop/reader synchronization is executed by the imaging library.
     func stop() {
-        Task { await stopOwned() }
+        let operation = cameraSelectionGeneration
+        let deviceID = selectedDeviceID
+        Task { await stopOwned(expectedGeneration: operation, expectedDeviceID: deviceID) }
     }
 
-    private func stopOwned() async {
+    private func stopOwned(expectedGeneration operation: UInt64, expectedDeviceID: String) async {
+        guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else { return }
         do {
             try await cameraLifecycle.stop()
+            guard isCurrentCameraSelectionOperation(operation),
+                  selectedDeviceID == expectedDeviceID else { return }
             frameConsumerTask?.cancel()
             frameConsumerTask = nil
             isStreaming = false
             status = "Stopped — \(selectedDevice?.displayName ?? "camera")"
         } catch {
+            guard isCurrentCameraSelectionOperation(operation),
+                  selectedDeviceID == expectedDeviceID else { return }
             errorMessage = error.localizedDescription
             status = "Camera stop failed"
         }
