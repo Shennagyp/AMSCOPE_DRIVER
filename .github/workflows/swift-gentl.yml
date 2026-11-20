@@ -32,11 +32,11 @@ on:
 permissions:
   contents: read
 
-# v8 moves platform-neutral model/state tests to Linux and avoids waiting
-# behind superseded macOS-only matrix jobs.
+# v9 keeps only the latest branch validation active while implementation is
+# changing; the final pushed commit receives a complete run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v8
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v9
+  cancel-in-progress: true
 
 jobs:
   portable-imaging-core-linux:
