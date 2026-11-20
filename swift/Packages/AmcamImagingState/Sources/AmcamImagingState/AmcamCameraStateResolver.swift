@@ -39,7 +39,7 @@ public struct AmcamCameraStateResolver: Sendable {
         named name: String,
         descriptors: [CameraFeatureDescriptor]
     ) -> CameraFeatureAccessError? {
-        guard let descriptor = descriptors.first(where: { $0.name == name }) else {
+        guard let descriptor = descriptors.last(where: { $0.name == name }) else {
             return .featureNotFound(name)
         }
         guard descriptor.isAvailable else {
