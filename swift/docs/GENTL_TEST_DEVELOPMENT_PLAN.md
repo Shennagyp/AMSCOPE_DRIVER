@@ -430,3 +430,8 @@ The C fixture has been moved to the sibling path `Tests/MockGenTLProducer/`, out
 ### Optional-export absence coverage expanded to all 17 functions
 
 The optional-export test now builds a Producer with all 17 later-revision symbols omitted and invokes every corresponding Swift protocol method. It verifies each returns exactly `GC_ERR_NOT_IMPLEMENTED`. Where an operation has output parameters, the test initializes sentinel counts, sizes, datatypes, or opaque handles and asserts they remain unchanged. This catches accidental writes or fabricated outputs when a function pointer is absent, not merely loader acceptance.
+
+
+### Required-export rejection matrix expanded to all 47 base symbols
+
+The mock fixture now supports a compile-time omission flag for each required GenTL 1.0 symbol. The native integration suite iterates over the loader's authoritative `requiredEntryPoints` list, builds one fixture variant per symbol, and asserts that `GenTLNativeImplementation` rejects each variant with `missingRequiredSymbol` naming the exact omitted export. This replaces the earlier single-`GCGetInfo` negative test. It tests the full required-symbol inventory rather than relying on one representative missing symbol.
