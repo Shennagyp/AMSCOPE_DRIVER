@@ -220,3 +220,10 @@ Camera presentation types and model capability/profile policy are defined in the
 The application closes resources in dependency order: acquisition session first, device session second. If acquisition cleanup fails (for example, a Producer refuses to revoke an announced buffer), the application retains both the acquisition and device session handles and does not close the parent device. If device close fails, the device session remains retained. The user can retry cleanup by selecting the same camera action again or by shutting down; the app must not discard a still-owned handle and continue as if cleanup succeeded.
 
 The GenTLRouter acquisition tests inject a buffer-revoke failure, verify that the data stream is not closed prematurely, then allow revocation and verify that a second close succeeds. The app follows the same parent/child ownership rule.
+
+
+## Triggered acquisition and event timeouts
+
+A GenTL New Buffer event timeout means only that no buffer arrived within the requested wait interval. It is not proof that the camera or acquisition has failed: a camera may be waiting for an external trigger, a software trigger, or simply a longer frame interval. GenTLAcquisitionSession reports this outcome as `eventTimeout`; the app keeps waiting and does not close the device. A stop/close request remains distinct and is reported as `acquisitionStopped`.
+
+A fake Producer test forces an event timeout, then delivers a valid frame without restarting the acquisition session. This verifies that timeout handling is recoverable rather than a fatal stream transition.
