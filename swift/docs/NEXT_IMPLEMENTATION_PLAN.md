@@ -129,6 +129,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Pass validated RGB8 frames to the frontend as a value object containing dimensions, row stride, bytes and a sequence number.
 - [x] Extract validated RGB8 frame values and GenTL payload validation into the platform-neutral AmcamImagingCore package.
 - [x] Add deterministic tests for RGB8 format identity, row padding, payload bounds, invalid dimensions and arithmetic overflow.
+- [x] Extract monotonic-timestamp frame-rate estimation into AmcamImagingCore and test smoothing-window bounds, invalid timestamps and reset behavior.
 - [ ] Move the application state model out of the executable target into a separately testable package with an explicitly chosen observation/event contract.
 - [ ] Define platform-neutral camera application commands and state before adding another frontend.
 - [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
