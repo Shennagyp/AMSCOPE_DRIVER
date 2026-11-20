@@ -454,3 +454,13 @@ swift test --package-path swift/Packages/AmcamGenTL
 swift test --package-path swift/Packages/GenTLRouter
 ```
 Run them on macOS with Xcode command-line tools and record toolchain details. Do not treat the current red workflow state as a code regression because no job step ran.
+
+
+### Native argument fault-injection cases
+
+Added negative-path tests for the sentinel operations:
+- invalid `GCGetInfo` command returns its configured custom error and leaves datatype, payload, and size untouched;
+- invalid `GCReadPort` address returns its configured custom error and leaves the output buffer and size untouched;
+- invalid `GCWritePort` payload returns its configured custom error while preserving the caller's size value.
+
+These cases test that argument validation failures and custom Producer errors cross the native function-pointer boundary unchanged and do not create false output data.
