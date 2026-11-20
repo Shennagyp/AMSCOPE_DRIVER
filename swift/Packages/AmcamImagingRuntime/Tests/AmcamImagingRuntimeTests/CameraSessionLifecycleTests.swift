@@ -203,14 +203,27 @@ private actor FakeDevice: CameraRuntimeDevice {
 private actor FakeSession: CameraRuntimeSession {
     private let acquisition: FakeAcquisition
     private var closeFailuresRemaining: Int
+    private let featureReadGate: AsyncGate?
 
     private(set) var acquisitionRequests = 0
     private(set) var closeAttempts = 0
 
-    init(acquisition: FakeAcquisition, closeFailures: Int = 0) {
+    init(acquisition: FakeAcquisition, closeFailures: Int = 0, featureReadGate: AsyncGate? = nil) {
         self.acquisition = acquisition
         closeFailuresRemaining = closeFailures
+        self.featureReadGate = featureReadGate
     }
+
+    func supportsAcquisition() async -> Bool { true }
+
+    func featureDescriptors() async throws -> [CameraFeatureDescriptor] { [] }
+
+    func readFeature(_ name: String) async throws -> CameraFeatureValue {
+        if let featureReadGate { await featureReadGate.pause() }
+        return .integer(7)
+    }
+
+    func writeFeature(_ value: CameraFeatureValue, named name: String) async throws {}
 
     func makeAcquisition() async throws -> any CameraRuntimeAcquisition {
         acquisitionRequests += 1
@@ -249,17 +262,45 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let device = FakeDevice(session: session)
         let lifecycle = CameraSessionLifecycle()
 
-        let openedSession = try await lifecycle.open(device)
+        try await lifecycle.open(device)
         let snapshot = await lifecycle.snapshot()
         let openAttempts = await device.openAttempts
 
         XCTAssertTrue(snapshot.hasSession)
-        XCTAssertTrue(openedSession is FakeSession)
         XCTAssertEqual(openAttempts, 1)
 
         try await lifecycle.close()
         let finalSnapshot = await lifecycle.snapshot()
         XCTAssertFalse(finalSnapshot.hasSession)
+    }
+
+
+    func testFeatureIOIsOwnedAndSerializedAgainstClose() async throws {
+        let featureGate = AsyncGate()
+        let acquisition = FakeAcquisition()
+        let session = FakeSession(acquisition: acquisition, featureReadGate: featureGate)
+        let lifecycle = CameraSessionLifecycle()
+
+        try await lifecycle.open(FakeDevice(session: session))
+        let featureRead = Task {
+            try await lifecycle.readFeature("ExposureTime")
+        }
+        await featureGate.waitUntilEntered()
+
+        do {
+            try await lifecycle.close()
+            XCTFail("Close must not overlap an in-flight feature operation.")
+        } catch {
+            XCTAssertEqual(error as? CameraSessionLifecycleError, .operationInProgress)
+        }
+
+        await featureGate.release()
+        let value = try await featureRead.value
+        XCTAssertEqual(value, .integer(7))
+
+        try await lifecycle.close()
+        let snapshot = await lifecycle.snapshot()
+        XCTAssertFalse(snapshot.hasSession)
     }
 
     func testAcquisitionCloseFailureRetainsParentAndAllowsRetry() async throws {
