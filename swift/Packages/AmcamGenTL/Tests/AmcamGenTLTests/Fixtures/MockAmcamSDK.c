@@ -156,6 +156,13 @@ int32_t Amcam_get_WhiteBalanceGain(void *handle, int32_t *values) {
     values[2] = white_balance_rgb[2];
     return 0;
 }
+int32_t Amcam_put_WhiteBalanceGain(void *handle, const int32_t *values) {
+    if (!handle || !values) return -1;
+    white_balance_rgb[0] = values[0];
+    white_balance_rgb[1] = values[1];
+    white_balance_rgb[2] = values[2];
+    return 0;
+}
 int32_t Amcam_get_ExpoAGain(void *handle, uint16_t *value) {
     if (!handle || !value) return -1;
     *value = exposure_gain;
