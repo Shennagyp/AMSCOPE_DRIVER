@@ -60,9 +60,7 @@ public struct AmcamCameraStateResolver: Sendable {
         case .integer(let number):
             if let range = descriptor.numericRange,
                !isWithinRange(Double(number), range: range) {
-                return .invalidValue(
-                    "\(name) must be between \(range.minimum) and \(range.maximum)."
-                )
+                return .invalidValue(rangeValidationMessage(name, range: range))
             }
         case .floatingPoint(let number):
             guard number.isFinite else {
@@ -94,6 +92,16 @@ public struct AmcamCameraStateResolver: Sendable {
             break
         }
         return nil
+    }
+
+    private func rangeValidationMessage(
+        _ name: String,
+        range: CameraFeatureNumericRange
+    ) -> String {
+        if let increment = range.increment {
+            return "\(name) must be between \(range.minimum) and \(range.maximum) in increments of \(increment)."
+        }
+        return "\(name) must be between \(range.minimum) and \(range.maximum)."
     }
 
     private func isWithinRange(_ value: Double, range: CameraFeatureNumericRange) -> Bool {
