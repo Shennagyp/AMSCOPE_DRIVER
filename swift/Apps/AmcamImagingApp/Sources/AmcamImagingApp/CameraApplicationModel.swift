@@ -438,11 +438,17 @@ final class CameraApplicationModel: ObservableObject {
         expectedGeneration operation: UInt64,
         expectedDeviceID: String
     ) async {
+        // A stale UI action is discarded silently; it must not write to a
+        // replacement camera or overwrite that camera's current error state.
         guard isCurrentCameraSelectionOperation(operation),
-              selectedDeviceID == expectedDeviceID,
-              (await cameraLifecycle.snapshot()).hasSession,
-              isCurrentCameraSelectionOperation(operation) else {
-            errorMessage = "Open a camera before changing its features."
+              selectedDeviceID == expectedDeviceID else { return }
+        guard (await cameraLifecycle.snapshot()).hasSession,
+              isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else {
+            if isCurrentCameraSelectionOperation(operation),
+               selectedDeviceID == expectedDeviceID {
+                errorMessage = "Open a camera before changing its features."
+            }
             return
         }
         if let validationError = stateResolver.validateWrite(
