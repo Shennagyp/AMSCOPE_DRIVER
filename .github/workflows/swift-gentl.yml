@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   portable-imaging-core-linux:
-    name: Portable imaging and application-core Linux tests
+    name: Portable imaging and runtime-library Linux tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -49,7 +49,7 @@ jobs:
       - name: Build and test portable imaging core
         run: swift test --package-path swift/Packages/AmcamImagingCore
 
-      - name: Build and test portable application lifecycle core
+      - name: Build and test portable imaging runtime
         run: swift test --package-path swift/Packages/AmcamImagingRuntime
 
   package-tests:

@@ -1,4 +1,4 @@
-import AmcamImagingApplicationCore
+import AmcamImagingRuntime
 import AmcamImagingCore
 import Foundation
 import GenTLRouter
@@ -21,7 +21,7 @@ public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable 
     private let candidate: GenTLDeviceCandidate
     private let access: GenTLDeviceAccessMode
 
-    public init(candidate: GenTLDeviceCandidate, access: GenTLDeviceAccess = .exclusive) {
+    public init(candidate: GenTLDeviceCandidate, access: GenTLDeviceAccessMode = .exclusive) {
         self.candidate = candidate
         self.access = access
     }

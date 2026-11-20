@@ -43,7 +43,7 @@ amcam-camera-probe
   -> GenTLAPI
 ```
 
-Staged lifecycle boundary (packages are implemented and tested; AppKit model migration remains pending):
+Library-owned camera lifecycle boundary:
 
 ```text
 AmcamImagingApp
@@ -60,7 +60,7 @@ Rules:
 4. Vendor SDK behavior remains in AmcamGenTL.
 5. Camera UI and model-facing policy remain in AmcamCameraModel and AmcamImagingApp.
 6. Pixel-format validation and backend-neutral image-frame values belong in AmcamImagingCore.
-7. Backend-neutral camera session/acquisition lifecycle contracts belong in AmcamImagingRuntime; GenTLRouter is bridged through AmcamImagingGenTLAdapter at the macOS boundary.
+7. Camera device opening, session ownership, acquisition start/stop, frame delivery and ordered cleanup belong in AmcamImagingRuntime. GenTLRouter is bridged through AmcamImagingGenTLAdapter; the UI only sends commands and consumes events/frames.
 8. Do not create fake executables for library-only packages. Add a CLI only when it provides a real diagnostic or operational use case.
 
 ## 3. Immediate implementation sequence
@@ -143,7 +143,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Add AmcamImagingRuntime with async backend protocols, an event stream, strict child-before-parent cleanup, retryable ownership and generation-based stale-frame rejection.
 - [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, startup rollback, timeout recovery, unsolicited stop, fatal-read cleanup, concurrent-close rejection, frame delivery and stale-frame suppression.
 - [x] Add AmcamImagingGenTLAdapter to bridge GenTLRouter's synchronous device/acquisition sessions into the portable async lifecycle contracts; blocking reads run off the cooperative executor so stop/close can interrupt them.
-- [ ] Replace the AppKit model's direct acquisition task with the lifecycle coordinator and route session cleanup through the adapter.
+- [x] Replace the AppKit model's direct acquisition task with the lifecycle coordinator and route device opening, session closure and acquisition operations through the adapter.
 - [ ] Move camera discovery, feature policy, controls and profile semantics into a separately testable application state model with an explicitly chosen observation/event contract.
 - [ ] Define platform-neutral camera application commands and state before adding another frontend.
 - [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
