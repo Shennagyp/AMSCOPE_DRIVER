@@ -100,7 +100,7 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         case 5: return .string(sdkLibraryURL.lastPathComponent)
         case 6: return .string(sdkLibraryURL.path)
         case 7: return .string("AmScope Amcam")
-        case 8: return .int32(1) // UTF-8
+        case 8: return .int32(GenTLCharacterEncoding.utf8.rawValue)
         case 9: return .uint32(1) // TL_INFO_GENTL_VER_MAJOR
         case 10: return .uint32(6) // TL_INFO_GENTL_VER_MINOR
         default: try fail(.invalidParameter)
@@ -480,7 +480,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
     ) throws {
         lock.lock()
         defer { lock.unlock() }
-        guard flags == 0 else { try fail(.notImplemented) }
+        guard flags == GenTLAcquisitionStartFlag.normal.rawValue else {
+            try fail(.notImplemented)
+        }
         try recordErrors { try streamRecord(hDS).start(numberToAcquire: numberToAcquire) }
     }
 
@@ -489,7 +491,9 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         defer { lock.unlock() }
         // Amcam_Stop provides the SDK's orderly stop operation. It does not
         // expose a distinct immediate-kill semantic.
-        guard flags == 0 else { try fail(.notImplemented) }
+        guard flags == GenTLAcquisitionStopFlag.normal.rawValue else {
+            try fail(.notImplemented)
+        }
         try recordErrors { try streamRecord(hDS).stop() }
     }
 
