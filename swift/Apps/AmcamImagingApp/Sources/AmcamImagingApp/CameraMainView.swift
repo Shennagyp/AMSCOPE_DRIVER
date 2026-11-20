@@ -233,6 +233,7 @@ final class CameraSettingsViewController: NSViewController {
     private var greenField = NSTextField(string: "100")
     private var blueField = NSTextField(string: "100")
     private var resolutionPicker = NSPopUpButton()
+    private var rgbGainRow: NSView?
     private var pixelFormatPicker = NSPopUpButton()
     private var exposureModePicker = NSPopUpButton()
     private var colorMatrixButton = NSButton(checkboxWithTitle: "Color matrix", target: nil, action: nil)
@@ -276,13 +277,15 @@ final class CameraSettingsViewController: NSViewController {
         content.addArrangedSubview(label)
     }
 
-    private func addRow(_ title: String, control: NSView) {
+    @discardableResult
+    private func addRow(_ title: String, control: NSView) -> NSView {
         let row = NSStackView(views: [makeLabel(title), NSView(), control])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
         row.widthAnchor.constraint(equalToConstant: 500).isActive = true
         content.addArrangedSubview(row)
+        return row
     }
 
     private func addSlider(_ title: String, minimum: Double, maximum: Double, selector: Selector) -> NSSlider {
@@ -321,7 +324,7 @@ final class CameraSettingsViewController: NSViewController {
         redField.widthAnchor.constraint(equalToConstant: 55).isActive = true
         greenField.widthAnchor.constraint(equalToConstant: 55).isActive = true
         blueField.widthAnchor.constraint(equalToConstant: 55).isActive = true
-        addRow("RGB gain", control: NSStackView(views: [
+        rgbGainRow = addRow("RGB gain", control: NSStackView(views: [
             redField, greenField, blueField,
             makeButton("Apply", target: self, action: #selector(applyRGB))
         ]))
@@ -337,59 +340,114 @@ final class CameraSettingsViewController: NSViewController {
     }
 
     private func refreshValues() {
-        guard let capabilities = model.cameraCapabilities, let controls = model.controls else { return }
-        let available = capabilities.availability(of: .resolution).isUsable
-        resolutionPicker.isHidden = !available
+        // A settings window may outlive camera selection. Hide every editable
+        // control first so nil/new-device state can never retain stale controls.
+        resolutionPicker.isHidden = true
+        exposureModePicker.isHidden = true
+        exposureSlider?.isHidden = true
+        exposureValue.isHidden = true
+        gainSlider?.isHidden = true
+        gainValue.isHidden = true
+        temperatureSlider?.isHidden = true
+        temperatureValue.isHidden = true
+        tintSlider?.isHidden = true
+        tintValue.isHidden = true
+        rgbGainRow?.isHidden = true
+        colorMatrixButton.isHidden = true
+        pixelFormatPicker.isHidden = true
+        frameRateSlider?.isHidden = true
+
+        guard let capabilities = model.cameraCapabilities,
+              let controls = model.controls else { return }
+
+        let resolutionIsWritable = capabilities.availability(of: .resolution).isUsable
+            && model.isFeatureWritable("AmcamResolutionIndex")
+        let resolutions = model.selectedDevice?.previewResolutions ?? []
         resolutionPicker.removeAllItems()
-        for resolution in model.selectedDevice?.previewResolutions ?? [] {
+        for resolution in resolutions {
             resolutionPicker.addItem(withTitle: "\(resolution.width) × \(resolution.height)")
             resolutionPicker.lastItem?.representedObject = resolution.index
         }
         if let current = model.currentResolution,
-           let index = model.selectedDevice?.previewResolutions.firstIndex(where: { $0.index == current.index }) {
+           let index = resolutions.firstIndex(where: { $0.index == current.index }) {
             resolutionPicker.selectItem(at: index)
         }
+        resolutionPicker.isHidden = !resolutionIsWritable || resolutions.isEmpty
 
         if let exposure = controls.exposure {
-            exposureSlider?.minValue = Double(exposure.minimumMicroseconds ?? 1)
-            exposureSlider?.maxValue = Double(max(exposure.minimumMicroseconds ?? 1, exposure.maximumMicroseconds ?? 1_000_000))
-            exposureSlider?.doubleValue = Double(exposure.readbackMicroseconds ?? 10_000)
-            exposureSlider?.isHidden = !capabilities.availability(of: .exposureManual).isUsable
             exposureValue.stringValue = "Current: \(exposure.readbackMicroseconds ?? 0) µs"
-            if let mode = exposure.autoMode {
-                exposureModePicker.selectItem(at: mode == .manual ? 0 : (mode == .once ? 1 : 2))
+            let canWriteExposure = capabilities.availability(of: .exposureManual).isUsable
+                && model.isFeatureWritable("ExposureTime")
+            if canWriteExposure {
+                exposureSlider?.minValue = Double(exposure.minimumMicroseconds ?? 1)
+                exposureSlider?.maxValue = Double(max(
+                    exposure.minimumMicroseconds ?? 1,
+                    exposure.maximumMicroseconds ?? 1_000_000
+                ))
+                exposureSlider?.doubleValue = Double(exposure.readbackMicroseconds ?? 10_000)
             }
-        } else {
-            exposureSlider?.isHidden = true
+            exposureSlider?.isHidden = !canWriteExposure
+            exposureValue.isHidden = false
+
+            let supportedAutoModes = model.enumerationValues(for: "ExposureAuto")
+            let modeItems: [(symbol: String, title: String)] = [
+                ("Off", "Fixed / Manual"),
+                ("Once", "Auto once"),
+                ("Continuous", "Auto continuous")
+            ].filter { supportedAutoModes.contains($0.symbol) }
+            exposureModePicker.removeAllItems()
+            for item in modeItems {
+                exposureModePicker.addItem(withTitle: item.title)
+                exposureModePicker.lastItem?.representedObject = item.symbol
+            }
+            if let mode = exposure.autoMode {
+                let symbol = mode == .manual ? "Off" : (mode == .once ? "Once" : "Continuous")
+                if let index = modeItems.firstIndex(where: { $0.symbol == symbol }) {
+                    exposureModePicker.selectItem(at: index)
+                }
+            }
+            let canWriteAutoMode = capabilities.availability(of: .exposureAuto).isUsable
+                && model.isFeatureWritable("ExposureAuto")
+            exposureModePicker.isHidden = !canWriteAutoMode || modeItems.isEmpty
         }
+
         if let gain = controls.gain {
             gainSlider?.minValue = Double(gain.minimumPercent)
             gainSlider?.maxValue = Double(max(gain.minimumPercent, gain.maximumPercent))
             gainSlider?.doubleValue = Double(gain.readbackPercent)
             gainValue.stringValue = "Current: \(gain.readbackPercent)%"
-            gainSlider?.isHidden = !capabilities.availability(of: .analogGain).isUsable
-        } else { gainSlider?.isHidden = true }
+            let canWriteGain = capabilities.availability(of: .analogGain).isUsable
+                && model.isFeatureWritable("AmcamAnalogGainPercent")
+            gainSlider?.isHidden = !canWriteGain
+            gainValue.isHidden = false
+        }
 
         if let white = controls.whiteBalance {
             if let temperature = white.temperature {
                 temperatureSlider?.doubleValue = Double(temperature)
-                temperatureSlider?.isHidden = false
+                temperatureSlider?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceTemperature")
                 temperatureValue.stringValue = "Current: \(temperature) K"
-            } else { temperatureSlider?.isHidden = true }
+                temperatureValue.isHidden = false
+            }
             if let tint = white.tint {
                 tintSlider?.doubleValue = Double(tint)
-                tintSlider?.isHidden = false
+                tintSlider?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceTint")
                 tintValue.stringValue = "Current: \(tint)"
-            } else { tintSlider?.isHidden = true }
-            if let rgb = white.rgbGain, rgb.count == 3 {
-                redField.stringValue = String(rgb[0]); greenField.stringValue = String(rgb[1]); blueField.stringValue = String(rgb[2])
+                tintValue.isHidden = false
             }
-        } else {
-            temperatureSlider?.isHidden = true; tintSlider?.isHidden = true
+            if let rgb = white.rgbGain, rgb.count == 3 {
+                redField.stringValue = String(rgb[0])
+                greenField.stringValue = String(rgb[1])
+                blueField.stringValue = String(rgb[2])
+                rgbGainRow?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceRGBGain")
+            }
         }
 
         if let image = controls.image {
-            if let enabled = image.colorMatrixEnabled { colorMatrixButton.state = enabled ? .on : .off }
+            if let enabled = image.colorMatrixEnabled {
+                colorMatrixButton.state = enabled ? .on : .off
+                colorMatrixButton.isHidden = !model.isFeatureWritable("AmcamColorMatrixEnabled")
+            }
             pixelFormatPicker.removeAllItems()
             for code in image.supportedPixelFormats {
                 pixelFormatPicker.addItem(withTitle: AmcamPixelFormatCode(rawValue: code)?.title ?? "Format \(code)")
@@ -399,16 +457,17 @@ final class CameraSettingsViewController: NSViewController {
                let index = image.supportedPixelFormats.firstIndex(of: code) {
                 pixelFormatPicker.selectItem(at: index)
             }
-            pixelFormatPicker.isHidden = !capabilities.availability(of: .pixelFormatSelection).isUsable
-            colorMatrixButton.isHidden = image.colorMatrixEnabled == nil
-        } else {
-            pixelFormatPicker.isHidden = true; colorMatrixButton.isHidden = true
+            let canWritePixelFormat = capabilities.availability(of: .pixelFormatSelection).isUsable
+                && model.isFeatureWritable("AmcamPixelFormat")
+            pixelFormatPicker.isHidden = !canWritePixelFormat || image.supportedPixelFormats.isEmpty
         }
 
         if let rate = controls.frameRate.readbackFramesPerSecond {
             frameRateSlider?.doubleValue = rate
         }
-        frameRateSlider?.isHidden = !capabilities.availability(of: .preciseFrameRate).isUsable
+        let canWriteFrameRate = capabilities.availability(of: .preciseFrameRate).isUsable
+            && model.isFeatureWritable("AmcamFixedFrameRate")
+        frameRateSlider?.isHidden = !canWriteFrameRate
         if let range = controls.frameRate.minimumFramesPerSecond,
            let maximum = controls.frameRate.maximumFramesPerSecond {
             frameRateSlider?.minValue = range
@@ -421,9 +480,13 @@ final class CameraSettingsViewController: NSViewController {
         if let index = resolutionPicker.selectedItem?.representedObject as? Int { model.setResolution(index) }
     }
     @objc private func exposureModeChanged() {
-        let modes: [AmcamAutoExposureMode] = [.manual, .once, .continuous]
-        let index = exposureModePicker.indexOfSelectedItem
-        if modes.indices.contains(index) { model.setAutoExposureMode(modes[index]) }
+        guard let symbol = exposureModePicker.selectedItem?.representedObject as? String else { return }
+        switch symbol {
+        case "Off": model.setAutoExposureMode(.manual)
+        case "Once": model.setAutoExposureMode(.once)
+        case "Continuous": model.setAutoExposureMode(.continuous)
+        default: return
+        }
     }
     @objc private func exposureChanged() { model.setExposureTime(UInt32(exposureSlider?.doubleValue ?? 1)) }
     @objc private func gainChanged() { model.setExposureGain(UInt16(gainSlider?.doubleValue ?? 0)) }
