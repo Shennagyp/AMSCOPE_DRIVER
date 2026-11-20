@@ -128,6 +128,33 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         controls = try session.setExposureTime(microseconds: 20_000)
         XCTAssertEqual(controls.exposure.readbackMicroseconds, 20_000)
         XCTAssertEqual(controls.exposure.requestedMicroseconds, 20_000)
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let ignoreSymbol = dlsym(fixtureHandle, "MockAmcam_SetIgnoreExposureWrite") else {
+            XCTFail("Mock SDK is missing MockAmcam_SetIgnoreExposureWrite")
+            return
+        }
+        let setIgnoreExposureWrite = unsafeBitCast(
+            ignoreSymbol,
+            to: (@convention(c) (Int32) -> Void).self
+        )
+        setIgnoreExposureWrite(1)
+        defer { setIgnoreExposureWrite(0) }
+
+        XCTAssertThrowsError(try session.setExposureTime(microseconds: 30_000)) { error in
+            guard case .controlReadbackMismatch(
+                control: "exposure time",
+                requested: "30000 µs",
+                actual: "20000 µs"
+            ) = error as? AmcamCameraError else {
+                XCTFail("Expected exposure readback mismatch, got: \\(error)")
+                return
+            }
+        }
+        XCTAssertEqual(try session.readControls().exposure.readbackMicroseconds, 20_000)
+
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 1_000_001))
 
         controls = try session.setAutomaticExposure(enabled: true)
