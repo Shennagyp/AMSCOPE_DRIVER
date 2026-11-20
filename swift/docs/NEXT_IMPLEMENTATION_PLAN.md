@@ -156,9 +156,9 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Add deterministic tests for RGB8 format identity, row padding, payload bounds, invalid dimensions and arithmetic overflow.
 - [x] Extract monotonic-timestamp frame-rate estimation into AmcamImagingCore and test smoothing-window bounds, invalid timestamps and reset behavior.
 - [x] Add AmcamImagingRuntime with async backend protocols, an event stream, strict child-before-parent cleanup, retryable ownership and generation-based stale-frame rejection.
-- [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, startup rollback, timeout recovery, unsolicited stop, fatal-read cleanup, concurrent-close rejection, frame delivery and stale-frame suppression.
+- [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, startup rollback, timeout recovery, unsolicited stop, fatal-read cleanup, FIFO concurrent-close serialization, feature-I/O-versus-close ordering, frame delivery and stale-frame suppression.
 - [x] Add AmcamImagingGenTLAdapter to bridge GenTLRouter's synchronous device/acquisition sessions into the portable async lifecycle contracts; blocking reads run off the cooperative executor so stop/close can interrupt them.
-- [x] Keep the opened backend session exclusively inside CameraSessionLifecycle; expose async feature descriptors/read/write through the lifecycle actor and queue backend operations FIFO against open/start/stop/close.
+- [x] Keep the opened backend session exclusively inside CameraSessionLifecycle; expose async feature descriptors/read/write through the lifecycle actor and queue backend operations FIFO against open/start/stop/close. Unexpected acquisition-stop and fatal-read transitions use the same queue.
 - [x] Replace the AppKit model's direct acquisition task with the lifecycle coordinator and route device opening, session closure and acquisition operations through the adapter.
 - [x] Move AmScope SDK registration, GenTL discovery and device metadata mapping into AmcamCameraProvider in the adapter; return model values plus opaque runtime devices, not GenTL handles.
 - [x] Centralize hardware-evidence and model-profile capability resolution in AmcamCameraModel.
