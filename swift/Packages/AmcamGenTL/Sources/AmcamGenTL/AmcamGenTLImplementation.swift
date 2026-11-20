@@ -1110,11 +1110,12 @@ extension AmcamGenTLImplementation: GenTLAPI {
     ) throws -> GenTLHandle<Tag> {
         guard let pointer else { try fail(.invalidHandle) }
         let rawValue = UInt(bitPattern: pointer)
-        guard rawValue == UInt(bitPattern: systemToken) ||
-              rawValue == UInt(bitPattern: interfaceToken) ||
-              activeHandleTokens[rawValue] != nil else {
-            try fail(.invalidHandle)
-        }
+        lock.lock()
+        let isKnown = rawValue == UInt(bitPattern: systemToken) ||
+            rawValue == UInt(bitPattern: interfaceToken) ||
+            activeHandleTokens[rawValue] != nil
+        lock.unlock()
+        guard isKnown else { try fail(.invalidHandle) }
         return GenTLHandle<Tag>(rawValue: rawValue)
     }
 
@@ -1200,15 +1201,22 @@ extension AmcamGenTLImplementation: GenTLAPI {
     private func eventSource(_ pointer: GenTLABI.EVENTSRC_HANDLE) throws -> EVENTSRC_HANDLE {
         guard let pointer else { try fail(.invalidHandle) }
         let rawValue = UInt(bitPattern: pointer)
-        guard activeHandleTokens[rawValue] != nil else { try fail(.invalidHandle) }
-        guard dataStreams[rawValue] != nil else { try fail(.notImplemented) }
+        lock.lock()
+        let isKnown = activeHandleTokens[rawValue] != nil
+        let isDataStream = dataStreams[rawValue] != nil
+        lock.unlock()
+        guard isKnown else { try fail(.invalidHandle) }
+        guard isDataStream else { try fail(.notImplemented) }
         return .dataStream(DS_HANDLE(rawValue: rawValue))
     }
 
     private func validBuffer(_ pointer: GenTLABI.BUFFER_HANDLE, in stream: DS_HANDLE) -> BUFFER_HANDLE? {
         guard let pointer else { return nil }
         let rawValue = UInt(bitPattern: pointer)
-        guard bufferHandlesByStream[stream.rawValue]?.contains(rawValue) == true else { return nil }
+        lock.lock()
+        let isValid = bufferHandlesByStream[stream.rawValue]?.contains(rawValue) == true
+        lock.unlock()
+        guard isValid else { return nil }
         return BUFFER_HANDLE(rawValue: rawValue)
     }
 
