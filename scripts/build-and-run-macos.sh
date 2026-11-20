@@ -35,6 +35,7 @@ packages=(
   "GenTLNative"
   "AmcamCameraModel"
   "AmcamImagingCore"
+  "AmcamImagingApplicationCore"
   "AmcamGenTL"
   "GenTLRouter"
 )
