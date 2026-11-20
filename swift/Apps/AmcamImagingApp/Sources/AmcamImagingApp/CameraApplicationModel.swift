@@ -189,11 +189,12 @@ final class CameraApplicationModel: ObservableObject {
             }
         }
 
+        latestFrame = nil
+        frameRateEstimator.reset()
+        framesPerSecond = 0
+
         do {
             try await cameraLifecycle.start()
-            latestFrame = nil
-            frameRateEstimator.reset()
-            framesPerSecond = 0
             isStreaming = true
             status = "Live — \(device.displayName)"
             errorMessage = nil
