@@ -138,10 +138,17 @@ jobs:
           grep -q 'REQUIRE_AMCAM_SDK' scripts/build-and-run-macos.sh
           bash -n scripts/build-and-run-macos.sh
 
-      - name: Build macOS imaging application
+      - name: Build and sign a fixture vendor SDK
         if: matrix.package == 'AmcamGenTL'
         run: |
+          cat > "$RUNNER_TEMP/amcam-sdk-fixture.c" <<'C'
+          int amcam_packaging_fixture(void) { return 42; }
+          C
+          clang -dynamiclib -arch arm64 "$RUNNER_TEMP/amcam-sdk-fixture.c" -o "$RUNNER_TEMP/libamcam.dylib"
           app_bundle="$RUNNER_TEMP/amcam-imaging/Amcam Imaging.app"
-          BUILD_ONLY=1 BUILD_CONFIGURATION=release APP_DESTINATION="$app_bundle" scripts/build-and-run-macos.sh
+          AMCAM_SDK_SOURCE="$RUNNER_TEMP/libamcam.dylib" REQUIRE_AMCAM_SDK=1 BUILD_ONLY=1 BUILD_CONFIGURATION=release APP_DESTINATION="$app_bundle" scripts/build-and-run-macos.sh
+          embedded_sdk="$app_bundle/Contents/Frameworks/Vendors/amcam/macos/libamcam.dylib"
+          test -f "$embedded_sdk"
+          codesign --verify --strict "$embedded_sdk"
           codesign --verify --deep --strict "$app_bundle"
           file "$app_bundle/Contents/MacOS/amcam-imaging" | grep -q "Mach-O 64-bit executable arm64"
