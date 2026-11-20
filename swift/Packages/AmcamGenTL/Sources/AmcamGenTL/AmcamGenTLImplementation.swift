@@ -227,16 +227,26 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         try requireInterface(hIF)
         guard let driver else { try fail(.notInitialized) }
 
-        let previousIDs = Set(discoveredDevices.map(\.identifier))
+        let previousIDs = discoveredDevices.map(\.identifier)
+        let updated: [AmcamDevice]
         do {
-            let updated = try driver.discover()
-            let updatedIDs = Set(updated.map(\.identifier))
-            discoveredDevices = updated
-            setLastError(.success, message: "No Error")
-            return previousIDs != updatedIDs
+            updated = try driver.discover()
         } catch {
             try fail(.error, error.localizedDescription)
         }
+
+        let updatedIDs = updated.map(\.identifier)
+        guard updated.count <= Int(UInt32.max) else {
+            try fail(.resourceExhausted)
+        }
+        guard updatedIDs.allSatisfy({ !$0.isEmpty }),
+              Set(updatedIDs).count == updatedIDs.count else {
+            try fail(.invalidID, "The Amcam SDK returned an empty or duplicate device identifier.")
+        }
+
+        discoveredDevices = updated
+        setLastError(.success, message: "No Error")
+        return previousIDs != updatedIDs
     }
 
     public func IFGetNumDevices(_ hIF: IF_HANDLE) throws -> UInt32 {
