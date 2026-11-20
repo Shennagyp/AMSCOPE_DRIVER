@@ -181,11 +181,13 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         var info = AmcamFrameInfoV2()
         var metadata: AmcamFrameMetadata?
         var operationName: String?
+        var tightlyPackedRows = false
         XCTAssertEqual(
-            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata, operationName: &operationName),
+            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata, operationName: &operationName, tightlyPackedRows: &tightlyPackedRows),
             0
         )
         XCTAssertEqual(operationName, "Amcam_PullImageV3")
+        XCTAssertTrue(tightlyPackedRows)
         XCTAssertEqual(reportedVersion(), 3)
         XCTAssertEqual(metadata?.apiVersion, .v3)
     }
@@ -211,8 +213,9 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         defer { buffer.deallocate() }
         var info = AmcamFrameInfoV2()
         var operationName: String?
+        var tightlyPackedRows = true
         XCTAssertEqual(
-            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, operationName: &operationName),
+            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, operationName: &operationName, tightlyPackedRows: &tightlyPackedRows),
             -1
         )
         XCTAssertEqual(operationName, "Amcam_PullImageV4")
