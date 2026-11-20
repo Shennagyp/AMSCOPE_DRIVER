@@ -1,6 +1,6 @@
 import Foundation
 import GenTLABI
-import GenTLAPI
+@_spi(BackendConvenience) import GenTLAPI
 
 /// One complete image payload delivered by a GenTL New Buffer event.
 ///
@@ -147,7 +147,7 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
     public init(
         device: GenTLDeviceSession,
         bufferCount: Int = 4,
-        allocationLimitBytes: Int = Constants.maximumPayloadSize
+        allocationLimitBytes: Int = 512 * 1024 * 1024
     ) throws {
         guard (1...16).contains(bufferCount) else {
             throw GenTLAcquisitionError.invalidBufferCount(bufferCount)
