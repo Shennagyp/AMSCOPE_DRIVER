@@ -87,7 +87,7 @@ int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameIn
     info->height = height;
     info->flag = 0x0003;
     info->seq = ++pull_count;
-    info->timestamp = 123456789u + pull_count;
+    info->timestamp = (int64_t)(123456789u + pull_count);
     return 0;
 }
 
