@@ -228,11 +228,16 @@ public actor CameraSessionLifecycle {
                     reportUnexpectedStop(generation: activeGeneration)
                     return
                 case .failed(let message):
-                    await reportFailure(message, from: acquisition, generation: activeGeneration)
+                    Task { [weak self] in
+                        await self?.reportFailure(message, from: acquisition, generation: activeGeneration)
+                    }
                     return
                 }
             } catch {
-                await reportFailure(error.localizedDescription, from: acquisition, generation: activeGeneration)
+                let message = error.localizedDescription
+                Task { [weak self] in
+                    await self?.reportFailure(message, from: acquisition, generation: activeGeneration)
+                }
                 return
             }
         }
