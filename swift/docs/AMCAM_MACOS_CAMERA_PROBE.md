@@ -58,7 +58,7 @@ For a longer stability sample:
   --output "$HOME/Desktop/mu503-stability.ppm"
 \`\`\`
 
-The executable acquires one buffer and requeues it between frames. It reports incomplete frames as a failure. It does not change camera settings.
+The executable announces up to four buffers, subject to a 512 MiB aggregate allocation limit, and requeues each delivered buffer while acquisition continues. This reduces probe-induced starvation compared with a single-buffer loop. It reports incomplete frames as a failure. It does not change camera settings.
 
 ## Interpretation
 
