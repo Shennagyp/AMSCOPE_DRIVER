@@ -103,6 +103,23 @@ int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameIn
     return 0;
 }
 
+#if !defined(MOCK_DISABLE_ROW_PITCH_V2)
+int32_t Amcam_PullImageWithRowPitchV2(void *handle, void *buffer, int32_t bits, int32_t row_pitch, AmcamFrameInfoV2 *info) {
+    if (!handle || !buffer || !info || bits != 24 || row_pitch != -1) return -1;
+    const uint32_t width = resolution_widths[current_resolution_index];
+    const uint32_t height = resolution_heights[current_resolution_index];
+    memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
+    info->width = width;
+    info->height = height;
+    info->flag = 0x0003;
+    info->seq = ++pull_count;
+    info->timestamp = (int64_t)(123456789u + pull_count);
+    pull_api_version = 2;
+    return 0;
+}
+#endif
+
+#if !defined(MOCK_DISABLE_V3)
 int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV3 *info) {
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
@@ -121,6 +138,9 @@ int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bit
     return 0;
 }
 
+#endif
+
+#if !defined(MOCK_DISABLE_V4)
 int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV4 *info) {
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
@@ -149,6 +169,7 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     pull_api_version = 4;
     return 0;
 }
+#endif
 
 uint32_t MockAmcam_PullAPIVersion(void) { return pull_api_version; }
 
