@@ -132,7 +132,7 @@ public struct AmcamCameraCapabilities: Equatable, Sendable {
 
     public var availableGroups: [AmcamCameraFeatureGroup] {
         AmcamCameraFeatureGroup.allCases.filter { group in
-            group.features.contains { availability(of: $0).isUsable }
+            group.features.contains { availability(of: $0).available }
         }
     }
 }
