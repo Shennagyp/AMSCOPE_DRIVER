@@ -7,8 +7,16 @@ let package = Package(
     products: [
         .library(name: "GenTLAPI", targets: ["GenTLAPI"])
     ],
+    dependencies: [
+        .package(path: "../GenTLABI")
+    ],
     targets: [
-        .target(name: "GenTLAPI"),
+        .target(
+            name: "GenTLAPI",
+            dependencies: [
+                .product(name: "GenTLABI", package: "GenTLABI")
+            ]
+        ),
         .testTarget(name: "GenTLAPITests", dependencies: ["GenTLAPI"])
     ]
 )
