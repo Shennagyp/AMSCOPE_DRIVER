@@ -33,7 +33,10 @@ AmcamImagingApp
   -> AmcamImagingCore
   -> AmcamImagingRuntime
   -> AmcamImagingGenTLAdapter
+  -> AmcamImagingState
        -> AmcamCameraModel
+       -> AmcamImagingRuntime
+  -> AmcamCameraModel
        -> AmcamImagingRuntime
        -> GenTLRouter
             -> GenTLNative
@@ -62,9 +65,9 @@ Rules:
 2. GenTLRouter owns provider contexts and generic discovery. AmcamImagingGenTLAdapter owns AmScope SDK registration, camera metadata mapping and opaque runtime-device candidate creation; active camera session and acquisition ownership belong to AmcamImagingRuntime.
 3. Camera-independent contracts remain in GenTLAPI/GenTLABI.
 4. Vendor SDK behavior remains in AmcamGenTL.
-5. Camera feature taxonomy, model profiles and capability resolution belong in AmcamCameraModel. AmcamImagingApp is a presentation/command adapter and must not import GenTLABI, GenTLAPI or GenTLRouter.
+5. Camera feature taxonomy, model profiles and hardware-evidence capability resolution belong in AmcamCameraModel. AmcamImagingState combines those contracts with runtime feature readbacks to produce tested camera control snapshots and resolution state; it has no AppKit or GenTL dependency. AmcamImagingApp is a presentation/command adapter and must not import GenTLABI, GenTLAPI or GenTLRouter.
 6. Pixel-format validation and backend-neutral image-frame values belong in AmcamImagingCore.
-7. Camera device opening, session ownership, acquisition start/stop, frame delivery and ordered cleanup belong in AmcamImagingRuntime. GenTLRouter is bridged through AmcamImagingGenTLAdapter; the UI only sends commands and consumes events/frames.
+7. Camera device opening, session ownership, acquisition start/stop, frame delivery and ordered cleanup belong in AmcamImagingRuntime. Camera control-state construction belongs in AmcamImagingState. GenTLRouter is bridged through AmcamImagingGenTLAdapter; the UI only sends commands and consumes events/frames.
 8. Do not create fake executables for library-only packages. Add a CLI only when it provides a real diagnostic or operational use case.
 
 ## 3. Immediate implementation sequence
