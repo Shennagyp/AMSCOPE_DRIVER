@@ -97,7 +97,8 @@ private enum ProbeError: Error, LocalizedError {
     case noDataStream
     case invalidInfo(String)
     case invalidEventPayload
-    case unexpectedBuffer(UInt, expected: UInt)
+    case unknownBuffer(UInt)
+    case unexpectedUserPointer(UInt)
     case incompleteFrame
     case invalidFrameLayout
     case invalidPixelFormat(UInt64)
@@ -114,8 +115,10 @@ private enum ProbeError: Error, LocalizedError {
         case .noDataStream: return "The opened camera exposes no data stream."
         case .invalidInfo(let message): return "Unexpected GenTL information value: \(message)"
         case .invalidEventPayload: return "The New Buffer event payload does not match the backend's two-word buffer-handle/user-pointer layout."
-        case .unexpectedBuffer(let actual, let expected):
-            return "The New Buffer event returned handle \(actual), expected \(expected)."
+        case .unknownBuffer(let actual):
+            return "The New Buffer event returned an unannounced buffer handle: \(actual)."
+        case .unexpectedUserPointer(let actual):
+            return "The New Buffer event returned unexpected user pointer \(actual); the probe announced buffers with nil user pointers."
         case .incompleteFrame: return "The camera delivered an incomplete or undersized frame."
         case .invalidFrameLayout: return "The reported RGB24 frame layout is invalid, exceeds the announced buffer, or overflows."
         case .invalidPixelFormat(let value):
@@ -152,6 +155,7 @@ struct AmcamCameraProbe {
         var stream: DS_HANDLE?
         var eventRegistered = false
         var acquisitionStarted = false
+        var bufferHandlesByRawValue: [UInt: BUFFER_HANDLE] = [:]
 
         defer {
             var cleanupFailures: [String] = []
@@ -283,15 +287,23 @@ struct AmcamCameraProbe {
         )
         eventRegistered = true
 
-        let bufferHandle = try backend.DSAllocAndAnnounceBuffer(
-            streamHandle,
-            size: payloadSize,
-            privateData: nil
-        )
-        try backend.DSQueueBuffer(streamHandle, buffer: bufferHandle)
+        let allocationLimit = 512 * 1024 * 1024
+        let bufferCount = min(4, max(1, allocationLimit / payloadSize))
+        for _ in 0..<bufferCount {
+            let bufferHandle = try backend.DSAllocAndAnnounceBuffer(
+                streamHandle,
+                size: payloadSize,
+                privateData: nil
+            )
+            bufferHandlesByRawValue[bufferHandle.rawValue] = bufferHandle
+            try backend.DSQueueBuffer(streamHandle, buffer: bufferHandle)
+        }
 
         print("Data stream: \(streamID)")
-        print("Announced buffer: \(payloadSize) bytes")
+        print(
+            "Announced buffers: \(bufferCount) x \(payloadSize) bytes " +
+            "(\(bufferCount * payloadSize) bytes total)"
+        )
         print("Acquiring \(options.frameCount) frame(s)...")
 
         let startTime = ProcessInfo.processInfo.systemUptime
@@ -316,14 +328,20 @@ struct AmcamCameraProbe {
             guard eventData.count == 2 * MemoryLayout<UInt>.size else {
                 throw ProbeError.invalidEventPayload
             }
-            let deliveredHandle = eventData.withUnsafeBytes {
-                $0.loadUnaligned(as: UInt.self)
-            }
-            guard deliveredHandle == bufferHandle.rawValue else {
-                throw ProbeError.unexpectedBuffer(
-                    deliveredHandle,
-                    expected: bufferHandle.rawValue
+            let (deliveredHandle, deliveredUserPointer) = eventData.withUnsafeBytes {
+                (
+                    $0.loadUnaligned(as: UInt.self),
+                    $0.loadUnaligned(
+                        fromByteOffset: MemoryLayout<UInt>.size,
+                        as: UInt.self
+                    )
                 )
+            }
+            guard let bufferHandle = bufferHandlesByRawValue[deliveredHandle] else {
+                throw ProbeError.unknownBuffer(deliveredHandle)
+            }
+            guard deliveredUserPointer == 0 else {
+                throw ProbeError.unexpectedUserPointer(deliveredUserPointer)
             }
 
             let width = try readSize(
