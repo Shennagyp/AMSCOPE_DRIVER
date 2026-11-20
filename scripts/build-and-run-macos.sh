@@ -86,6 +86,8 @@ if [[ -d "$vendor_source" ]]; then
   done < <(find "$vendor_source" -mindepth 1 -maxdepth 1 -type d -print0)
 fi
 
+find "$vendor_destination" -type f \( -name .gitkeep -o -name .gitignore -o -name .DS_Store \) -delete
+
 # Support the established AmScope SDK deployment convention and standard
 # machine-local installation paths. The source file is never modified.
 amcam_sdk_source="${AMCAM_SDK_SOURCE:-}"
