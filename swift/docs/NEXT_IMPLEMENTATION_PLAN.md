@@ -19,7 +19,7 @@ The repository-level Makefile is the supported command interface:
 - `make run-local`: alias for `make run`.
 - `make test-local`: run all nine Swift package test suites locally.
 
-The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. Vendor SDKs are kept in `vendor/<vendor>/<platform>/<architecture>/`, copied into the app bundle under `Contents/Frameworks/Vendors/<vendor>/`, and signed as nested code before the app bundle is signed. The backend resolves the SDK automatically; the UI never asks the user to browse for a dylib. Proprietary binaries remain local unless redistribution is licensed.
+The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. Vendor SDKs are kept in `vendor/<vendor>/<platform>/`, copied into the app bundle under `Contents/Frameworks/Vendors/<vendor>/`, architecture-checked against the app executable, and signed as nested code before the app bundle is signed. The AmScope backend resolves the bundled SDK first and then standard per-user/machine installation paths; the UI never asks the user to browse for a dylib. Proprietary binaries remain local unless redistribution is licensed.
 
 Hosted macOS GitHub Actions remain responsible for package tests and app compilation validation. CI does not supply the local app binary and does not establish physical camera compatibility.
 
@@ -80,7 +80,7 @@ Rules:
 - [ ] Validate the packaged AmScope dylib and all transitive dependencies on the target Mac; hosted CI cannot validate the proprietary local binary.
 - [ ] Run `make run` on the target Mac and verify the app opens.
 
-Acceptance: a clean macOS 13+ checkout with Apple's Swift compiler, macOS SDK and AppKit can build and launch with `make run`. Full Xcode, GitHub CLI authentication and downloaded binaries are not required. Actual AmScope camera access additionally requires the licensed SDK at `vendor/amscope/macos/<architecture>/libamcam.dylib` with its runtime dependencies.
+Acceptance: a clean macOS 13+ checkout with Apple's Swift compiler, macOS SDK and AppKit can build and launch with `make run`. Full Xcode, GitHub CLI authentication and downloaded binaries are not required. Actual AmScope camera access additionally requires the licensed SDK at `vendor/amcam/macos/libamcam.dylib` with its sibling runtime dependencies, or a supported machine-wide installation. `AMCAM_SDK_SOURCE` can select a build-time source path; `REQUIRE_AMCAM_SDK=1` makes the build fail if no SDK is found.
 
 ### Phase B — Physical MU503 acceptance
 
