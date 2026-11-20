@@ -14,14 +14,14 @@ static AmcamModelV2 model = {
     .ioctrol = 0,
     .xpixsz = 2.4f,
     .ypixsz = 2.4f,
-    .res = {{2560, 1922}, {1280, 960}, {640, 480}}
+    .res = {{2560, 1922}, {1280, 960}, {640, 480}, {0, 0}}
 };
 
 static AmcamEventCallback active_callback;
 static void *active_context;
 static uint32_t current_resolution_index = 2;
-static const uint32_t resolution_widths[] = {2560, 1280, 640};
-static const uint32_t resolution_heights[] = {1922, 960, 480};
+static const uint32_t resolution_widths[] = {2560, 1280, 640, 641};
+static const uint32_t resolution_heights[] = {1922, 960, 480, 480};
 static uint32_t close_count;
 static uint32_t stop_count;
 static uint32_t pull_count;
@@ -42,6 +42,12 @@ static int32_t white_balance_rgb[3] = {100, 100, 100};
 static int32_t precise_frame_rate_tenths = 150;
 static int32_t color_matrix_enabled = 1;
 static int32_t pixel_format_code = 8;
+
+void MockAmcam_EnableOddResolution(void) {
+    model.preview = 4;
+    model.res[3].width = 641;
+    model.res[3].height = 480;
+}
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
 
@@ -73,7 +79,7 @@ int32_t Amcam_get_Size(void *handle, int32_t *width, int32_t *height) {
 }
 
 int32_t Amcam_put_eSize(void *handle, uint32_t index) {
-    if (!handle || index >= 3) return -1;
+    if (!handle || index >= 4) return -1;
     current_resolution_index = index;
     return 0;
 }

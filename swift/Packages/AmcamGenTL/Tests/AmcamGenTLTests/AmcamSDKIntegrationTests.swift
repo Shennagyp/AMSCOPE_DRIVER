@@ -952,6 +952,83 @@ final class AmcamSDKIntegrationTests: XCTestCase {
     }
 
 
+    func testDataStreamDeliversTightlyPackedV4RowsAtOddWidth() throws {
+        let libraryURL = try buildMockSDK()
+        let fixtureLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureLibrary)
+        defer { if let fixtureLibrary { dlclose(fixtureLibrary) } }
+        guard let enableSymbol = dlsym(fixtureLibrary, "MockAmcam_EnableOddResolution") else {
+            XCTFail("Mock SDK is missing odd-resolution fixture control")
+            return
+        }
+        let enableOddResolution = unsafeBitCast(enableSymbol, to: (@convention(c) () -> Void).self)
+        enableOddResolution()
+
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        XCTAssertEqual(device.previewResolutions.last, AmcamResolution(index: 3, width: 641, height: 480))
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        try session.setResolution(index: 3)
+
+        let streamHandle = DS_HANDLE(rawValue: 0x201)
+        let deviceHandle = DEV_HANDLE(rawValue: 0x202)
+        let bufferHandle = BUFFER_HANDLE(rawValue: 0x203)
+        let event = AmcamEventRecord(
+            handle: EVENT_HANDLE(rawValue: 0x204),
+            eventType: GenTLEventType.newBuffer.rawValue,
+            source: .dataStream(streamHandle)
+        )
+        let stream = try AmcamDataStreamRecord(
+            handle: streamHandle,
+            deviceHandle: deviceHandle,
+            session: session
+        )
+        stream.addEvent(event)
+
+        let packedBytes = 641 * 480 * 3
+        let announcedCapacity = try XCTUnwrap(
+            AmcamRGB24Layout(width: 641, height: 480)
+        ).payloadSize
+        XCTAssertEqual(announcedCapacity, 641 * 480 * 3 + 480)
+        let memory = UnsafeMutableRawPointer.allocate(byteCount: announcedCapacity, alignment: 64)
+        memory.initializeMemory(as: UInt8.self, repeating: 0, count: announcedCapacity)
+        var cleanupCompleted = false
+        defer {
+            if !cleanupCompleted {
+                try? stream.stop()
+                try? stream.close()
+                try? session.close()
+            }
+            memory.deallocate()
+        }
+
+        try stream.announce(
+            handle: bufferHandle,
+            memory: memory,
+            size: announcedCapacity,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+        try stream.queue(bufferHandle)
+        try stream.start(numberToAcquire: 1)
+
+        _ = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 7), .bool8(false))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 9), .size(packedBytes))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 10), .size(641))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 11), .size(480))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 14), .size(0))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 27), .size(packedBytes))
+        XCTAssertEqual(try stream.bufferPartInfo(bufferHandle, command: 1), .size(packedBytes))
+        XCTAssertEqual(try stream.bufferPartInfo(bufferHandle, command: 9), .size(0))
+        XCTAssertEqual(memory.load(as: UInt8.self), 0x5a)
+
+        try stream.stop()
+        try stream.close()
+        try session.close()
+        cleanupCompleted = true
+    }
+
     func testTypedFeatureAccessUsesSDKControlsAndVerifiedReadback() throws {
         let libraryURL = try buildMockSDK()
         let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)
