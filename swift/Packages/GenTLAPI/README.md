@@ -8,7 +8,7 @@ The pinned EMVA GenTL 1.6 C header imported by GenTLABI is the authority for ABI
 
 GenTLAPI must not maintain a parallel, independently authored copy of these declarations. Its operations must preserve GenTL function meaning, module ownership, output-parameter behavior, error results and lifecycle semantics. Any Swift-safe convenience API must remain a thin layer over the standard contract.
 
-**Transition status:** the current GenTLAPI source still contains a manually authored Swift protocol, function groups and type definitions. It is GenTL-shaped, but is not yet a direct binding aligned to imported GenTL C declarations. The implementation plan tracks the correction. Do not treat documentation of the target architecture as proof that this conversion is already complete.
+**Transition status:** the GenTLABI package is now a shared dependency of GenTLAPI, GenTLNative and AmcamGenTL. The native loader's function-pointer aliases now refer to the imported PGC/P* typedefs from the header. However, the current GenTLAPI source still contains a manually authored Swift protocol, function groups and type definitions; it does not yet expose an API contract derived from the imported declarations. Do not treat the dependency wiring or native alias conversion as completion of that API conversion.
 
 ## Implementations
 
