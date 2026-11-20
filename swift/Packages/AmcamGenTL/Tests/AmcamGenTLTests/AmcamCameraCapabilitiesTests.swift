@@ -13,12 +13,12 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
             modelCode: "MU503",
             modelFlags: flags,
             maximumSpeedLevel: 3,
-            probes: [.exposureAuto: true, .exposureManual: true, .discreteFrameSpeed: true],
+            probes: [.exposureAuto: true, .exposureManual: true, .preciseFrameRate: true, .discreteFrameSpeed: true],
             implemented: implemented
         )
 
         XCTAssertTrue(capabilities.availability(of: .hardwareROI).available)
-        XCTAssertTrue(capabilities.availability(of: .hardwareROI).isUsable == false)
+        XCTAssertFalse(capabilities.availability(of: .hardwareROI).isUsable)
         XCTAssertTrue(capabilities.availability(of: .preciseFrameRate).isUsable)
         XCTAssertFalse(capabilities.availability(of: .thermoelectricCooling).available)
         XCTAssertTrue(capabilities.availability(of: .exposureManual).isUsable)
@@ -41,7 +41,7 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
         )
 
         XCTAssertFalse(capabilities.availability(of: .exposureAuto).available)
-        XCTAssertFalse(capabilities.availability(of: .exposureManual).available == false)
+        XCTAssertTrue(capabilities.availability(of: .exposureManual).available)
         XCTAssertFalse(capabilities.availability(of: .preciseFrameRate).available)
         XCTAssertTrue(capabilities.availability(of: .exposureAuto).reason?.contains("Disabled") == true)
     }
