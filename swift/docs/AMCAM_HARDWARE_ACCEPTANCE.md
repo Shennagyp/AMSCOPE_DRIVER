@@ -18,6 +18,7 @@ make run
 ```
 
 If the SDK is absent, the app can launch but the AmScope provider remains unavailable.
+
 ## Test sequence
 
 ### A. Establish library and device identity
@@ -68,6 +69,7 @@ make run-probe PROBE_ARGS='--sdk "/absolute/path/to/libamcam.dylib" --frames 10 
 Preserve the full terminal output and the generated PPM image. Do not use `sudo`.
 
 If the probe reports an SDK load, version, enumeration, open, event, buffer, format, or cleanup error, preserve the exact error rather than retrying with guessed SDK arguments.
+
 ## Acceptance record
 
 Record:
