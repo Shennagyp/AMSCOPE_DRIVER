@@ -11,7 +11,7 @@ public struct RGB8Frame: Equatable, Sendable {
     public let data: Data
     public let sequence: UInt64
 
-    public init(
+    private init(
         width: Int,
         height: Int,
         bytesPerRow: Int,
