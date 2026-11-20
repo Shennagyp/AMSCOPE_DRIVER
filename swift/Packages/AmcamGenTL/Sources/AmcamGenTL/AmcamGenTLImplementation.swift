@@ -2147,12 +2147,29 @@ extension AmcamGenTLImplementation: GenTLAPI {
 extension AmcamGenTLImplementation: GenTLFeatureAccess {
     public func featureDescriptors(for device: GenTLFeatureDeviceHandle) throws -> [GenTLFeatureDescriptor] {
         let record = try featureDeviceRecord(device)
-        let capabilities = try record.session.cameraCapabilities()
-        let controls = try record.session.readControls()
+        let session = record.session
+        let capabilities = try session.cameraCapabilities()
+        let controls = try session.readControls()
+        let resolutions = session.availableResolutions()
+        let currentResolution = session.currentResolution()
+        let stopped = !session.isStreaming
 
         let autoAvailability = capabilities.availability(of: .exposureAuto)
         let exposureAvailability = capabilities.availability(of: .exposureManual)
         let gainAvailability = capabilities.availability(of: .analogGain)
+        let whiteBalanceAvailability = capabilities.availability(of: .whiteBalance)
+        let colorMatrixAvailable = capabilities.availability(of: .colorCorrection).isUsable
+            && controls.image?.colorMatrixEnabled != nil
+        let pixelFormats = controls.image?.supportedPixelFormats ?? []
+        let pixelFormatAvailable = capabilities.availability(of: .pixelFormatSelection).isUsable
+            && !pixelFormats.isEmpty
+            && controls.image?.pixelFormatCode != nil
+        let fixedRateAvailable = capabilities.availability(of: .preciseFrameRate).isUsable
+            && controls.frameRate.supported
+        let speedAvailable = capabilities.availability(of: .discreteFrameSpeed).isUsable
+            && controls.frameRate.speedLevelSupported
+        let resolutionAvailable = capabilities.availability(of: .resolution).isUsable
+            && !resolutions.isEmpty
 
         let exposureRange: GenTLFeatureNumericRange?
         if let minimum = controls.exposure?.minimumMicroseconds,
@@ -2175,6 +2192,25 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
             gainRange = nil
         }
 
+        let fixedRateRange: GenTLFeatureNumericRange?
+        if let minimum = controls.frameRate.minimumFramesPerSecond,
+           let maximum = controls.frameRate.maximumFramesPerSecond {
+            fixedRateRange = GenTLFeatureNumericRange(
+                minimum: minimum,
+                maximum: maximum,
+                increment: 0.1
+            )
+        } else {
+            fixedRateRange = nil
+        }
+
+        let speedRange: GenTLFeatureNumericRange?
+        if let maximum = controls.frameRate.maximumSpeedLevel, speedAvailable {
+            speedRange = GenTLFeatureNumericRange(minimum: 0, maximum: Double(maximum))
+        } else {
+            speedRange = nil
+        }
+
         return [
             GenTLFeatureDescriptor(
                 name: "ExposureAuto",
@@ -2195,8 +2231,7 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
                 isWritable: exposureAvailability.isUsable && controls.exposure?.autoMode == .manual,
                 numericRange: exposureRange
             ),
-            // Amcam reports analog gain as a percentage. It is deliberately
-            // vendor-namespaced rather than misrepresenting percent as SFNC Gain (dB).
+            // Amcam reports analog gain as a percentage, not SFNC Gain in dB.
             GenTLFeatureDescriptor(
                 name: "AmcamAnalogGainPercent",
                 displayName: "Analog Gain",
@@ -2206,6 +2241,77 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
                 isReadable: controls.gain != nil,
                 isWritable: gainAvailability.isUsable,
                 numericRange: gainRange
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamColorMatrixEnabled",
+                displayName: "Color Matrix",
+                kind: .boolean,
+                isAvailable: colorMatrixAvailable,
+                isReadable: controls.image?.colorMatrixEnabled != nil,
+                isWritable: colorMatrixAvailable
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamPixelFormat",
+                displayName: "Pixel Format",
+                kind: .enumeration,
+                isAvailable: pixelFormatAvailable,
+                isReadable: controls.image?.pixelFormatCode != nil,
+                isWritable: pixelFormatAvailable && stopped,
+                enumerationValues: pixelFormats.map(String.init)
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamWhiteBalanceTemperature",
+                displayName: "White Balance Temperature",
+                kind: .integer,
+                unit: "K",
+                isAvailable: whiteBalanceAvailability.isUsable && controls.whiteBalance?.temperature != nil,
+                isReadable: controls.whiteBalance?.temperature != nil,
+                isWritable: whiteBalanceAvailability.isUsable && controls.whiteBalance?.temperature != nil,
+                numericRange: GenTLFeatureNumericRange(
+                    minimum: Double(AmcamSDK.temperatureMinimum),
+                    maximum: Double(AmcamSDK.temperatureMaximum)
+                )
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamWhiteBalanceTint",
+                displayName: "White Balance Tint",
+                kind: .integer,
+                isAvailable: whiteBalanceAvailability.isUsable && controls.whiteBalance?.tint != nil,
+                isReadable: controls.whiteBalance?.tint != nil,
+                isWritable: whiteBalanceAvailability.isUsable && controls.whiteBalance?.tint != nil,
+                numericRange: GenTLFeatureNumericRange(
+                    minimum: Double(AmcamSDK.tintMinimum),
+                    maximum: Double(AmcamSDK.tintMaximum)
+                )
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamFixedFrameRate",
+                displayName: "Fixed Frame Rate",
+                kind: .floatingPoint,
+                unit: "fps",
+                isAvailable: fixedRateAvailable && fixedRateRange != nil,
+                isReadable: controls.frameRate.readbackFramesPerSecond != nil,
+                isWritable: fixedRateAvailable && fixedRateRange != nil,
+                numericRange: fixedRateRange
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamFrameSpeedLevel",
+                displayName: "Frame Speed Level",
+                kind: .integer,
+                unit: "level",
+                isAvailable: speedAvailable,
+                isReadable: controls.frameRate.currentSpeedLevel != nil,
+                isWritable: speedAvailable,
+                numericRange: speedRange
+            ),
+            GenTLFeatureDescriptor(
+                name: "AmcamResolutionIndex",
+                displayName: "Resolution",
+                kind: .enumeration,
+                isAvailable: resolutionAvailable,
+                isReadable: currentResolution != nil,
+                isWritable: resolutionAvailable && stopped,
+                enumerationValues: resolutions.map(Self.resolutionSymbol)
             )
         ]
     }
@@ -2238,6 +2344,41 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
                 throw GenTLFeatureAccessError.featureNotReadable(name)
             }
             return .integer(Int64(value))
+        case "AmcamColorMatrixEnabled":
+            guard let value = controls.image?.colorMatrixEnabled else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .boolean(value)
+        case "AmcamPixelFormat":
+            guard let value = controls.image?.pixelFormatCode else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .enumeration(String(value))
+        case "AmcamWhiteBalanceTemperature":
+            guard let value = controls.whiteBalance?.temperature else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .integer(Int64(value))
+        case "AmcamWhiteBalanceTint":
+            guard let value = controls.whiteBalance?.tint else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .integer(Int64(value))
+        case "AmcamFixedFrameRate":
+            guard let value = controls.frameRate.readbackFramesPerSecond else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .floatingPoint(value)
+        case "AmcamFrameSpeedLevel":
+            guard let value = controls.frameRate.currentSpeedLevel else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .integer(Int64(value))
+        case "AmcamResolutionIndex":
+            guard let value = record.session.currentResolution() else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .enumeration(Self.resolutionSymbol(value))
         default:
             throw GenTLFeatureAccessError.featureNotFound(name)
         }
@@ -2293,6 +2434,53 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
             }
             _ = try record.session.setExposureGain(percent: UInt16(percent))
 
+        case ("AmcamColorMatrixEnabled", .boolean(let enabled)):
+            _ = try record.session.setColorMatrixEnabled(enabled)
+
+        case ("AmcamPixelFormat", .enumeration(let symbol)):
+            guard descriptor.enumerationValues.contains(symbol),
+                  let code = Int32(symbol) else {
+                throw GenTLFeatureAccessError.invalidValue("AmcamPixelFormat must be one of the camera's enumerated format codes.")
+            }
+            _ = try record.session.setPixelFormat(code: code)
+
+        case ("AmcamWhiteBalanceTemperature", .integer(let rawTemperature)):
+            guard rawTemperature >= Int64(Int32.min), rawTemperature <= Int64(Int32.max),
+                  let tint = try record.session.readControls().whiteBalance?.tint else {
+                throw GenTLFeatureAccessError.invalidValue("White-balance temperature is not available or does not fit Int32.")
+            }
+            _ = try record.session.setWhiteBalanceTemperatureTint(
+                temperature: Int32(rawTemperature),
+                tint: tint
+            )
+
+        case ("AmcamWhiteBalanceTint", .integer(let rawTint)):
+            guard rawTint >= Int64(Int32.min), rawTint <= Int64(Int32.max),
+                  let temperature = try record.session.readControls().whiteBalance?.temperature else {
+                throw GenTLFeatureAccessError.invalidValue("White-balance tint is not available or does not fit Int32.")
+            }
+            _ = try record.session.setWhiteBalanceTemperatureTint(
+                temperature: temperature,
+                tint: Int32(rawTint)
+            )
+
+        case ("AmcamFixedFrameRate", .floatingPoint(let framesPerSecond)):
+            _ = try record.session.setFixedFrameRate(framesPerSecond: framesPerSecond)
+
+        case ("AmcamFrameSpeedLevel", .integer(let level)):
+            guard level >= 0, level <= Int64(Int.max) else {
+                throw GenTLFeatureAccessError.invalidValue("AmcamFrameSpeedLevel must be a non-negative Int value.")
+            }
+            _ = try record.session.setFrameRateSpeedLevel(Int(level))
+
+        case ("AmcamResolutionIndex", .enumeration(let symbol)):
+            guard descriptor.enumerationValues.contains(symbol),
+                  let separator = symbol.firstIndex(of: ":"),
+                  let index = Int(symbol[..<separator]) else {
+                throw GenTLFeatureAccessError.invalidValue("AmcamResolutionIndex must match an enumerated index and resolution.")
+            }
+            _ = try record.session.setResolution(index: index)
+
         default:
             throw GenTLFeatureAccessError.featureNotFound(name)
         }
@@ -2321,5 +2509,8 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
         case .continuous: return "Continuous"
         }
     }
-}
 
+    private static func resolutionSymbol(_ resolution: AmcamResolution) -> String {
+        "(resolution.index):(resolution.width)x(resolution.height)"
+    }
+}

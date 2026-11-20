@@ -33,19 +33,31 @@ final class CameraApplicationModel: ObservableObject {
     private var frameIntervals: [TimeInterval] = []
     private(set) var isFullScreen = false
 
-    private let featureNameByCameraFeature: [AmcamCameraFeature: String] = [
-        .exposureAuto: "ExposureAuto",
-        .exposureManual: "ExposureTime",
-        .analogGain: "AmcamAnalogGainPercent"
+    private let featureNamesByCameraFeature: [AmcamCameraFeature: [String]] = [
+        .resolution: ["AmcamResolutionIndex"],
+        .exposureAuto: ["ExposureAuto"],
+        .exposureManual: ["ExposureTime"],
+        .analogGain: ["AmcamAnalogGainPercent"],
+        .whiteBalance: ["AmcamWhiteBalanceTemperature", "AmcamWhiteBalanceTint"],
+        .colorCorrection: ["AmcamColorMatrixEnabled"],
+        .pixelFormatSelection: ["AmcamPixelFormat"],
+        .preciseFrameRate: ["AmcamFixedFrameRate"],
+        .discreteFrameSpeed: ["AmcamFrameSpeedLevel"]
     ]
 
     var selectedDevice: AmcamDevice? {
         devices.first { $0.identifier == selectedDeviceID }
     }
 
-    /// Resolution selection is intentionally unavailable until Width/Height or
-    /// a verified discrete-resolution feature is exposed through GenTLFeatureAccess.
-    var currentResolution: AmcamResolution? { nil }
+    var currentResolution: AmcamResolution? {
+        guard let deviceSession,
+              case .enumeration(let symbol)? = try? deviceSession.readFeature("AmcamResolutionIndex"),
+              let separator = symbol.firstIndex(of: ":"),
+              let index = Int(symbol[..<separator]) else {
+            return nil
+        }
+        return selectedDevice?.previewResolutions.first { $0.index == index }
+    }
 
     func initialize() {
         guard !hasInitialized else { return }
@@ -224,6 +236,7 @@ final class CameraApplicationModel: ObservableObject {
     func refreshControls() {
         guard let deviceSession else { return }
         featureDescriptors = (try? deviceSession.featureDescriptors()) ?? []
+        updateSelectedDeviceResolutions(from: featureDescriptors)
         cameraCapabilities = makeCapabilities(
             for: selectedDevice,
             descriptors: featureDescriptors,
@@ -258,7 +271,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func setPixelFormat(_ code: Int32) {
-        writeFeature(.integer(Int64(code)), named: "PixelFormat")
+        writeFeature(.enumeration(String(code)), named: "AmcamPixelFormat")
     }
 
     func setWhiteBalanceRGBGain(_ values: [Int32]) {
@@ -270,19 +283,28 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
-        errorMessage = "White-balance temperature/tint controls are not yet exposed by the routed feature provider."
+        writeFeature(.integer(Int64(temperature)), named: "AmcamWhiteBalanceTemperature")
+        guard errorMessage == nil else { return }
+        writeFeature(.integer(Int64(tint)), named: "AmcamWhiteBalanceTint")
     }
 
     func setFixedFrameRate(_ framesPerSecond: Double) {
-        errorMessage = "Fixed frame-rate control is not yet exposed by the routed feature provider."
+        writeFeature(.floatingPoint(framesPerSecond), named: "AmcamFixedFrameRate")
     }
 
     func setFrameSpeedLevel(_ level: Int) {
-        errorMessage = "Frame-speed control is not yet exposed by the routed feature provider."
+        writeFeature(.integer(Int64(level)), named: "AmcamFrameSpeedLevel")
     }
 
     func setResolution(_ index: Int) {
-        errorMessage = "Discrete resolution selection is not yet exposed by the routed feature provider."
+        guard let descriptor = featureDescriptors.first(where: { $0.name == "AmcamResolutionIndex" }),
+              let symbol = descriptor.enumerationValues.first(where: {
+                  Int($0.split(separator: ":").first ?? "") == index
+              }) else {
+            errorMessage = "The selected resolution is not advertised by this camera."
+            return
+        }
+        writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex")
     }
 
     func enterFullScreen() {
@@ -311,6 +333,7 @@ final class CameraApplicationModel: ObservableObject {
             let openedSession = try candidate.open(access: .exclusive)
             deviceSession = openedSession
             featureDescriptors = (try? openedSession.featureDescriptors()) ?? []
+            updateSelectedDeviceResolutions(from: featureDescriptors)
             let hasDataStream = deviceHasDataStream(openedSession)
             cameraCapabilities = makeCapabilities(
                 for: device,
@@ -418,11 +441,12 @@ final class CameraApplicationModel: ObservableObject {
         let profile = profileRegistry.profile(for: device.modelCode)
 
         let features = AmcamCameraFeature.allCases.map { feature -> AmcamFeatureAvailability in
-            let descriptor = featureNameByCameraFeature[feature].flatMap { descriptorsByName[$0] }
-            let implemented = feature == .liveCapture || descriptor != nil
+            let matchingDescriptors = (featureNamesByCameraFeature[feature] ?? [])
+                .compactMap { descriptorsByName[$0] }
+            let implemented = feature == .liveCapture || !matchingDescriptors.isEmpty
             let hardwareAvailable = feature == .liveCapture
                 ? hasDataStream
-                : (descriptor?.isAvailable ?? false)
+                : matchingDescriptors.contains(where: \.isAvailable)
             let profileAllows = profile.map { $0.allowedFeatures.contains(feature) } ?? true
             let profileDenies = profile?.deniedFeatures.contains(feature) ?? false
             let available = hardwareAvailable && profileAllows && !profileDenies
@@ -508,15 +532,90 @@ final class CameraApplicationModel: ObservableObject {
             gain = nil
         }
 
+        let whiteTemperature = readIntegerFeature("AmcamWhiteBalanceTemperature", from: session)
+            .flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
+        let whiteTint = readIntegerFeature("AmcamWhiteBalanceTint", from: session)
+            .flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
+        let whiteBalance = (whiteTemperature != nil || whiteTint != nil)
+            ? AmcamWhiteBalanceControl(temperature: whiteTemperature, tint: whiteTint)
+            : nil
+
+        let colorMatrix: Bool?
+        if case .boolean(let value)? = try? session.readFeature("AmcamColorMatrixEnabled") {
+            colorMatrix = value
+        } else {
+            colorMatrix = nil
+        }
+        let pixelFormat = readEnumerationFeature("AmcamPixelFormat", from: session).flatMap(Int32.init)
+        let supportedPixelFormats = descriptorsByName["AmcamPixelFormat"]?.enumerationValues.compactMap(Int32.init) ?? []
+        let image = (colorMatrix != nil || pixelFormat != nil || !supportedPixelFormats.isEmpty)
+            ? AmcamCameraImageControls(
+                colorMatrixEnabled: colorMatrix,
+                pixelFormatCode: pixelFormat,
+                supportedPixelFormats: supportedPixelFormats
+            )
+            : nil
+
+        let fixedRateDescriptor = descriptorsByName["AmcamFixedFrameRate"]
+        let speedDescriptor = descriptorsByName["AmcamFrameSpeedLevel"]
+        let fixedRateReadback = readFloatingPointFeature("AmcamFixedFrameRate", from: session)
+        let currentSpeed = readIntegerFeature("AmcamFrameSpeedLevel", from: session).flatMap(Int.init(exactly:))
+        let frameRate = AmcamFrameRateControl(
+            supported: fixedRateDescriptor?.isAvailable == true,
+            minimumFramesPerSecond: fixedRateDescriptor?.numericRange?.minimum,
+            maximumFramesPerSecond: fixedRateDescriptor?.numericRange?.maximum,
+            readbackFramesPerSecond: fixedRateReadback,
+            unsupportedReason: fixedRateDescriptor?.isAvailable == true
+                ? nil
+                : "Precise fixed frame rate is not available for this camera.",
+            speedLevelSupported: speedDescriptor?.isAvailable == true,
+            currentSpeedLevel: currentSpeed,
+            maximumSpeedLevel: speedDescriptor?.numericRange?.maximum.flatMap { Int(exactly: $0) }
+        )
+
         return AmcamControlSnapshot(
             exposure: exposure,
             gain: gain,
-            whiteBalance: nil,
-            image: nil,
-            frameRate: AmcamFrameRateControl(
-                supported: false,
-                unsupportedReason: "Frame-rate features are not yet exposed by the routed feature provider."
-            )
+            whiteBalance: whiteBalance,
+            image: image,
+            frameRate: frameRate
+        )
+    }
+
+    private func readEnumerationFeature(_ name: String, from session: GenTLDeviceSession) -> String? {
+        guard case .enumeration(let value)? = try? session.readFeature(name) else { return nil }
+        return value
+    }
+
+    private func readFloatingPointFeature(_ name: String, from session: GenTLDeviceSession) -> Double? {
+        guard case .floatingPoint(let value)? = try? session.readFeature(name), value.isFinite else {
+            return nil
+        }
+        return value
+    }
+
+    private func updateSelectedDeviceResolutions(from descriptors: [GenTLFeatureDescriptor]) {
+        guard let index = devices.firstIndex(where: { $0.identifier == selectedDeviceID }) else { return }
+        let device = devices[index]
+        let options = descriptors.first(where: { $0.name == "AmcamResolutionIndex" })?.enumerationValues ?? []
+        let resolutions = options.compactMap { symbol -> AmcamResolution? in
+            guard let separator = symbol.firstIndex(of: ":"),
+                  let resolutionSeparator = symbol[symbol.index(after: separator)...].firstIndex(of: "x"),
+                  let resolutionIndex = Int(symbol[..<separator]),
+                  let width = Int(symbol[symbol.index(after: separator)..<resolutionSeparator]),
+                  let height = Int(symbol[symbol.index(after: resolutionSeparator)...]) else {
+                return nil
+            }
+            return AmcamResolution(index: resolutionIndex, width: width, height: height)
+        }
+        devices[index] = AmcamDevice(
+            identifier: device.identifier,
+            displayName: device.displayName,
+            modelName: device.modelName,
+            modelFlags: device.modelFlags,
+            maximumSpeedLevel: device.maximumSpeedLevel,
+            sensorPixelSizeMicrometers: device.sensorPixelSizeMicrometers,
+            previewResolutions: resolutions
         )
     }
 

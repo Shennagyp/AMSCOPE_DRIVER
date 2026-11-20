@@ -64,6 +64,20 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return resolutions.first { $0.index == currentResolutionIndex }
     }
 
+    /// Returns the SDK-enumerated discrete resolutions for this exact camera.
+    public func availableResolutions() -> [AmcamResolution] {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        return resolutions
+    }
+
+    /// True while the SDK is starting, streaming, stopping, or still owns a callback.
+    public var isStreaming: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return starting || streaming || stopping || callbackContext != nil
+    }
+
     public func currentDimensions() -> (width: Int, height: Int) {
         controlLock.lock()
         defer { controlLock.unlock() }
