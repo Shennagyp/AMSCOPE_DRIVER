@@ -4,33 +4,38 @@
 
 The first milestone is physical acceptance on the user's Apple Silicon Mac using the packaged application. Multiplatform changes begin after this baseline passes. This avoids changing the camera ABI, streaming lifecycle, and UI architecture simultaneously while the first physical camera integration remains unverified.
 
-No local Xcode installation is required at any stage. Build, unit-test, package, and release jobs run on hosted CI workers. The user's Mac is used only to run the prebuilt app and connect the physical camera.
+The full Xcode application is not required for the local macOS build: Apple's Swift compiler, macOS SDK and AppKit SDK are sufficient. Hosted CI performs package tests and app compilation validation. The user's Mac builds and launches the app with `make run`, then connects the physical camera for hardware acceptance.
 
 ## Current platform coupling
 
 The current package contains three distinct concerns:
 
-1. **Amcam camera behavior** — discovery, device identity, model flags, sessions, controls, frame data, buffers, and capability profiles.
-2. **Native SDK loading** — dynamic library loading and symbol resolution. The current implementation imports Darwin and therefore is not yet a cross-platform loader.
-3. **Application presentation** — SwiftUI plus AppKit and NSImage/NSBitmapImageRep in the current macOS application target.
+1. **Camera model and policy** — device identity values, model flags, feature groups, profiles and capability resolution are extracted into AmcamCameraModel.
+2. **Frame and runtime contracts** — validated frame values and rate estimation are in AmcamImagingCore; device/session/acquisition lifecycle and typed feature contracts are in AmcamImagingRuntime.
+3. **Application state** — descriptor-gated control snapshots, readback conversion and feature-write validation are in AmcamImagingState.
+4. **Backend adaptation** — AmcamImagingGenTLAdapter maps GenTLRouter discovery, feature and acquisition contracts to the portable runtime.
+5. **Native SDK loading** — AmcamGenTL still performs dynamic library loading and symbol resolution through Darwin; this is not yet a cross-platform loader.
+6. **Application presentation** — the current macOS frontend uses AppKit and NSImage/NSBitmapImageRep. It is not a shared cross-platform UI target.
 
 These must not be combined into one cross-platform target.
 
 ## Target package boundaries
 
-### 1. AmcamCore
+### 1. AmcamCameraModel and AmcamImagingCore
 
-Platform-neutral Swift target containing:
+These platform-neutral packages already exist.
 
-- device/model descriptors and camera identity value types;
+AmcamCameraModel contains:
+- camera/device model values and identity metadata;
 - model feature flags and feature groups;
-- camera profiles and capability resolution;
-- control snapshots, ranges, typed setting values, and validation;
-- frame metadata and pixel-format descriptors;
-- camera driver/session protocols;
-- errors that do not expose OS-specific loader types.
+- camera profiles and hardware-evidence capability resolution.
 
-This target must not import Darwin, Glibc, WinSDK, AppKit, SwiftUI, or platform graphics types.
+AmcamImagingCore contains:
+- validated RGB8 frames and backend-neutral frame payloads;
+- pixel-format/payload validation;
+- monotonic frame-rate estimation.
+
+Neither package may import Darwin, Glibc, WinSDK, AppKit, SwiftUI or platform graphics types.
 
 ### 2. AmcamABI
 
@@ -55,21 +60,22 @@ Loader lifetime must be coupled to all native function pointers, camera handles,
 
 Optional symbols remain optional. A missing optional symbol must disable only the corresponding feature, not prevent the camera from opening.
 
-### 4. AmcamDriver
+### 4. AmcamImagingRuntime, AmcamImagingState and AmcamImagingGenTLAdapter
 
-The Amcam-specific implementation of camera protocols, depending on AmcamCore, AmcamABI, and AmcamLoader.
+These packages already separate backend-neutral runtime behavior from AmScope policy and GenTL implementation details.
 
-- Preserve the current tested session lifecycle and ownership model.
-- Keep capability resolution camera-specific.
-- Keep exposure, gain, white balance, pixel format, and frame-rate features independently probed.
-- Keep hardware-unsupported controls absent.
-- Do not expose OS-specific image objects.
+- AmcamImagingRuntime owns device/session/acquisition lifecycles, serializes feature I/O against lifecycle transitions, retains failed resources for retry, and publishes backend-neutral events/frames.
+- AmcamImagingState converts descriptors and typed readbacks into control snapshots and validates writes without GenTL or AppKit dependencies.
+- AmcamImagingGenTLAdapter adapts GenTLRouter and the Amcam backend to runtime protocols. Blocking GenTL calls execute away from the cooperative executor so stop/close can interrupt a pending frame read.
+- AmcamGenTL remains the AmScope-specific SDK implementation and native dynamic loader.
+- Keep exposure, gain, white balance, pixel format and frame-rate features independently probed. Hardware-unsupported controls must remain unavailable.
+- Do not expose OS-specific image objects or GenTL handles through the runtime contracts.
 
 ### 5. Imaging presentation
 
-The imaging interface consumes the platform-neutral driver/session API.
+The imaging interface consumes platform-neutral camera models, runtime commands/events, typed feature contracts and frame values.
 
-The macOS target may use SwiftUI and AppKit. Other operating systems require their own presentation target unless a deliberate shared UI technology is selected. Do not put NSImage or AppKit in the core driver API.
+The current macOS target uses AppKit. Other operating systems require their own presentation target unless a deliberate shared UI technology is selected. Do not put NSImage or AppKit in camera model, frame, state or runtime packages.
 
 The first shared UI contract should expose camera list, current camera/session state, frame stream, capability groups, control descriptors, and typed setting commands. A presenter converts the raw frame into the platform's display surface.
 
