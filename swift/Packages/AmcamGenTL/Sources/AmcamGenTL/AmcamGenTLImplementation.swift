@@ -2286,6 +2286,16 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
                 )
             ),
             GenTLFeatureDescriptor(
+                name: "AmcamWhiteBalanceRGBGain",
+                displayName: "White Balance RGB Gain",
+                kind: .integerVector,
+                unit: "SDK units",
+                isAvailable: rgbGainAvailable,
+                isReadable: rgbGainAvailable,
+                isWritable: rgbGainAvailable,
+                elementCount: 3
+            ),
+            GenTLFeatureDescriptor(
                 name: "AmcamFixedFrameRate",
                 displayName: "Fixed Frame Rate",
                 kind: .floatingPoint,
