@@ -1,4 +1,3 @@
-import AppKit
 import AmcamCameraModel
 import Darwin
 import Foundation
@@ -7,11 +6,19 @@ import GenTLAPI
 import GenTLRouter
 import Combine
 
+struct CameraPreviewFrame {
+    let width: Int
+    let height: Int
+    let bytesPerRow: Int
+    let rgb8Data: Data
+    let sequence: UInt64
+}
+
 @MainActor
 final class CameraApplicationModel: ObservableObject {
     @Published private(set) var devices: [AmcamDevice] = []
     @Published var selectedDeviceID = ""
-    @Published private(set) var latestImage: NSImage?
+    @Published private(set) var latestFrame: CameraPreviewFrame?
     @Published private(set) var isStreaming = false
     @Published private(set) var cameraCapabilities: AmcamCameraCapabilities?
     @Published private(set) var controls: AmcamControlSnapshot?
@@ -31,7 +38,7 @@ final class CameraApplicationModel: ObservableObject {
     private var profileRegistry = AmcamCameraProfileRegistry()
     private var lastFrameHostTime: TimeInterval?
     private var frameIntervals: [TimeInterval] = []
-    private(set) var isFullScreen = false
+    private var frameSequence: UInt64 = 0
 
     private let featureNamesByCameraFeature: [AmcamCameraFeature: [String]] = [
         .resolution: ["AmcamResolutionIndex"],
@@ -70,20 +77,9 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    func chooseSDK() {
-        let panel = NSOpenPanel()
-        panel.title = "Select the Amcam SDK"
-        panel.message = "Choose the vendor libamcam.dylib"
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        if panel.runModal() == .OK, let url = panel.url {
-            configureSDK(at: url)
-        }
-    }
-
     func refreshDevices() {
         guard sdkPath != nil else {
-            chooseSDK()
+            status = "Select the Amcam SDK before refreshing cameras"
             return
         }
 
@@ -124,7 +120,7 @@ final class CameraApplicationModel: ObservableObject {
                 return
             }
             selectedDeviceID = discoveredDevices.first?.identifier ?? ""
-            latestImage = nil
+            latestFrame = nil
         }
 
         if discoveredDevices.isEmpty {
@@ -151,7 +147,7 @@ final class CameraApplicationModel: ObservableObject {
         guard identifier != selectedDeviceID else { return }
         guard closeSession() else { return }
         selectedDeviceID = identifier
-        latestImage = nil
+        latestFrame = nil
         cameraCapabilities = nil
         controls = nil
         featureDescriptors = []
@@ -179,7 +175,7 @@ final class CameraApplicationModel: ObservableObject {
             try newAcquisition.start()
             acquisition = newAcquisition
 
-            latestImage = nil
+            latestFrame = nil
             frameIntervals.removeAll(keepingCapacity: true)
             lastFrameHostTime = nil
             framesPerSecond = 0
@@ -308,23 +304,6 @@ final class CameraApplicationModel: ObservableObject {
         writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex")
     }
 
-    func enterFullScreen() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self,
-                  let window = NSApp.keyWindow ?? NSApp.windows.first else { return }
-            if !window.styleMask.contains(.fullScreen) {
-                window.toggleFullScreen(nil)
-            }
-            self.isFullScreen = true
-        }
-    }
-
-    func toggleFullScreen() {
-        guard let window = NSApp.keyWindow ?? NSApp.windows.first else { return }
-        window.toggleFullScreen(nil)
-        isFullScreen.toggle()
-    }
-
     private func prepareSelectedCamera() {
         guard deviceSession == nil,
               let candidate = candidatesByID[selectedDeviceID],
@@ -355,7 +334,7 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    private func configureSDK(at url: URL) {
+    func configureSDK(at url: URL) {
         guard closeSession() else { return }
         router = GenTLRouter()
         candidatesByID.removeAll()
@@ -777,29 +756,14 @@ final class CameraApplicationModel: ObservableObject {
             return
         }
 
-        guard let representation = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: frame.width,
-            pixelsHigh: frame.height,
-            bitsPerSample: 8,
-            samplesPerPixel: 3,
-            hasAlpha: false,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
+        frameSequence &+= 1
+        latestFrame = CameraPreviewFrame(
+            width: frame.width,
+            height: frame.height,
             bytesPerRow: bytesPerRow,
-            bitsPerPixel: 24
-        ), let destination = representation.bitmapData else {
-            errorMessage = "Unable to allocate the live-frame display buffer."
-            return
-        }
-
-        frame.bytes.withUnsafeBytes { source in
-            guard let baseAddress = source.baseAddress else { return }
-            memcpy(destination, baseAddress, requiredBytes)
-        }
-        let image = NSImage(size: NSSize(width: frame.width, height: frame.height))
-        image.addRepresentation(representation)
-        latestImage = image
+            rgb8Data: Data(frame.bytes.prefix(requiredBytes)),
+            sequence: frameSequence
+        )
 
         let now = ProcessInfo.processInfo.systemUptime
         if let previous = lastFrameHostTime, now > previous {
