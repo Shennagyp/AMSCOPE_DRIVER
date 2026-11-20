@@ -8,6 +8,10 @@ let package = Package(
         .library(name: "AmcamCameraModel", targets: ["AmcamCameraModel"])
     ],
     targets: [
-        .target(name: "AmcamCameraModel")
+        .target(name: "AmcamCameraModel"),
+        .testTarget(
+            name: "AmcamCameraModelTests",
+            dependencies: ["AmcamCameraModel"]
+        )
     ]
 )

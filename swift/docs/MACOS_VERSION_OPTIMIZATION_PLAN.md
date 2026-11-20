@@ -337,3 +337,14 @@ These changes are a response to compiler diagnostics from the actual hosted run.
 ## 2026-11-20 — Camera model package boundary
 
 Extracted Amcam camera value types, capability descriptors, control snapshots and model-profile policy into the SDK-independent `AmcamCameraModel` Swift package. AmcamGenTL imports and re-exports that package for source compatibility. AmcamImagingApp now depends on AmcamCameraModel, GenTLABI, GenTLAPI and GenTLRouter only; its sources no longer import AmcamGenTL. This keeps vendor SDK implementation ownership in the backend while preserving the UI's camera presentation types.
+
+
+## 2026-11-20 — Isolated camera model package and test ownership
+
+- Extracted `AmcamCameraModels.swift` and `AmcamCameraCapabilities.swift` into `swift/Packages/AmcamCameraModel`. The package has no Amcam SDK, C ABI or GenTL dependency.
+- AmcamGenTL imports and re-exports AmcamCameraModel to preserve existing source-level access to public model types.
+- AmcamImagingApp now depends on AmcamCameraModel, GenTLABI, GenTLAPI and GenTLRouter only. It no longer imports or depends on AmcamGenTL.
+- Moved pure camera capability/profile tests to AmcamCameraModelTests. This makes the model package independently testable rather than relying on backend tests to validate backend-independent policy.
+- Added AmcamCameraModel to the hosted macOS package test matrix and enforced the application dependency boundary in CI.
+- The new package boundary is not considered validated until the current hosted workflow succeeds.
+

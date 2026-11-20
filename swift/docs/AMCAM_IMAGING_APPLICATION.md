@@ -140,34 +140,32 @@ Do not add a model profile until the exact SDK model descriptor name and the har
 
 ## Current implementation boundary
 
-The first application slice exposes:
-- live RGB24 camera preview;
-- device enumeration and selection;
-- start/stop and session cleanup;
-- resolution selection when the loaded SDK exposes resolution changes;
-- manual/fixed, continuous-auto, and one-shot-auto exposure modes;
-- exposure-time range and exact readback;
-- analog gain range, setter, and exact readback when the SDK symbols and camera queries are available;
-- temperature/tint and RGB-channel white-balance modes, each gated independently by its SDK symbols and runtime query;
-- color-matrix enable/disable with readback;
-- pixel-format selection from the camera's enumerated supported-format list, only while acquisition is stopped;
-- precise fixed frame rate when both model flag and runtime option probes succeed;
-- discrete sensor speed when model speed range and SDK get/set symbols are usable.
+The routed application currently provides:
+- device discovery and opening through GenTLRouter;
+- live image acquisition through GenTLAcquisitionSession and the GenTL New Buffer event;
+- a bounded announced-buffer pool, copy-before-requeue semantics, and ordered stop/flush/revoke/close cleanup;
+- RGB8 (PFNC format 0x02180014, namespace 4) display with row-padding and payload-size validation;
+- ExposureAuto (Off, Once, Continuous), ExposureTime (microseconds), and AmcamAnalogGainPercent (percentage) through GenTLFeatureAccess;
+- Amcam SDK-backed range validation and readback through the existing backend session implementation;
+- model-profile allow/deny policy applied to the descriptors reported by the routed feature provider;
+- camera selection, refresh, start/stop, SDK selection and full-screen UI.
 
-Color correction and pixel-format support are runtime-probed and exposed as editable controls. Pixel-format changes are constrained to the enumerated formats returned by Amcam_get_PixelFormatSupport and are rejected during acquisition. Other Amcam feature groups are capability-described from the model flags, but controls not yet wired into the Swift backend are labelled as pending. They are not falsely exposed as editable settings. The next control integrations should follow the supplied wrapper's feature semantics and add readback plus model-specific tests before UI activation.
+The following controls are intentionally not editable in the routed app yet: discrete resolution, pixel format, color matrix, white balance, fixed frame rate and frame-speed level. Some have SDK-level support, but the application will not call those SDK methods directly. Each control must first gain a typed feature descriptor, model-specific availability, validated units/ranges and readback tests.
+
+The display decoder currently accepts RGB8 only. Mono, Bayer, packed RAW, YUV and other PFNC formats require format-specific decoders. The app currently registers the Amcam backend; native CTI Producer selection in the UI is not yet implemented. Native CTI feature access still requires a verified GenApi XML/port path. No synthetic register map or fake GenApi XML is used.
 
 ## Build and run
 
-The application is built on the macOS GitHub Actions runner. A local Xcode installation is not required to download and run the packaged app.
+The app is built and packaged by hosted macOS GitHub Actions. A local Xcode installation is not required.
 
-1. Open the repository's swift-gentl-api branch Actions run.
-2. Download artifact amcam-imaging-macos-arm64.
-3. Extract Amcam-Imaging-macos-arm64.zip.
-4. Open Amcam Imaging.app.
-5. If the app does not find the SDK automatically, use SDK… to select the vendor libamcam.dylib.
+1. Open the latest successful [macOS workflow run](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions).
+2. Download the `amcam-imaging-macos-arm64` artifact.
+3. Extract `Amcam-Imaging-macos-arm64.zip`.
+4. Open `Amcam Imaging.app`.
+5. If the app does not find the SDK automatically, use SDK… to select the vendor `libamcam.dylib`.
 6. Select the camera from the hardware dock, then start live acquisition.
 
-The vendor SDK is proprietary and is not bundled. The app requires a compatible arm64 libamcam.dylib version 58.28273.20250415. The first hardware acceptance run must verify discovery, open, live RGB image, frame rate, exposure mode transitions, manual exposure readback, resolution changes, and clean stop/close on the physical MU503.
+The vendor SDK is proprietary and is not bundled. The app requires a compatible arm64 `libamcam.dylib` version 58.28273.20250415. The app is ad-hoc signed for local testing, not notarized. CI does not establish physical camera compatibility; MU503 acceptance remains a separate hardware test.
 
 ## Verification boundary
 
@@ -176,18 +174,7 @@ Swift package tests use a deterministic native C fixture. They verify ABI calls,
 
 ## CI build and current runnable artifact
 
-Latest successful macOS validation:
-
-- Workflow run: [44689152308](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44689152308)
-- Source revision used by the build: `07ebaf591ac4052ef525952b026edbeec0727d8a`
-- Amcam package tests: 21 XCTest cases scheduled and passed.
-- Diagnostic probe: release arm64 build and upload passed.
-- Imaging application: release build passed, app-bundle code signature verification passed, and Mach-O arm64 verification passed.
-- App artifact ID: `14606959758`
-- Artifact SHA-256: `6638aeb9d309d49e98577562d517080454d2d2b4221b5b2af66c6c86a198f903`
-- Artifact expiry: December 4, 2026.
-
-The app is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK.
+The last successful hosted run before the model-package extraction was [44698894492](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44698894492). It passed the GenTLAPI, GenTLRouter, AmcamGenTL and GenTLNative package suites and built the macOS camera probe and imaging app. The model-package extraction and new CI guard are being validated in the current workflow run; do not treat the earlier result as validation of the new package boundary.
 
 ## TDD assessment
 
@@ -197,5 +184,10 @@ The entire development history is not strictly TDD: some earlier controls were i
 
 
 ## Package dependency boundary (2026-11-20)
+
+Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.
+
+
+## Package dependency boundary
 
 Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.

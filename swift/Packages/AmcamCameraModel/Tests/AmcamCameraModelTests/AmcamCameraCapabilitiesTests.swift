@@ -1,5 +1,5 @@
 import XCTest
-@testable import AmcamGenTL
+@testable import AmcamCameraModel
 
 final class AmcamCameraCapabilitiesTests: XCTestCase {
     private let implemented: Set<AmcamCameraFeature> = [

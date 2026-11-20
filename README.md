@@ -16,9 +16,10 @@ The application uses one GenTL API contract with two interchangeable implementat
 - **GenTLABI** — shared imported C declarations from the pinned EMVA GenTL header, including ABI structure-layout checks. This is the single ABI source of truth.
 - **GenTLAPI** — the one application-facing Swift protocol. It mirrors the GenTL function surface and uses the imported GenTL C ABI types; it is a contract, not a Producer implementation.
 - **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
-- **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
-- **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions, including optional typed feature forwarding.
-- **AmcamImagingApp** — standalone macOS SwiftUI executable under `swift/Apps/AmcamImagingApp`; separated from the backend package so it can depend on GenTLRouter without creating a SwiftPM cycle.
+- **AmcamCameraModel** — SDK-independent camera value types, capability descriptors, control snapshots and model-profile policy.
+- **AmcamGenTL** — Amcam SDK-backed implementation of the same contract; it re-exports AmcamCameraModel for source compatibility.
+- **GenTLRouter** — backend registration, discovery aggregation, backend-bound sessions, typed feature forwarding and generic GenTL data-stream acquisition.
+- **AmcamImagingApp** — standalone macOS SwiftUI executable under `swift/Apps/AmcamImagingApp`; depends on AmcamCameraModel + GenTLABI + GenTLAPI + GenTLRouter, never on AmcamGenTL.
 
 The shared GenTLABI package is extracted. GenTLAPI declares all 64 GenTL 1.6 operations as a Swift protocol using imported C ABI types and raw GenTL-style return codes. GenTLNative forwards those calls to the actual C function pointers exported by dynamically loaded .cti Producers. GenTLRouter and application code call the Swift protocol; they do not call C function pointers directly. Both backends implement the same contract. A source-level prototype comparison found exact signature matches; build, runtime and device verification remain pending. Older typed-handle and throwing convenience helpers remain internal behind BackendConvenience SPI.
 
