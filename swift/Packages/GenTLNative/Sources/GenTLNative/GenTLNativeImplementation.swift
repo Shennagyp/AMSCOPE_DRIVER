@@ -297,7 +297,7 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
 
     // MARK: Library
 
-    public func GCInitLib() throws {
+    public func swiftGCInitLib() throws {
         lock.lock()
         defer { lock.unlock() }
         guard !initialized else { throw GC_ERROR.resourceInUse }
@@ -305,7 +305,7 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
         initialized = true
     }
 
-    public func GCCloseLib() throws {
+    public func swiftGCCloseLib() throws {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
