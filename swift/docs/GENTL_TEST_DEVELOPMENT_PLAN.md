@@ -335,7 +335,7 @@ T0 is therefore partially complete at the source-inspection level. Package compi
 - Added `Tests/MockGenTLProducer/MockGenTLProducer.c`, a C shared-library fixture that includes the pinned `GenTL_v1_6.h`.
 - The fixture exports the 47 entry points currently classified by `GenTLProducerLibrary.requiredEntryPoints`: 46 deterministic `GC_ERR_NOT_IMPLEMENTED` stubs and a custom `GCGetInfo` implementation.
 - The custom `GCGetInfo` writes a known datatype, payload marker, and payload size, then returns the distinctive error code `-4321`. This makes argument/output/result forwarding observable across the real C ABI.
-- The fixture supports `MOCK_OMIT_GCGETINFO`, creating a malformed Producer variant for required-symbol rejection tests.
+- The fixture supports `MOCK_OMIT_<symbol>` for every required base export, creating a malformed Producer variant for each required-symbol rejection test.
 - Added `GenTLNativeIntegrationTests.swift`. It compiles the C fixture at test runtime with the macOS SDK compiler, loads the resulting `.cti` through `GenTLNativeImplementation`, and tests output and error forwarding.
 - Added tests for missing required `GCGetInfo` rejection and absent optional `GCGetNumPortURLs` behavior. The latter asserts `GC_ERR_NOT_IMPLEMENTED` and that the caller's output sentinel remains unchanged.
 - Updated the native test target dependencies to import `GenTLABI` and `GenTLAPI`, and used the existing test target rather than adding a parallel package.
@@ -377,7 +377,7 @@ The native test directory already contained `GenTLProducerCatalogTests.swift` an
 ### Expanded mock Producer
 
 The C fixture now declares all 64 GenTL exports from the pinned header, not only the 47 required base exports. It retains the loader policy distinction:
-- 47 GenTL 1.0 base exports are always present except in the explicit `MOCK_OMIT_GCGETINFO` negative-test variant.
+- 47 GenTL 1.0 base exports are present in the normal build; each can be omitted individually using its `MOCK_OMIT_<symbol>` compile-time flag.
 - 17 later-revision exports can be omitted together using `MOCK_OMIT_OPTIONAL_EXPORTS`.
 - Every ordinary stub returns a unique error value derived from its header operation index. A wrong function-pointer mapping therefore produces the wrong result instead of passing because every stub returns the same generic error.
 - Stateful library/event functions return success where needed to let the native implementation complete a legal registration and shutdown sequence.
