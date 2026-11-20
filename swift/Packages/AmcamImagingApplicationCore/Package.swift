@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "AmcamImagingApplicationCore",
+    platforms: [.macOS(.v13)],
     products: [
         .library(name: "AmcamImagingApplicationCore", targets: ["AmcamImagingApplicationCore"])
     ],
