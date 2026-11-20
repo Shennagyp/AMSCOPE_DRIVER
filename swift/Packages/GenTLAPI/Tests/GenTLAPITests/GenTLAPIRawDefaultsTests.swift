@@ -8,7 +8,6 @@ final class GenTLAPIRawDefaultsTests: XCTestCase {
     func testUnimplementedDefaultFunctionsReturnGenTLStatusCodes() {
         let api = DefaultGenTLAPI()
         let handle = UnsafeMutableRawPointer(bitPattern: 1)!
-        let handle = UnsafeMutableRawPointer(bitPattern: 1)!
 
         XCTAssertEqual(api.GCInitLib(), GenTLABI.GenTLABI_ErrorNotImplemented())
         XCTAssertEqual(api.GCCloseLib(), GenTLABI.GenTLABI_ErrorNotImplemented())
