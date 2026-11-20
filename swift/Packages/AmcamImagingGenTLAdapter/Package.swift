@@ -23,7 +23,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AmcamImagingGenTLAdapterTests",
-            dependencies: ["AmcamImagingGenTLAdapter"]
+            dependencies: ["AmcamImagingGenTLAdapter", .product(name: "GenTLRouter", package: "GenTLRouter")]
         )
     ]
 )
