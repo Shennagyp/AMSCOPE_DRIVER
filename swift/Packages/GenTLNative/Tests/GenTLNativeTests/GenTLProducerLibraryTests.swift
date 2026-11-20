@@ -70,6 +70,21 @@ final class GenTLProducerLibraryTests: XCTestCase {
         }
     }
 
+
+    func testLoaderReportsInvalidDynamicLibrary() throws {
+        let invalid = FileManager.default.temporaryDirectory
+            .appendingPathComponent("invalid-\(UUID().uuidString).cti")
+        try Data("not a Mach-O dynamic library".utf8).write(to: invalid)
+        defer { try? FileManager.default.removeItem(at: invalid) }
+
+        XCTAssertThrowsError(try GenTLProducerLibrary(url: invalid)) { error in
+            guard case GenTLProducerLibraryError.loadFailed(let path, _) = error else {
+                return XCTFail("Expected loadFailed, received \(error)")
+            }
+            XCTAssertEqual(path, invalid.standardizedFileURL.resolvingSymlinksInPath().path)
+        }
+    }
+
     func testLoaderReportsMissingProducerFile() throws {
         let missing = FileManager.default.temporaryDirectory
             .appendingPathComponent("missing-\(UUID().uuidString).cti")
