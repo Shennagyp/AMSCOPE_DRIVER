@@ -241,6 +241,16 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(callCount(3), 1, "GCCloseLib must be invoked exactly once.")
         XCTAssertEqual(callCount(8), 1, "GCRegisterEvent must be invoked exactly once.")
         XCTAssertEqual(callCount(9), 1, "GCUnregisterEvent must be invoked exactly once.")
+        XCTAssertEqual(operations.count + 6, 64)
+
+        for operationIndex in 0..<64 {
+            let expectedCount: UInt32 = operationIndex == 14 ? 2 : 1
+            XCTAssertEqual(
+                callCount(UInt32(operationIndex)),
+                expectedCount,
+                "GenTL operation index \(operationIndex) was not dispatched the expected number of times."
+            )
+        }
     }
 
     func testNativeLoaderRejectsEachMissingRequiredEntryPoint() throws {
