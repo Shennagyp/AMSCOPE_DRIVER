@@ -8,6 +8,11 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         let resolver = AmcamCameraStateResolver()
         let descriptors = [
             CameraFeatureDescriptor(
+                name: "ExposureAuto", displayName: "Auto exposure", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: true,
+                enumerationValues: ["Off", "Once", "Continuous"]
+            ),
+            CameraFeatureDescriptor(
                 name: "ExposureTime", displayName: "Exposure", kind: .integer,
                 isAvailable: true, isReadable: true, isWritable: true,
                 numericRange: CameraFeatureNumericRange(minimum: 100, maximum: 500_000)
@@ -21,6 +26,11 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 name: "AmcamPixelFormat", displayName: "Pixel format", kind: .enumeration,
                 isAvailable: true, isReadable: true, isWritable: true,
                 enumerationValues: ["0", "8"]
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamFrameSpeedLevel", displayName: "Frame speed", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: true,
+                numericRange: CameraFeatureNumericRange(minimum: 0, maximum: 3)
             ),
             CameraFeatureDescriptor(
                 name: "AmcamFixedFrameRate", displayName: "Fixed frame rate", kind: .floatingPoint,
