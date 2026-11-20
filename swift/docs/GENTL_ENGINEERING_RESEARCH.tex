@@ -597,16 +597,17 @@ The immediate product objective is reliable operation of the AmScope MU503 camer
 
 A deterministic native mock SDK was added as a C dynamic library fixture. The fixture is loaded through the same \texttt{dlopen}/\texttt{dlsym} code as the vendor SDK; it is not a Swift fake and does not bypass the ABI boundary. The fixture reports the Amcam SDK version expected by the implementation and models the MU503 preview modes 2560x1922, 1280x960, and 640x480. It deliberately invokes the image callback synchronously from \texttt{Amcam\_StartPullModeWithCallback}, exercising callback reentrancy before the start call returns.
 
-The Amcam package test job completed successfully on macOS 15.8.2 arm64 with Swift 6.1.2 in workflow run \texttt{44680215484}, source commit \texttt{4969dbcbfbeb7e0b713df2b6cf852a22c73d6bb0}. The Amcam job's package-test step succeeded. Its six scheduled test cases comprise three RGB24 layout tests and three SDK integration tests:
+The Amcam package test job completed successfully on macOS 15.8.2 arm64 with Swift 6.1.2 in workflow run \texttt{44680315441}, source commit \texttt{7e7c10f203cb0c7f620bac9a0e730567b0f8b5f3}. The Amcam job's package-test step succeeded. Its seven scheduled test cases comprise three RGB24 layout tests and four SDK integration tests:
 \begin{itemize}
 \item device enumeration, model/resolution metadata, camera open, three repeated start/frame/stop cycles, synchronous callback delivery, disconnect notification, and callback cleanup;
 \item exposure auto/manual transitions, exposure range validation and readback, resolution selection/readback, a captured frame at 1280x960, and rejection of resolution changes while streaming;
-\item data-stream input queue, finite acquisition, new-buffer event delivery, RGB24 buffer contents and metadata, and completion of the GenTL stop/close lifecycle.
+\item data-stream input queue, finite acquisition, new-buffer event delivery, RGB24 buffer contents and metadata, and completion of the GenTL stop/close lifecycle;
+\item undersized-buffer fault injection, verifying incomplete-buffer metadata and that the consumer's memory is not overwritten.
 \end{itemize}
 
 The workflow as a whole was not green: the separate \texttt{GenTLNative} and \texttt{GenTLRouter} jobs failed. Those failures are not evidence against the Amcam package job, which completed successfully. Conversely, the Amcam mock tests are not evidence that a physical MU503 has been opened or streamed on the user's Mac.
 
-After that successful run, the ABI declaration for \texttt{AmcamFrameInfoV2.timestamp} was corrected to signed 64-bit, matching the SDK's frame-info structure semantics. Negative timestamp values are treated as unavailable rather than reinterpreted as very large unsigned timestamps. An additional undersized-buffer test now verifies that a too-small consumer buffer is reported incomplete and is not overwritten. These latest changes are pending a subsequent macOS CI result at the time of this document revision.
+The successful run \texttt{44680315441} includes the signed 64-bit \texttt{AmcamFrameInfoV2.timestamp} ABI correction and the undersized-buffer safety test. Negative timestamp values are treated as unavailable rather than reinterpreted as very large unsigned timestamps. The job log schedules all seven test cases and the Amcam package-test step succeeds.
 
 The physical acceptance gate remains separate:
 \begin{enumerate}
@@ -619,6 +620,8 @@ The physical acceptance gate remains separate:
 
 The previous hardware profile records the user's Mac connection as USB 2.0 High Speed at 480 Mbit/s through the observed hub path. The historical Windows observation of 101 fps at 640x480 is a performance reference, not a promise for the present Mac connection. The SDK path must first measure the actual camera and transport behavior; nominal USB signaling speed and published frame rates are not substitutes for measured image-payload goodput. Do not change exposure or gain automatically to compensate for lower transport capacity.
 
-The next development work is therefore Amcam SDK correctness, camera controls, buffer ownership, event delivery, disconnect cleanup, and a reproducible macOS hardware smoke-test path. Linux/Windows native-loader expansion and platform-neutral mock compilation are deferred until the AmScope camera path is reliable on macOS.
+A macOS hardware-probe executable has now been added. It uses the real AmcamGenTL backend to enumerate the camera, open an exclusive device session, acquire finite frame batches through the GenTL data-stream buffer/event path, report frame metadata and timestamps, and optionally write the last complete RGB frame as PPM. The CI workflow now builds the Apple Silicon executable and uploads it with usage instructions as an artifact. Workflow run \texttt{44680725572} is the first run containing this build-and-upload step and is queued at the time of this document revision; the executable has not yet been CI-compiled. The physical camera smoke test remains outstanding.
+
+The next development work is therefore Amcam SDK correctness, camera controls, buffer ownership, event delivery, disconnect cleanup, and execution of the hardware probe on the user's Mac. Linux/Windows native-loader expansion and platform-neutral mock compilation are deferred until the AmScope camera path is reliable on macOS.
 
 \end{document}
