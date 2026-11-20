@@ -22,7 +22,7 @@ private typealias SetOptionFunction = @convention(c) (UnsafeMutableRawPointer?, 
 private typealias GetSpeedFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?) -> Int32
 private typealias SetSpeedFunction = @convention(c) (UnsafeMutableRawPointer?, UInt16) -> Int32
 private typealias GetFrameRateFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?, UnsafeMutablePointer<UInt32>?, UnsafeMutablePointer<UInt32>?) -> Int32
-public typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
+typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
 /// Keeps an Amcam SDK loaded when a camera handle could not be closed safely.
 private final class AmcamSDKRetainer: @unchecked Sendable {
