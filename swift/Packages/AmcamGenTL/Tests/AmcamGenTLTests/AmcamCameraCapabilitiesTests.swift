@@ -75,6 +75,35 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
         XCTAssertFalse(noProbe.availability(of: .discreteFrameSpeed).available)
     }
 
+    func testModelProfileJSONUsesFeatureGroupsAndExactModelCode() throws {
+        let json = Data("""
+        [{
+          "modelCode": "MU503",
+          "displayName": "MU503",
+          "allowedFeaturesByGroup": {
+            "capture": ["liveCapture", "resolution"],
+            "exposureAndGain": ["exposureAuto", "exposureManual", "analogGain"]
+          },
+          "deniedFeatures": ["analogGain"]
+        }]
+        """.utf8)
+
+        let profiles = try JSONDecoder().decode([AmcamCameraModelProfile].self, from: json)
+        let registry = AmcamCameraProfileRegistry(profiles: profiles)
+        XCTAssertNotNil(registry.profile(for: "MU503"))
+        XCTAssertNil(registry.profile(for: "mu503"))
+
+        let capabilities = registry.resolve(
+            modelCode: "MU503",
+            modelFlags: 0,
+            maximumSpeedLevel: nil,
+            probes: [.exposureAuto: true, .exposureManual: true, .analogGain: true],
+            implemented: [.liveCapture, .resolution, .exposureAuto, .exposureManual, .analogGain]
+        )
+        XCTAssertTrue(capabilities.availability(of: .exposureManual).available)
+        XCTAssertFalse(capabilities.availability(of: .analogGain).available)
+    }
+
     func testAvailableGroupsContainOnlyUsableFeatures() {
         let capabilities = AmcamCameraProfileRegistry().resolve(
             modelCode: "ModelA", modelFlags: 0x0000004000000000,
