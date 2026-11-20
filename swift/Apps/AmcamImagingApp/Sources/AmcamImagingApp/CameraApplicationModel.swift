@@ -26,6 +26,7 @@ final class CameraApplicationModel: ObservableObject {
     private var lifecycleEventTask: Task<Void, Never>?
     private var featureDescriptors: [CameraFeatureDescriptor] = []
     private var hasInitialized = false
+    private var cameraSelectionGeneration: UInt64 = 0
     private var stateResolver = AmcamCameraStateResolver()
     private var frameRateEstimator = FrameRateEstimator()
 
@@ -47,11 +48,13 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func refreshDevicesOwned() async {
+        let operation = beginCameraSelectionOperation()
         guard let cameraProvider else {
             status = "AmScope camera provider is unavailable"
             return
         }
         let report = await cameraProvider.discover()
+        guard isCurrentCameraSelectionOperation(operation) else { return }
         let discoveredDevices = report.devices.map(\.device)
         let discoveredCandidates = Dictionary(
             uniqueKeysWithValues: report.devices.map { ($0.id, $0) }
@@ -61,8 +64,11 @@ final class CameraApplicationModel: ObservableObject {
         candidatesByID = discoveredCandidates
 
         if !discoveredDevices.contains(where: { $0.identifier == selectedDeviceID }) {
-            guard await closeSession() else {
-                status = "Camera disappeared; previous session cleanup is incomplete"
+            guard await closeSession(),
+                  isCurrentCameraSelectionOperation(operation) else {
+                if isCurrentCameraSelectionOperation(operation) {
+                    status = "Camera disappeared; previous session cleanup is incomplete"
+                }
                 return
             }
             selectedDeviceID = discoveredDevices.first?.identifier ?? ""
@@ -84,8 +90,10 @@ final class CameraApplicationModel: ObservableObject {
             ? nil
             : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
 
-        if !(await cameraLifecycle.snapshot()).hasSession, selectedDevice != nil {
-            await prepareSelectedCamera()
+        if !(await cameraLifecycle.snapshot()).hasSession,
+           isCurrentCameraSelectionOperation(operation),
+           selectedDevice != nil {
+            await prepareSelectedCamera(expectedGeneration: operation)
         }
     }
 
@@ -95,14 +103,16 @@ final class CameraApplicationModel: ObservableObject {
 
     private func selectDeviceOwned(_ identifier: String) async {
         guard identifier != selectedDeviceID else { return }
-        guard await closeSession() else { return }
+        let operation = beginCameraSelectionOperation()
+        guard await closeSession(),
+              isCurrentCameraSelectionOperation(operation) else { return }
         selectedDeviceID = identifier
         latestFrame = nil
         cameraCapabilities = nil
         controls = nil
         featureDescriptors = []
         status = selectedDevice.map { "Ready: \($0.displayName)" } ?? "No camera selected"
-        await prepareSelectedCamera()
+        await prepareSelectedCamera(expectedGeneration: operation)
     }
 
     /// UI command. The imaging library owns the session and acquisition lifecycle.
@@ -273,30 +283,43 @@ final class CameraApplicationModel: ObservableObject {
         Task { await writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex") }
     }
 
-    private func prepareSelectedCamera() async {
-        guard !(await cameraLifecycle.snapshot()).hasSession,
+    private func prepareSelectedCamera(expectedGeneration: UInt64) async {
+        guard isCurrentCameraSelectionOperation(expectedGeneration),
+              !(await cameraLifecycle.snapshot()).hasSession,
+              isCurrentCameraSelectionOperation(expectedGeneration),
               let candidate = candidatesByID[selectedDeviceID],
               let device = selectedDevice else { return }
 
         do {
             try await cameraLifecycle.open(candidate.runtimeDevice)
-            featureDescriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
-            updateSelectedDeviceResolutions(from: featureDescriptors)
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
+
+            let descriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
+            featureDescriptors = descriptors
+            updateSelectedDeviceResolutions(from: descriptors)
+
             await updateCurrentResolution()
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
+
+            let hasDataStream = await cameraLifecycle.supportsAcquisition()
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
             cameraCapabilities = stateResolver.capabilities(
                 for: device,
-                descriptors: featureDescriptors,
-                hasDataStream: await cameraLifecycle.supportsAcquisition()
+                descriptors: descriptors,
+                hasDataStream: hasDataStream
             )
             controls = await makeControlSnapshotOwned()
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
+
             status = "Ready — \(device.displayName)"
-            if featureDescriptors.isEmpty {
-                errorMessage = "The backend opened the device but did not expose typed feature access."
-            } else {
-                errorMessage = nil
-            }
+            errorMessage = descriptors.isEmpty
+                ? "The backend opened the device but did not expose typed feature access."
+                : nil
         } catch {
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
             _ = await closeSession()
+            guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
             status = "Unable to open camera through the AmScope camera provider"
             errorMessage = error.localizedDescription
         }
@@ -307,7 +330,9 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func configureSDKOwned() async {
-        guard await closeSession() else { return }
+        let operation = beginCameraSelectionOperation()
+        guard await closeSession(),
+              isCurrentCameraSelectionOperation(operation) else { return }
         cameraProvider = nil
         candidatesByID.removeAll()
         devices.removeAll()
@@ -320,6 +345,16 @@ final class CameraApplicationModel: ObservableObject {
             status = "AmScope camera provider is unavailable"
             errorMessage = error.localizedDescription
         }
+    }
+
+
+    private func beginCameraSelectionOperation() -> UInt64 {
+        cameraSelectionGeneration &+= 1
+        return cameraSelectionGeneration
+    }
+
+    private func isCurrentCameraSelectionOperation(_ generation: UInt64) -> Bool {
+        cameraSelectionGeneration == generation
     }
 
     @discardableResult
