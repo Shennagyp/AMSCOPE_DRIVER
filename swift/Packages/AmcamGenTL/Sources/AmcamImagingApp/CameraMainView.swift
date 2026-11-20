@@ -365,6 +365,22 @@ private struct FeatureGroupView: View {
         }
     }
 
+    private var availableExposureModes: [AmcamAutoExposureMode] {
+        var modes: [AmcamAutoExposureMode] = [.continuous, .once]
+        if capability?.availability(of: .exposureManual).isUsable == true {
+            modes.insert(.manual, at: 0)
+        }
+        return modes
+    }
+
+    private func exposureModeTitle(_ mode: AmcamAutoExposureMode) -> String {
+        switch mode {
+        case .manual: return "Fixed / Manual"
+        case .continuous: return "Auto continuous"
+        case .once: return "Auto once"
+        }
+    }
+
     @ViewBuilder
     private var exposureControls: some View {
         if capability?.availability(of: .exposureAuto).isUsable == true,
@@ -376,9 +392,9 @@ private struct FeatureGroupView: View {
                     get: { exposure.autoMode },
                     set: { model.setAutoExposureMode($0) }
                 )) {
-                    Text("Fixed / Manual").tag(AmcamAutoExposureMode.manual)
-                    Text("Auto continuous").tag(AmcamAutoExposureMode.continuous)
-                    Text("Auto once").tag(AmcamAutoExposureMode.once)
+                    ForEach(availableExposureModes, id: \.self) { mode in
+                        Text(exposureModeTitle(mode)).tag(mode)
+                    }
                 }
                 .labelsHidden()
                 .frame(width: 180)
