@@ -6,6 +6,7 @@
 
 /* This operation has observable outputs so the Swift test can prove that
    the real C function pointer was invoked with the original output storage. */
+#ifndef MOCK_OMIT_GCGETINFO
 GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCGetInfo(
     TL_INFO_CMD command,
     INFO_DATATYPE *type,
@@ -23,11 +24,6 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCGetInfo(
     }
     return (GC_ERROR)-4321;
 }
-
-#ifndef MOCK_OMIT_GCGETINFO
-/* The special implementation above is the exported GCGetInfo. */
-#else
-/* Build variant intentionally omits GCGetInfo to test required-symbol rejection. */
 #endif
 
 MOCK_STUB(GCGetLastError, (GC_ERROR *piErrorCode, char *sErrText, size_t *piSize))
