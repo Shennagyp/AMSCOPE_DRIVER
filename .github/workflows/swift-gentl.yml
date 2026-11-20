@@ -113,7 +113,7 @@ jobs:
             echo "The application must not depend on or instantiate backend implementation types." >&2
             exit 1
           fi
-          if grep -R -nE 'GenTLAcquisitionSession|GenTLFrame|candidate\\.open\\(access:|deviceSession\\.close\\(' swift/Apps/AmcamImagingApp/Sources; then
+          if grep -R -nE 'GenTLAcquisitionSession|GenTLFrame|candidate\.open\\(access:|deviceSession\.close\\(' swift/Apps/AmcamImagingApp/Sources; then
             echo "The frontend must not open, own, or read from GenTL acquisition resources directly." >&2
             exit 1
           fi
