@@ -113,7 +113,10 @@ public struct AmcamCameraStateResolver: Sendable {
         guard let increment = range.increment else { return true }
         let steps = (value - range.minimum) / increment
         let nearestStep = steps.rounded()
-        let tolerance = max(1e-9, abs(steps) * 1e-9)
+        let tolerance = max(
+            1e-9,
+            Double.ulpOfOne * max(1, abs(steps)) * 8
+        )
         return abs(steps - nearestStep) <= tolerance
     }
 
