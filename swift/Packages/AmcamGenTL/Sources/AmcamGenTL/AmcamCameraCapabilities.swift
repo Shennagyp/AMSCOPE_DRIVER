@@ -38,6 +38,17 @@ public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendabl
              .cameraLink, .coaxPress: return .transport
         }
     }
+
+    public var isInformational: Bool {
+        switch self {
+        case .cmosSensor, .ccdProgressiveSensor, .ccdInterlacedSensor, .highFullWell,
+             .globalShutter, .ghoptoSensor, .usb3, .usb3OverUSB2, .gigE, .fiveGigE,
+             .tenGigE, .twoPointFiveGigE, .cameraLink, .coaxPress:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 public enum AmcamCameraFeatureGroup: String, CaseIterable, Codable, Hashable, Sendable, Identifiable {
@@ -236,19 +247,6 @@ public struct AmcamCameraProfileRegistry: Sendable {
             )
         }
         return AmcamCameraCapabilities(modelCode: modelCode, modelFlags: modelFlags, features: records)
-    }
-
-    private extension AmcamCameraFeature {
-        var isInformational: Bool {
-            switch self {
-            case .cmosSensor, .ccdProgressiveSensor, .ccdInterlacedSensor, .highFullWell,
-                 .globalShutter, .ghoptoSensor, .usb3, .usb3OverUSB2, .gigE, .fiveGigE,
-                 .tenGigE, .twoPointFiveGigE, .cameraLink, .coaxPress:
-                return true
-            default:
-                return false
-            }
-        }
     }
 
     private static func requiredFlag(for feature: AmcamCameraFeature) -> UInt64? {
