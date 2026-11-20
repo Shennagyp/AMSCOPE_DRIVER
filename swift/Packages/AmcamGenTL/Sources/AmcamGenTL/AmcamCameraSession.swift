@@ -503,7 +503,9 @@ final class AmcamCameraSession: @unchecked Sendable {
                 pixelFormat: .rgb24,
                 bytes: Data(bytes: buffer, count: layout.payloadSize),
                 sequence: (info.flag & AmcamSDK.frameSequenceFlag) != 0 ? info.seq : nil,
-                deviceTimestampMicroseconds: (info.flag & AmcamSDK.frameTimestampFlag) != 0 ? info.timestamp : nil
+                deviceTimestampMicroseconds: (info.flag & AmcamSDK.frameTimestampFlag) != 0 && info.timestamp >= 0
+                    ? UInt64(info.timestamp)
+                    : nil
             )
             lock.unlock()
             handler(.success(frame))
