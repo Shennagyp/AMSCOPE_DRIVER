@@ -283,3 +283,8 @@ See `GENTL_TEST_DEVELOPMENT_PLAN.md` and `GENTL_ENGINEERING_RESEARCH.tex` for th
 The C Mock Producer now exports all 64 pinned GenTL functions. The native integration test invokes 60 operations through `any GenTLAPI` and asserts unique per-export return codes and native call counts; the four lifecycle operations (init, close, event register, event unregister) are exercised explicitly. The fixture supports variants that omit the required `GCGetInfo` symbol or all 17 optional later-revision symbols. A separate output-pointer test checks `GCGetInfo` writes and error propagation.
 
 Static source comparison confirms 64 header declarations, 64 protocol requirements, 64 mock exports, and complete dispatch-test enumeration. These are not compiler or runtime results. Execution is still pending on macOS/Xcode.
+
+
+### Native argument and memory sentinel expansion (2026-11-20)
+
+The native mock now checks more than function identity. `GCGetInfo` validates its command and output writes; `GCReadPort` validates an opaque handle, 64-bit address, output pointer/capacity, and payload write; `GCWritePort` validates the handle, address, input pointer, exact bytes, and size. The all-operation dispatch matrix has 58 unique return-code assertions, these two additional port probes, and four lifecycle calls, with call counters covering all 64 operations. Full argument permutation and output-buffer coverage remains outstanding.
