@@ -486,3 +486,19 @@ Hosted runners are now being allocated and workflow steps execute.
 - The native mock-producer test still uses `xcrun` on macOS. Linux/Windows native-loader validation and cross-platform mock compilation remain future work.
 
 Do not claim all-platform support from the Linux API result.
+
+
+### ABI boundary correction — 2026-11-20
+
+The macOS compiler diagnostics exposed a structural collision between the convenience handle/status wrappers in `GenTLTypes.swift` and identically named imported C ABI types re-exported by `GenTLAPI`.
+
+Corrections now committed:
+
+- Keep the native backend's high-level wrapper implementation in the class body; qualify C ABI types only in its raw `GenTLAPI` conformance extension.
+- Remove the redundant direct `GenTLABI` import from the native implementation to avoid ambiguous convenience types.
+- Model output handles as pointers to nullable handle values, e.g. `UnsafeMutablePointer<TL_HANDLE?>?`, matching imported C function-pointer semantics.
+- Apply the same output-handle pointer semantics to both backends and raw defaults.
+- Add `GenTLABI_ErrorFromCode` in the C ABI shim to convert official `GC_ERROR_LIST` values to the ABI's `GC_ERROR` scalar type.
+- Remove duplicate Amcam raw-handle helpers; retain the identity-validating helper.
+
+The earlier Linux API pass remains valid for commit `430ccf9da3b098cedb79fd932874c031943317cd`. Latest source commit: `6364f89117ea3fc76fe4cb62663913eab100f6a1`; workflow [44676898035](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44676898035) is in progress. Linux Swift setup has not completed and macOS jobs remain queued. **The new ABI changes are not yet CI-verified.**
