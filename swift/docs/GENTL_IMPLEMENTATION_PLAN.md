@@ -6,7 +6,7 @@
 
 ## 1. Objective
 
-Implement the GenTL API in Swift by binding to the standard GenTL C interface, not by independently recreating a parallel API from memory or translating the standard into a second, hand-maintained set of declarations.
+Keep one application-facing Swift protocol that mirrors the GenTL function surface, while binding the native CTI backend to the actual standard GenTL C ABI. The Swift protocol is the application's call contract; it does not implement or export a GenTL Producer. The CTI supplies the native function implementations. Imported C declarations remain authoritative for ABI types and native function-pointer signatures.
 
 The checked-in GenTL 1.6 C header is the authority for:
 
@@ -25,7 +25,7 @@ There is one GenTL contract and two interchangeable implementations.
 
 The sole application-facing GenTL API contract.
 
-It must represent the actual GenTL function surface and semantics. Its declarations must be derived from, and checked against, the imported C declarations. It must not maintain independent copies of GenTL enums, constants, structures, handle representations or function signatures when those already exist in the header.
+It is the stable application-facing Swift contract and mirrors the GenTL function surface and semantics. Its declarations are checked against the imported C declarations. ABI-level argument and return types come from GenTLABI; do not create independent copies of GenTL enums, constants, structures or handle representations when the header already defines them.
 
 The public operations must preserve GenTL naming, module ownership, parameter meaning, output-parameter behavior, error results and lifecycle semantics. Any safer Swift conveniences must be thin additions over this contract; they must not replace or redefine the GenTL operations.
 
@@ -126,7 +126,7 @@ An absent later-revision function is reported as not implemented when invoked. T
 
 ### Phase 2 — Correct the GenTLAPI contract
 
-**Status: implemented at source level.** GenTLAPI now declares the 64 functions from the pinned header using imported GenTL ABI types, raw pointers, output parameters and GC_ERROR return values. A source-level comparison against the 64 C prototypes found exact parameter and return-type matches. The former Swift convenience protocols and types remain behind BackendConvenience SPI for internal migration only.
+**Status: implemented at source level.** GenTLAPI now declares the 64 functions from the pinned header using imported GenTL ABI types, raw pointers, output parameters and GC_ERROR return values. A source-level comparison against the 64 C prototypes found exact parameter and return-type matches. The older typed-handle, decoded-info and throwing convenience helpers remain behind BackendConvenience SPI for internal backend use. They are not the application-facing GenTL contract.
 
 - Audit every public type and operation against the imported header.
 - Replace hand-maintained duplicates with imported C declarations.
