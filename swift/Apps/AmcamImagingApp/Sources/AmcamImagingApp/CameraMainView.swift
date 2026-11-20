@@ -87,7 +87,6 @@ final class CameraMainViewController: NSViewController {
         stopButton.target = self
         stopButton.action = #selector(stopCapture)
         footer.addArrangedSubview(stopButton)
-        footer.addArrangedSubview(makeButton("SDK…", target: self, action: #selector(chooseSDK)))
         footer.addArrangedSubview(makeButton("Settings…", target: self, action: #selector(showSettings)))
         footer.addArrangedSubview(makeButton("Full Screen", target: self, action: #selector(toggleFullScreen)))
         root.addSubview(footer)
@@ -194,20 +193,10 @@ final class CameraMainViewController: NSViewController {
         model.selectDevice(identifier)
     }
     @objc private func refreshCameras() {
-        if model.sdkPath == nil { chooseSDK() } else { model.refreshDevices() }
+        model.refreshDevices()
     }
     @objc private func startCapture() { model.start() }
     @objc private func stopCapture() { model.stop() }
-    @objc private func chooseSDK() {
-        let panel = NSOpenPanel()
-        panel.title = "Select the Amcam SDK"
-        panel.message = "Choose the vendor libamcam.dylib"
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        if panel.runModal() == .OK, let url = panel.url {
-            model.configureSDK(at: url)
-        }
-    }
     @objc private func toggleFullScreen() { view.window?.toggleFullScreen(nil) }
 
     @objc private func showSettings() {
