@@ -22,6 +22,7 @@ The Swift `genTLVersion` property identifies the revision represented by this AP
   - GenTL 1.5: `DSGetNumBufferParts`, `DSGetBufferPartInfo`.
   - GenTL 1.6: composite buffers, stacked buffer metadata, flows and buffer segments.
 - An absent optional function returns `GC_ERR_NOT_IMPLEMENTED`.
+- `EVENT_SIZE_MAX` is a GenTL 1.2 `EventGetInfo` command. When a GenTL 1.0 Producer rejects that command, the native Consumer can still receive the standard fixed-size New Buffer event structure (two pointers). It does not guess a maximum for variable Error-event payloads and returns `GC_ERR_NOT_IMPLEMENTED` for that legacy case.
 - Producer handles remain opaque; this implementation does not synthesize handle IDs.
 - The pinned GenTL 1.6 header is compiled into the ABI target, with layout checks for the packed GenTL structures used by this consumer.
 
