@@ -42,6 +42,7 @@ public struct AmcamCameraDiscoveryReport: Sendable {
 /// camera-model values and opaque runtime devices, never GenTL handles or ABI calls.
 public actor AmcamCameraProvider {
     private let router: GenTLRouter
+    private var discoveryTask: Task<AmcamCameraDiscoveryReport, Never>?
 
     public init(backendID: String = "amcam-sdk") throws {
         let router = GenTLRouter()
@@ -52,10 +53,17 @@ public actor AmcamCameraProvider {
     /// GenTL discovery and metadata calls are synchronous vendor operations;
     /// keep them off the UI executor.
     public func discover(timeout: UInt64 = 2_000) async -> AmcamCameraDiscoveryReport {
+        if let discoveryTask {
+            return await discoveryTask.value
+        }
         let router = self.router
-        return await Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .userInitiated) {
             Self.discover(using: router, timeout: timeout)
-        }.value
+        }
+        discoveryTask = task
+        let report = await task.value
+        discoveryTask = nil
+        return report
     }
 
     private static func discover(
