@@ -464,3 +464,8 @@ Added negative-path tests for the sentinel operations:
 - invalid `GCWritePort` payload returns its configured custom error while preserving the caller's size value.
 
 These cases test that argument validation failures and custom Producer errors cross the native function-pointer boundary unchanged and do not create false output data.
+
+
+### Loader invalid-binary failure case
+
+Added a test that writes a regular file with a `.cti` suffix but invalid Mach-O contents and asserts the loader reports `loadFailed`, distinguishing an existing but unloadable file from a missing file or non-regular path.
