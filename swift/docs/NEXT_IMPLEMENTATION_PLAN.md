@@ -25,12 +25,10 @@ Hosted macOS GitHub Actions remain responsible for package tests and app compila
 
 ## 2. Package and executable boundaries
 
-Keep the dependency direction:
+Current dependency direction:
 
 ```text
 AmcamImagingApp
-  -> AmcamImagingApplicationCore
-  -> AmcamImagingGenTLAdapter -> GenTLRouter
   -> AmcamImagingCore
   -> AmcamCameraModel
   -> GenTLAPI + GenTLABI
@@ -43,6 +41,15 @@ AmcamImagingApp
 amcam-camera-probe
   -> AmcamGenTL
   -> GenTLAPI
+```
+
+Staged lifecycle boundary (packages are implemented and tested; AppKit model migration remains pending):
+
+```text
+AmcamImagingApp
+  -> AmcamImagingApplicationCore
+  -> AmcamImagingGenTLAdapter
+  -> GenTLRouter
 ```
 
 Rules:
