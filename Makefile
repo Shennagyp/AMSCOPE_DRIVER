@@ -32,6 +32,7 @@ test-local:
 	  swift/Packages/AmcamCameraModel \
 	  swift/Packages/AmcamImagingCore \
 	  swift/Packages/AmcamImagingApplicationCore \
+  swift/Packages/AmcamImagingGenTLAdapter \
 	  swift/Packages/AmcamGenTL \
 	  swift/Packages/GenTLRouter; do \
 	  echo "==> swift test: $$package"; \
