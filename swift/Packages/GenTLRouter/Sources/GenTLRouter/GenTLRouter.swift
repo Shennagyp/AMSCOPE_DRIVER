@@ -291,7 +291,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         }
 
         do {
-            try api.GCCloseLib()
+            try api.swiftGCCloseLib()
         } catch {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
@@ -511,7 +511,7 @@ public final class GenTLRouter: @unchecked Sendable {
         }
 
         let api = try registration.makeAPI()
-        try api.GCInitLib()
+        try api.swiftGCInitLib()
 
         do {
             let systemHandle = try api.TLOpen()
@@ -526,7 +526,7 @@ public final class GenTLRouter: @unchecked Sendable {
             return context
         } catch {
             do {
-                try api.GCCloseLib()
+                try api.swiftGCCloseLib()
             } catch {
                 unavailableBackendIDs.insert(registration.identifier)
                 GenTLProviderRetainer.shared.retain(api)
