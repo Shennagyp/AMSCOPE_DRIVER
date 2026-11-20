@@ -1,21 +1,22 @@
 import Foundation
 
-final class AmcamCameraDriver: @unchecked Sendable {
+public final class AmcamCameraDriver: @unchecked Sendable {
     private let sdk: AmcamSDK
 
-    init(libraryURL: URL) throws {
+    public init(libraryURL: URL) throws {
         self.sdk = try AmcamSDK(libraryURL: libraryURL)
     }
 
-    func discover() throws -> [AmcamDevice] { try sdk.enumerate() }
+    public func discover() throws -> [AmcamDevice] { try sdk.enumerate() }
 
-    func open(deviceIdentifier: String) throws -> AmcamCameraSession {
+    public func open(deviceIdentifier: String) throws -> AmcamCameraSession {
         let opened = try sdk.open(identifier: deviceIdentifier)
         return AmcamCameraSession(
             sdk: sdk,
             handle: opened.handle,
             width: opened.width,
             height: opened.height,
+            modelCode: device.modelCode,
             modelFlags: opened.modelFlags,
             maximumSpeedLevel: opened.maximumSpeedLevel,
             resolutions: opened.resolutions,
