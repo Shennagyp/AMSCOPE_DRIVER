@@ -648,7 +648,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             try? implementation.swiftGCCloseLib()
         }
 
-        let descriptors = try implementation.featureDescriptors(for: device)
+        let descriptors = try implementation.featureDescriptors(for: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
         let byName = Dictionary(uniqueKeysWithValues: descriptors.map { ($0.name, $0) })
         let auto = try XCTUnwrap(byName["ExposureAuto"])
         let exposure = try XCTUnwrap(byName["ExposureTime"])
@@ -672,15 +672,15 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertTrue(gain.isAvailable)
 
         XCTAssertEqual(
-            try implementation.readFeature("ExposureAuto", from: device),
+            try implementation.readFeature("ExposureAuto", from: GenTLFeatureDeviceHandle(rawValue: device.rawValue)),
             .enumeration("Continuous")
         )
-        try implementation.writeFeature(.enumeration("Off"), named: "ExposureAuto", to: device)
-        try implementation.writeFeature(.integer(12_000), named: "ExposureTime", to: device)
-        try implementation.writeFeature(.integer(200), named: "AmcamAnalogGainPercent", to: device)
+        try implementation.writeFeature(.enumeration("Off"), named: "ExposureAuto", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
+        try implementation.writeFeature(.integer(12_000), named: "ExposureTime", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
+        try implementation.writeFeature(.integer(200), named: "AmcamAnalogGainPercent", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
 
-        XCTAssertEqual(try implementation.readFeature("ExposureTime", from: device), .integer(12_000))
-        XCTAssertEqual(try implementation.readFeature("AmcamAnalogGainPercent", from: device), .integer(200))
+        XCTAssertEqual(try implementation.readFeature("ExposureTime", from: GenTLFeatureDeviceHandle(rawValue: device.rawValue)), .integer(12_000))
+        XCTAssertEqual(try implementation.readFeature("AmcamAnalogGainPercent", from: GenTLFeatureDeviceHandle(rawValue: device.rawValue)), .integer(200))
     }
 
     private func buildMockSDK() throws -> URL {
