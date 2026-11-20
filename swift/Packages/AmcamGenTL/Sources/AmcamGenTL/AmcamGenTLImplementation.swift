@@ -35,15 +35,51 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
     private var portOwners: [UInt: DEV_HANDLE] = [:]
     private var dataStreams: [UInt: AmcamDataStreamRecord] = [:]
     private var events: [UInt: AmcamEventRecord] = [:]
-    private var nextHandle: UInt = 2
+    private var bufferHandlesByStream: [UInt: Set<UInt>] = [:]
+
+    // Each C-facing void* handle is backed by a unique allocation. Retired
+    // tokens stay allocated until backend destruction so stale handles cannot
+    // be recycled into a later object identity.
+    private var activeHandleTokens: [UInt: UnsafeMutableRawPointer] = [:]
+    private var retiredHandleTokens: [UnsafeMutableRawPointer] = []
 
     private let lastErrorThreadKey = "AmcamGenTLImplementation.lastError.\(UUID().uuidString)"
 
-    private let systemHandle = TL_HANDLE(rawValue: 1)
-    private let interfaceHandle = IF_HANDLE(rawValue: 1)
+    private let systemToken: UnsafeMutableRawPointer
+    private let interfaceToken: UnsafeMutableRawPointer
+    private let systemHandle: TL_HANDLE
+    private let interfaceHandle: IF_HANDLE
 
     public init(sdkLibraryURL: URL) {
+        let systemToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+        let interfaceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
         self.sdkLibraryURL = sdkLibraryURL.standardizedFileURL
+        self.systemToken = systemToken
+        self.interfaceToken = interfaceToken
+        self.systemHandle = TL_HANDLE(rawValue: UInt(bitPattern: systemToken))
+        self.interfaceHandle = IF_HANDLE(rawValue: UInt(bitPattern: interfaceToken))
+    }
+
+    deinit {
+        lock.lock()
+        let canRelease = !initialized &&
+            !systemOpen &&
+            !interfaceOpen &&
+            openDevices.isEmpty &&
+            dataStreams.isEmpty &&
+            events.isEmpty
+        let active = Array(activeHandleTokens.values)
+        let retired = retiredHandleTokens
+        activeHandleTokens.removeAll()
+        retiredHandleTokens.removeAll()
+        lock.unlock()
+
+        // If cleanup was not proven complete, leave tokens allocated. A leaked
+        // opaque token is safer than recycling an address still held by a client.
+        guard canRelease else { return }
+        (active + retired).forEach { $0.deallocate() }
+        systemToken.deallocate()
+        interfaceToken.deallocate()
     }
 
     public var genTLVersion: GenTLVersion { .v1_6 }
@@ -385,6 +421,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
             )
         }
         dataStreams[handle.rawValue] = stream
+        bufferHandlesByStream[handle.rawValue] = []
         record.dataStreamHandle = handle
         return handle
     }
@@ -417,6 +454,8 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         }
         openDevices.removeValue(forKey: hDevice.rawValue)
         portOwners.removeValue(forKey: record.portHandle.rawValue)
+        retireHandle(hDevice.rawValue)
+        retireHandle(record.portHandle.rawValue)
     }
 
     // MARK: Data Stream and Buffers
@@ -439,6 +478,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
                 allocatedByProvider: false
             )
         }
+        bufferHandlesByStream[hDS.rawValue, default: []].insert(handle.rawValue)
         return handle
     }
 
@@ -469,6 +509,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
             pointer.deallocate()
             throw error
         }
+        bufferHandlesByStream[hDS.rawValue, default: []].insert(handle.rawValue)
         return handle
     }
 
@@ -536,7 +577,10 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
     ) throws -> GenTLRevokedBuffer {
         lock.lock()
         defer { lock.unlock() }
-        return try recordErrors { try streamRecord(hDS).revoke(buffer) }
+        let revoked = try recordErrors { try streamRecord(hDS).revoke(buffer) }
+        bufferHandlesByStream[hDS.rawValue]?.remove(buffer.rawValue)
+        retireHandle(buffer.rawValue)
+        return revoked
     }
 
     public func DSGetParentDev(_ hDS: DS_HANDLE) throws -> DEV_HANDLE {
@@ -556,10 +600,15 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         for (eventHandle, record) in streamEvents {
             stream.unregisterEvent(record)
             events.removeValue(forKey: eventHandle)
+            retireHandle(eventHandle)
         }
 
         try recordErrors { try stream.close() }
         dataStreams.removeValue(forKey: hDS.rawValue)
+        for bufferHandle in bufferHandlesByStream.removeValue(forKey: hDS.rawValue) ?? [] {
+            retireHandle(bufferHandle)
+        }
+        retireHandle(hDS.rawValue)
         if let record = openDevices[stream.deviceHandle.rawValue] {
             record.dataStreamHandle = nil
         }
@@ -731,6 +780,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         }
         stream.unregisterEvent(match.value)
         events.removeValue(forKey: match.key)
+        retireHandle(match.key)
     }
 
     public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
@@ -927,9 +977,27 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
     }
 
     private func allocateHandle() -> UInt {
-        let value = nextHandle
-        nextHandle &+= 1
+        let token = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+        let value = UInt(bitPattern: token)
+        activeHandleTokens[value] = token
         return value
+    }
+
+    private func retireHandle(_ value: UInt) {
+        guard let token = activeHandleTokens.removeValue(forKey: value) else { return }
+        retiredHandleTokens.append(token)
+    }
+
+    private func rawHandle<Tag>(_ handle: GenTLHandle<Tag>) -> UnsafeMutableRawPointer? {
+        UnsafeMutableRawPointer(bitPattern: handle.rawValue)
+    }
+
+    private func typedHandle<Tag>(
+        _ pointer: UnsafeMutableRawPointer?,
+        as type: Tag.Type
+    ) throws -> GenTLHandle<Tag> {
+        guard let pointer else { try fail(.invalidHandle) }
+        return GenTLHandle<Tag>(rawValue: UInt(bitPattern: pointer))
     }
 
     private func requireInitialized() throws {
