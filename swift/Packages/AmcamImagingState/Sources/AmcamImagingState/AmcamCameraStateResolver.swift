@@ -116,7 +116,7 @@ public struct AmcamCameraStateResolver: Sendable {
             uniquingKeysWith: { _, latest in latest }
         )
         let readableFeatureNames = Set(
-            descriptors.filter { $0.isAvailable && $0.isReadable }.map(\\.name)
+            descriptors.filter { $0.isAvailable && $0.isReadable }.map { $0.name }
         )
         let safeReadFeature: FeatureReader = { name in
             guard readableFeatureNames.contains(name) else {
