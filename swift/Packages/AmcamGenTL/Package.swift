@@ -8,7 +8,8 @@ let package = Package(
         .library(name: "AmcamGenTL", targets: ["AmcamGenTL"])
     ],
     dependencies: [
-        .package(path: "../GenTLAPI")
+        .package(path: "../GenTLAPI"),
+        .package(path: "../GenTLABI")
     ],
     targets: [
         .target(name: "AmcamABI", publicHeadersPath: "include"),
@@ -16,6 +17,7 @@ let package = Package(
             name: "AmcamGenTL",
             dependencies: [
                 "AmcamABI",
+                .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
         ),
