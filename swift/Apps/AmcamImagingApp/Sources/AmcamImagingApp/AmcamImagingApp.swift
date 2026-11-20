@@ -5,6 +5,8 @@ import AppKit
 final class AmcamImagingAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var model: CameraApplicationModel?
+    private var terminationTimeoutTask: Task<Void, Never>?
+    private var hasRepliedToTermination = false
 
     static func main() {
         let application = NSApplication.shared
@@ -100,15 +102,47 @@ final class AmcamImagingAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model else { return .terminateNow }
-        Task { @MainActor in
-            let resourcesClosed = await model.shutdown()
-            if !resourcesClosed {
-                // A failed camera teardown cancels termination. Restore the UI
-                // so the user can see the cleanup error and retry explicitly.
-                presentMainWindow()
+
+        hasRepliedToTermination = false
+        Task { @MainActor [weak self, model] in
+            guard let self else { return }
+
+            // Camera SDK calls are native code and may fail or block indefinitely.
+            // Give orderly cleanup a bounded opportunity, but never let a vendor
+            // driver veto an explicit application termination.
+            let shutdownTask = Task { @MainActor in
+                await model.shutdown()
             }
-            NSApp.reply(toApplicationShouldTerminate: resourcesClosed)
+            self.terminationTimeoutTask = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(for: .seconds(10))
+                } catch {
+                    return
+                }
+                self?.completeTermination(cleanupSucceeded: false, timedOut: true)
+            }
+
+            let cleanupSucceeded = await shutdownTask.value
+            self.completeTermination(cleanupSucceeded: cleanupSucceeded, timedOut: false)
         }
         return .terminateLater
+    }
+
+    private func completeTermination(cleanupSucceeded: Bool, timedOut: Bool) {
+        guard !hasRepliedToTermination else { return }
+        hasRepliedToTermination = true
+        terminationTimeoutTask?.cancel()
+        terminationTimeoutTask = nil
+
+        if timedOut {
+            NSLog("Amcam Imaging: camera cleanup exceeded the 10-second shutdown deadline; terminating process.")
+        } else if !cleanupSucceeded {
+            NSLog("Amcam Imaging: camera cleanup failed; terminating process anyway.")
+        }
+
+        // Termination is the user's command. A failed native teardown must not
+        // leave an invisible process resident in the Dock; the OS reclaims any
+        // resources still owned by this process.
+        NSApp.reply(toApplicationShouldTerminate: true)
     }
 }
