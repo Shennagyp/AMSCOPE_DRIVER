@@ -1317,8 +1317,8 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             }
 
             // Resolve the native pointers before blocking new calls. EventKill
-            // is the standard operation that terminates a waiting EventGetData;
-            // GCUnregisterEvent itself only removes the registration.
+            // terminates waiting EventGetData operations; GCUnregisterEvent
+            // itself only removes the registration.
             let eventPointers = try matchingHandles.map {
                 try pointer(EVENT_HANDLE(rawValue: $0))
             }
@@ -1327,7 +1327,6 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 for eventPointer in eventPointers {
                     try check(functions.eventKill(eventPointer))
                 }
-                try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
             } catch {
                 unregisteringEventHandles.subtract(matchingHandles)
                 throw error
@@ -1335,9 +1334,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             return matchingHandles
         }
 
-        // Keep the opaque handles registered until every killed read has
-        // actually returned to Swift; no in-flight call may use a released
-        // event handle or unloaded Producer function pointer.
+        // Drain all Swift calls before asking the Producer to destroy its event
+        // objects. The unregistering marker prevents new calls entering while
+        // this wait is in progress.
         eventReadCondition.lock()
         while handles.contains(where: {
             activeEventDataReadsByHandle[$0, default: 0] > 0
@@ -1346,11 +1345,24 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         }
         eventReadCondition.unlock()
 
-        try withLock {
-            for handle in handles {
-                registeredEventsByHandle.removeValue(forKey: handle)
-                unregisteringEventHandles.remove(handle)
+        do {
+            try withLock {
+                try check(functions.gcUnregisterEvent(
+                    try eventSourcePointer(source),
+                    eventType
+                ))
+                for handle in handles {
+                    registeredEventsByHandle.removeValue(forKey: handle)
+                    unregisteringEventHandles.remove(handle)
+                }
             }
+        } catch {
+            // A failed unregister leaves the native event registered. Reopen
+            // the Swift admission path so the caller can retry or kill it.
+            lock.lock()
+            unregisteringEventHandles.subtract(handles)
+            lock.unlock()
+            throw error
         }
     }
 
