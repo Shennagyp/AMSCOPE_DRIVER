@@ -95,10 +95,10 @@ public enum GenTLFeatureAccessError: Error, Equatable, Sendable {
 /// documented vendor SDK API. Callers must inspect descriptors before access.
 public protocol GenTLFeatureAccess: Sendable {
     func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor]
-    func readFeature(_ name: String, from device: GenTLABI.DEV_HANDLE) throws -> GenTLFeatureValue
+    func readFeature(_ name: String, from device: DEV_HANDLE) throws -> GenTLFeatureValue
     func writeFeature(
         _ value: GenTLFeatureValue,
         named name: String,
-        to device: GenTLABI.DEV_HANDLE
+        to device: DEV_HANDLE
     ) throws
 }
