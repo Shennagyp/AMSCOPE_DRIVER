@@ -275,6 +275,31 @@ final class CameraSessionLifecycleTests: XCTestCase {
     }
 
 
+
+    func testOpeningSameIdentifiedDeviceIsIdempotent() async throws {
+        let acquisition = FakeAcquisition()
+        let session = FakeSession(acquisition: acquisition)
+        let device = FakeDevice(session: session)
+        let lifecycle = CameraSessionLifecycle()
+
+        try await lifecycle.open(device, identifier: "camera-1")
+        try await lifecycle.open(device, identifier: "camera-1")
+
+        let openAttempts = await device.openAttempts
+        let snapshot = await lifecycle.snapshot()
+        XCTAssertEqual(openAttempts, 1)
+        XCTAssertTrue(snapshot.hasSession)
+
+        do {
+            try await lifecycle.open(device, identifier: "camera-2")
+            XCTFail("A different camera identity must not replace an attached session.")
+        } catch {
+            XCTAssertEqual(error as? CameraSessionLifecycleError, .sessionAlreadyAttached)
+        }
+
+        try await lifecycle.close()
+    }
+
     func testFeatureIOIsOwnedAndSerializedAgainstClose() async throws {
         let featureGate = AsyncGate()
         let acquisition = FakeAcquisition()
