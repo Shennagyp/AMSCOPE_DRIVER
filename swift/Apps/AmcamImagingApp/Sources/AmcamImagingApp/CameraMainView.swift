@@ -328,8 +328,8 @@ final class CameraSettingsViewController: NSViewController {
         if let gain = controls.gain {
             gainSlider?.minValue = Double(gain.minimumPercent)
             gainSlider?.maxValue = Double(max(gain.minimumPercent, gain.maximumPercent))
-            gainSlider?.doubleValue = Double(gain.readbackPercent ?? gain.minimumPercent)
-            gainValue.stringValue = "Current: \(gain.readbackPercent ?? 0)%"
+            gainSlider?.doubleValue = Double(gain.readbackPercent)
+            gainValue.stringValue = "Current: \(gain.readbackPercent)%"
             gainSlider?.isHidden = !capabilities.availability(of: .analogGain).isUsable
         } else { gainSlider?.isHidden = true }
 
