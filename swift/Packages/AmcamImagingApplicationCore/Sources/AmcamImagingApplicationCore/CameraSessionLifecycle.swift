@@ -12,6 +12,9 @@ public actor CameraSessionLifecycle {
     private var acquisition: (any CameraRuntimeAcquisition)?
     private var captureTask: Task<Void, Never>?
     private var isStreaming = false
+    /// Actor methods can be re-entered at every suspension point. This gate prevents
+    /// concurrent public lifecycle operations from acting on the same owned handles.
+    private var lifecycleOperationInProgress = false
     private var generation: UInt64 = 0
     private var continuations: [UUID: AsyncStream<CameraSessionLifecycleEvent>.Continuation] = [:]
 
@@ -39,6 +42,9 @@ public actor CameraSessionLifecycle {
     }
 
     public func attach(_ newSession: any CameraRuntimeSession) throws {
+        guard !lifecycleOperationInProgress else {
+            throw CameraSessionLifecycleError.operationInProgress
+        }
         guard session == nil, acquisition == nil, captureTask == nil else {
             throw CameraSessionLifecycleError.sessionAlreadyAttached
         }
@@ -46,6 +52,12 @@ public actor CameraSessionLifecycle {
     }
 
     public func start() async throws {
+        guard !lifecycleOperationInProgress else {
+            throw CameraSessionLifecycleError.operationInProgress
+        }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+
         guard let session else {
             throw CameraSessionLifecycleError.sessionNotAttached
         }
@@ -93,6 +105,12 @@ public actor CameraSessionLifecycle {
     /// Stops the acquisition but keeps the device session open.
     /// If stop fails, the acquisition and capture task remain owned for retry.
     public func stop() async throws {
+        guard !lifecycleOperationInProgress else {
+            throw CameraSessionLifecycleError.operationInProgress
+        }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+
         guard let acquisition else { return }
 
         if isStreaming {
@@ -112,6 +130,12 @@ public actor CameraSessionLifecycle {
     /// Closes the acquisition first, then its owning device session.
     /// Any failed close leaves the failed resource retained for a later call.
     public func close() async throws {
+        guard !lifecycleOperationInProgress else {
+            throw CameraSessionLifecycleError.operationInProgress
+        }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+
         generation &+= 1
         if isStreaming {
             isStreaming = false
