@@ -7,11 +7,12 @@ private struct DefaultGenTLAPI: GenTLAPI {}
 final class GenTLAPIRawDefaultsTests: XCTestCase {
     func testUnimplementedDefaultFunctionsReturnGenTLStatusCodes() {
         let api = DefaultGenTLAPI()
+        let handle = UnsafeMutableRawPointer(bitPattern: 1)!
 
         XCTAssertEqual(api.GCInitLib(), GenTLABI.GenTLABI_ErrorNotImplemented())
         XCTAssertEqual(api.GCCloseLib(), GenTLABI.GenTLABI_ErrorNotImplemented())
 
-        var system: GenTLABI.TL_HANDLE = nil
+        var system: GenTLABI.TL_HANDLE = handle
         XCTAssertEqual(api.TLOpen(&system), GenTLABI.GenTLABI_ErrorNotImplemented())
 
         var interfaceCount: UInt32 = 0
@@ -21,19 +22,19 @@ final class GenTLAPIRawDefaultsTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            api.GCReadPort(nil, 0, nil, nil),
+            api.GCReadPort(handle, 0, nil, nil),
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
         XCTAssertEqual(
-            api.GCRegisterEvent(nil, 0, nil),
+            api.GCRegisterEvent(handle, 0, handle),
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
         XCTAssertEqual(
-            api.EventGetData(nil, nil, nil, 0),
+            api.EventGetData(handle, nil, nil, 0),
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
         XCTAssertEqual(
-            api.DSGetNumFlows(nil, nil),
+            api.DSGetNumFlows(handle, nil),
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
     }
