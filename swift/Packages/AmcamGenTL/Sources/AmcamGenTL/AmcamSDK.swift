@@ -155,34 +155,91 @@ final class AmcamSDK: @unchecked Sendable {
         guard count <= Self.maximumDevices else {
             throw AmcamCameraError.enumerationFailed("SDK reported \(count) devices; maximum is \(Self.maximumDevices)")
         }
-        return (0..<count).compactMap { index in
+        var result: [AmcamDevice] = []
+        result.reserveCapacity(count)
+
+        for index in 0..<count {
             let pointer = devices.advanced(by: index)
             var identifierBuffer = [CChar](repeating: 0, count: 65)
             var displayNameBuffer = [CChar](repeating: 0, count: 65)
+
             let identifierIsValid = identifierBuffer.withUnsafeMutableBufferPointer {
                 amcam_device_copy_identifier(pointer, $0.baseAddress, $0.count)
             }
+            guard identifierIsValid == 1 else {
+                throw AmcamCameraError.enumerationFailed(
+                    "Device entry \(index) has an unterminated or invalid 64-byte identifier field."
+                )
+            }
+
             let displayNameIsValid = displayNameBuffer.withUnsafeMutableBufferPointer {
                 amcam_device_copy_display_name(pointer, $0.baseAddress, $0.count)
             }
-            guard identifierIsValid == 1, displayNameIsValid == 1 else { return nil }
-            let identifier = String(cString: identifierBuffer)
-            let displayName = String(cString: displayNameBuffer)
-            guard !identifier.isEmpty else { return nil }
-            guard let model = pointer.pointee.model else {
-                return AmcamDevice(identifier: identifier, displayName: displayName, modelName: nil, modelFlags: nil, maximumSpeedLevel: nil, sensorPixelSizeMicrometers: nil, previewResolutions: [])
+            guard displayNameIsValid == 1 else {
+                throw AmcamCameraError.enumerationFailed(
+                    "Device entry \(index) has an unterminated or invalid 64-byte display-name field."
+                )
             }
+
+            let identifier = String(cString: identifierBuffer)
+            guard !identifier.isEmpty else {
+                throw AmcamCameraError.enumerationFailed(
+                    "Device entry \(index) has an empty identifier."
+                )
+            }
+
+            let rawDisplayName = String(cString: displayNameBuffer)
+            let displayName = rawDisplayName.isEmpty ? identifier : rawDisplayName
+
+            guard let model = pointer.pointee.model else {
+                result.append(
+                    AmcamDevice(
+                        identifier: identifier,
+                        displayName: displayName,
+                        modelName: nil,
+                        modelFlags: nil,
+                        maximumSpeedLevel: nil,
+                        sensorPixelSizeMicrometers: nil,
+                        previewResolutions: []
+                    )
+                )
+                continue
+            }
+
             let value = model.pointee
             let modelName = value.name.map { String(cString: $0) }
-            let resolutions = (0..<min(Int(value.preview), 16)).compactMap { index -> AmcamResolution? in
+            let resolutions = (0..<min(Int(value.preview), 16)).compactMap { resolutionIndex -> AmcamResolution? in
                 var width: UInt32 = 0
                 var height: UInt32 = 0
-                guard amcam_model_resolution(model, UInt32(index), &width, &height) == 1,
-                      width > 0, height > 0 else { return nil }
-                return AmcamResolution(index: index, width: Int(width), height: Int(height))
+                guard amcam_model_resolution(
+                    model,
+                    UInt32(resolutionIndex),
+                    &width,
+                    &height
+                ) == 1, width > 0, height > 0 else {
+                    return nil
+                }
+                return AmcamResolution(
+                    index: resolutionIndex,
+                    width: Int(width),
+                    height: Int(height)
+                )
             }
-            return AmcamDevice(identifier: identifier, displayName: displayName, modelName: modelName, modelFlags: value.flag, maximumSpeedLevel: Int(value.maxspeed), sensorPixelSizeMicrometers: (Double(value.xpixsz), Double(value.ypixsz)), previewResolutions: resolutions)
+
+            result.append(
+                AmcamDevice(
+                    identifier: identifier,
+                    displayName: displayName,
+                    modelName: modelName,
+                    modelFlags: value.flag,
+                    maximumSpeedLevel: Int(value.maxspeed),
+                    sensorPixelSizeMicrometers: (Double(value.xpixsz), Double(value.ypixsz)),
+                    previewResolutions: resolutions
+                )
+            )
         }
+
+        return result
     }
 
     func open(identifier: String) throws -> (handle: UnsafeMutableRawPointer, width: Int, height: Int, modelFlags: UInt64?, maximumSpeedLevel: Int?, resolutions: [AmcamResolution], currentResolutionIndex: Int?) {
