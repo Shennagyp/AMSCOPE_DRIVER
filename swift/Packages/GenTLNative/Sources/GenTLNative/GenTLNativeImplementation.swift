@@ -1582,7 +1582,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         if let code = error as? GenTLABI.GC_ERROR {
             return code.rawValue
         }
-        return GenTLABI.GC_ERR_ERROR
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_ERROR)
     }
 
     private func rawEventHandle(
@@ -1614,7 +1614,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     public func GCInitLib() -> GenTLABI.GC_ERROR {
         do {
             try swiftGCInitLib()
-            return GenTLABI.GC_ERR_SUCCESS
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
         } catch {
             return rawError(error)
         }
@@ -1623,7 +1623,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     public func GCCloseLib() -> GenTLABI.GC_ERROR {
         do {
             try swiftGCCloseLib()
-            return GenTLABI.GC_ERR_SUCCESS
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
         } catch {
             return rawError(error)
         }
@@ -1674,7 +1674,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ iEventID: GenTLABI.EVENT_TYPE,
         _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
-        guard let phEvent else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        guard let phEvent else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
             let event = try withLock { () throws -> UnsafeMutableRawPointer in
                 guard !registeredEventsByHandle.values.contains(where: {
@@ -1698,7 +1698,7 @@ extension GenTLNativeImplementation: GenTLAPI {
                 return event
             }
             phEvent.pointee = event
-            return GenTLABI.GC_ERR_SUCCESS
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
         } catch {
             return rawError(error)
         }
@@ -1710,7 +1710,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         do {
             try unregisterEvent(sourcePointer: hEventSrc, eventType: iEventID)
-            return GenTLABI.GC_ERR_SUCCESS
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
         } catch {
             return rawError(error)
         }
@@ -1723,7 +1723,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ iTimeout: UInt64
     ) -> GenTLABI.GC_ERROR {
         guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GC_ERR_INVALID_HANDLE
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
         let eventPointer: UnsafeMutableRawPointer
         do {
@@ -1745,7 +1745,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ piOutSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
         guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GC_ERR_INVALID_HANDLE
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
         lock.lock()
         defer { lock.unlock() }
@@ -1768,7 +1768,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ piSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
         guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GC_ERR_INVALID_HANDLE
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
         lock.lock()
         defer { lock.unlock() }
@@ -1783,7 +1783,7 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     public func EventFlush(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
         guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GC_ERR_INVALID_HANDLE
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
         lock.lock()
         defer { lock.unlock() }
@@ -1797,7 +1797,7 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
         guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GC_ERR_INVALID_HANDLE
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
         lock.lock()
         defer { lock.unlock() }
@@ -2081,7 +2081,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.gcGetNumPortURLs else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hPort, piNumURLs)
         }
@@ -2097,7 +2097,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.gcGetPortURLInfo else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hPort, iURLIndex, iInfoCmd, piType, pBuffer, piSize)
         }
@@ -2110,7 +2110,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.gcReadPortStacked else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hPort, pEntries, piNumEntries)
         }
@@ -2123,7 +2123,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.gcWritePortStacked else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hPort, pEntries, piNumEntries)
         }
@@ -2139,7 +2139,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetBufferChunkData else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, pChunkData, piNumChunks)
         }
@@ -2153,7 +2153,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.ifGetParentTL else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hIface, phSystem)
         }
@@ -2165,7 +2165,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.devGetParentIF else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDevice, phIface)
         }
@@ -2177,7 +2177,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetParentDev else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, phDevice)
         }
@@ -2192,7 +2192,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetNumBufferParts else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, piNumParts)
         }
@@ -2209,7 +2209,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetBufferPartInfo else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, iPartIndex, iInfoCmd, piType, pBuffer, piSize)
         }
@@ -2227,7 +2227,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsAnnounceCompositeBuffer else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, iNumSegments, ppSegments, piSizes, pPrivate, phBuffer)
         }
@@ -2241,7 +2241,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetBufferInfoStacked else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, pInfoStacked, iNumInfos)
         }
@@ -2255,7 +2255,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetBufferPartInfoStacked else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, pInfoStacked, iNumInfos)
         }
@@ -2267,7 +2267,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetNumFlows else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, piNumFlows)
         }
@@ -2283,7 +2283,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetFlowInfo else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, iFlowIndex, iInfoCmd, piType, pBuffer, piSize)
         }
@@ -2296,7 +2296,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetNumBufferSegments else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, piNumSegments)
         }
@@ -2313,7 +2313,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetBufferSegmentInfo else {
-                return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+                return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_NOT_IMPLEMENTED)
             }
             return function(hDataStream, hBuffer, iSegmentIndex, iInfoCmd, piType, pBuffer, piSize)
         }
