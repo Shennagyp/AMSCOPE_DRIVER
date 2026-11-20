@@ -32,8 +32,8 @@ typedef struct {
     int64_t timestamp;
 } AmcamFrameInfoV2;
 int amcam_abi_layout_valid(void);
-const char *amcam_device_display_name(const AmcamDeviceV2 *device);
-const char *amcam_device_identifier(const AmcamDeviceV2 *device);
+int amcam_device_copy_display_name(const AmcamDeviceV2 *device, char *destination, size_t capacity);
+int amcam_device_copy_identifier(const AmcamDeviceV2 *device, char *destination, size_t capacity);
 int amcam_model_resolution(const AmcamModelV2 *model, uint32_t index, uint32_t *width, uint32_t *height);
 #ifdef __cplusplus
 }
