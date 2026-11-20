@@ -102,7 +102,7 @@ private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
 /// Unloading a Producer with open module handles would invalidate native code
 /// and callback pointers still owned by that Producer.
 @_spi(BackendFactory)
-public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecked Sendable {
+public final class GenTLNativeImplementation: @unchecked Sendable {
     private struct Functions {
         let gcInitLib: GCInitLibFunction
         let gcCloseLib: GCCloseLibFunction
