@@ -29,7 +29,7 @@ typedef struct {
     uint32_t height;
     uint32_t flag;
     uint32_t seq;
-    uint64_t timestamp;
+    int64_t timestamp;
 } AmcamFrameInfoV2;
 int amcam_abi_layout_valid(void);
 const char *amcam_device_display_name(const AmcamDeviceV2 *device);
