@@ -166,6 +166,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Move AmScope SDK registration, GenTL discovery and device metadata mapping into AmcamCameraProvider in the adapter; return model values plus opaque runtime devices, not GenTL handles.
 - [x] Centralize hardware-evidence and model-profile capability resolution in AmcamCameraModel.
 - [x] Add AmcamImagingState for testable control snapshots, readback conversion and resolution parsing; inject an async feature reader so it has no GenTL or AppKit dependency.
+- [x] Validate feature writes against the current descriptor's existence, availability, writability and value kind before calling the backend.
 - [x] Keep observation boundaries explicit: lifecycle state changes use AsyncStream events, image delivery uses a latest-frame-only AsyncStream, and UI-facing camera/control state is published as value snapshots.
 - [ ] Define platform-neutral camera application commands and state before adding another frontend.
 - [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
