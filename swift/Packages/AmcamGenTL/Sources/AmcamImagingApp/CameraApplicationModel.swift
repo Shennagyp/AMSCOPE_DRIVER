@@ -199,6 +199,17 @@ final class CameraApplicationModel: ObservableObject {
     }
 
 
+    func enterFullScreen() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let window = NSApp.keyWindow ?? NSApp.windows.first else { return }
+            if !window.styleMask.contains(.fullScreen) {
+                window.toggleFullScreen(nil)
+            }
+            self.isFullScreen = true
+        }
+    }
+
     func toggleFullScreen() {
         guard let window = NSApp.keyWindow ?? NSApp.windows.first else { return }
         window.toggleFullScreen(nil)
