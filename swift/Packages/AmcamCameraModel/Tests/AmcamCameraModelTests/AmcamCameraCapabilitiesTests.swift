@@ -7,6 +7,43 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
         .preciseFrameRate, .discreteFrameSpeed
     ]
 
+
+    func testRuntimeResolutionUsesFeatureAvailabilityAndStreamEvidence() {
+        let registry = AmcamCameraProfileRegistry()
+        let device = AmcamDevice(
+            identifier: "camera-1",
+            displayName: "MU503",
+            modelName: "MU503",
+            modelFlags: 0,
+            maximumSpeedLevel: nil,
+            sensorPixelSizeMicrometers: nil,
+            previewResolutions: []
+        )
+        let withoutStream = registry.resolveRuntime(
+            device: device,
+            featureAvailabilityByName: [
+                "ExposureTime": true,
+                "AmcamAnalogGainPercent": false
+            ],
+            hasDataStream: false
+        )
+        XCTAssertFalse(withoutStream.availability(of: .liveCapture).available)
+        XCTAssertTrue(withoutStream.availability(of: .exposureManual).isUsable)
+        XCTAssertFalse(withoutStream.availability(of: .analogGain).available)
+        XCTAssertFalse(withoutStream.availability(of: .analogGain).isUsable)
+
+        let withStream = registry.resolveRuntime(
+            device: device,
+            featureAvailabilityByName: [
+                "ExposureTime": true,
+                "AmcamAnalogGainPercent": true
+            ],
+            hasDataStream: true
+        )
+        XCTAssertTrue(withStream.availability(of: .liveCapture).isUsable)
+        XCTAssertTrue(withStream.availability(of: .analogGain).isUsable)
+    }
+
     func testModelFlagsResolveOnlyAdvertisedHardwareFeatures() {
         let flags: UInt64 = 0x00000008 | 0x0000004000000000
         let capabilities = AmcamCameraProfileRegistry().resolve(
