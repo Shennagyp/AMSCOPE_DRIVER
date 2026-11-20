@@ -11,7 +11,7 @@ public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendabl
     case whiteBalance, colorCorrection, imageLevelRange, blackLevel
     case triggerSoftware, triggerExternal, selfTrigger
     case focusMotor, autoFocus
-    case thermoelectricCooling, sensorTemperature, coolingFan, heatAntiFog
+    case thermoelectricCooling, thermoelectricCoolingOnOff, sensorTemperature, coolingFan, heatAntiFog
     case conversionGain, lowNoiseMode, hardwareLevelRange
     case filterWheel, embeddedLightSource, pixelFormatSelection
 
@@ -27,7 +27,7 @@ public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendabl
              .conversionGain, .lowNoiseMode: return .image
         case .triggerSoftware, .triggerExternal, .selfTrigger: return .trigger
         case .focusMotor, .autoFocus: return .focus
-        case .thermoelectricCooling, .sensorTemperature, .coolingFan, .heatAntiFog: return .thermal
+        case .thermoelectricCooling, .thermoelectricCoolingOnOff, .sensorTemperature, .coolingFan, .heatAntiFog: return .thermal
         case .hardwareLevelRange: return .calibration
         case .filterWheel, .embeddedLightSource: return .accessories
         }
@@ -85,7 +85,7 @@ public struct AmcamFeatureAvailability: Codable, Equatable, Sendable, Identifiab
 public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
     public let modelCode: String
     public let displayName: String?
-    public let allowedFeaturesByGroup: [AmcamCameraFeatureGroup: Set<AmcamCameraFeature>]
+    public let allowedFeaturesByGroup: [String: Set<AmcamCameraFeature>]
     public let deniedFeatures: Set<AmcamCameraFeature>
 
     public var allowedFeatures: Set<AmcamCameraFeature> {
@@ -99,11 +99,25 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
         self.displayName = displayName
         self.allowedFeaturesByGroup = Dictionary(grouping: allowedFeatures, by: \.group)
             .mapValues(Set.init)
+            .reduce(into: [String: Set<AmcamCameraFeature>]()) { result, item in
+                result[item.key.rawValue] = item.value
+            }
         self.deniedFeatures = deniedFeatures
     }
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeaturesByGroup: [AmcamCameraFeatureGroup: Set<AmcamCameraFeature>],
+                deniedFeatures: Set<AmcamCameraFeature> = []) {
+        self.modelCode = modelCode
+        self.displayName = displayName
+        self.allowedFeaturesByGroup = Dictionary(
+            uniqueKeysWithValues: allowedFeaturesByGroup.map { ($0.key.rawValue, $0.value) }
+        )
+        self.deniedFeatures = deniedFeatures
+    }
+
+    public init(modelCode: String, displayName: String? = nil,
+                allowedFeaturesByGroup: [String: Set<AmcamCameraFeature>],
                 deniedFeatures: Set<AmcamCameraFeature> = []) {
         self.modelCode = modelCode
         self.displayName = displayName
@@ -222,6 +236,7 @@ public struct AmcamCameraProfileRegistry: Sendable {
         case .monochromeOutput: return 0x00000010
         case .binningAndSkipping: return 0x00000020
         case .thermoelectricCooling: return 0x00000080
+        case .thermoelectricCoolingOnOff: return 0x00020000
         case .sensorTemperature: return 0x00000400
         case .coolingFan: return 0x00010000
         case .triggerSoftware: return 0x00080000
