@@ -9,7 +9,7 @@ The application uses one GenTL API contract with two interchangeable implementat
 1. **GenTLNative** loads manufacturer-supplied GenTL Producer libraries (.cti) and calls their actual exported GenTL C functions.
 2. **AmcamGenTL** implements the same GenTL operations by translating them to the Amcam SDK. It does not create, export or require an AmScope .cti file.
 
-**GenTLRouter** selects and manages the backend. The imaging app uses GenTLAPI through GenTLRouter for discovery, device lifecycle, typed feature access and GenTL acquisition. Camera presentation models are isolated in AmcamCameraModel; the app package has no dependency on the Amcam backend implementation.
+**GenTLRouter** selects and manages the backend. The imaging app uses GenTLAPI through GenTLRouter for discovery, device lifecycle, typed feature access and GenTL acquisition. Camera domain types and capability policy live in AmcamCameraModel. The app's CameraApplicationModel now exposes validated RGB8 frames as a value type and contains no AppKit window, image, or file-panel APIs; the AppKit frontend owns SDK selection, bitmap conversion, windows and full-screen behavior. This is a UI boundary, not a claim that the current app or camera backends are cross-platform.
 
 ## Run from source
 
