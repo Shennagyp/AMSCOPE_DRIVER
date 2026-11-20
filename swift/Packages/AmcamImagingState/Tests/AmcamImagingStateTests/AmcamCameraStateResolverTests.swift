@@ -202,6 +202,21 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             CameraFeatureDescriptor(
                 name: "UnavailableGain", displayName: "Gain", kind: .integer,
                 isAvailable: false, isReadable: false, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "SteppedRate", displayName: "Rate", kind: .floatingPoint,
+                isAvailable: true, isReadable: true, isWritable: true,
+                numericRange: CameraFeatureNumericRange(minimum: 1, maximum: 10, increment: 0.5)
+            ),
+            CameraFeatureDescriptor(
+                name: "ExposureMode", displayName: "Exposure mode", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: true,
+                enumerationValues: ["Off", "Once"]
+            ),
+            CameraFeatureDescriptor(
+                name: "WhiteBalanceRGB", displayName: "RGB gain", kind: .integerVector,
+                isAvailable: true, isReadable: true, isWritable: true,
+                elementCount: 3
             )
         ]
 
@@ -217,6 +232,21 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertEqual(
             resolver.validateWrite(.boolean(true), named: "ExposureTime", descriptors: descriptors),
             .valueTypeMismatch(feature: "ExposureTime", expected: .integer, actual: .boolean)
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.floatingPoint(10.25), named: "SteppedRate", descriptors: descriptors),
+            .invalidValue("SteppedRate must be between 1.0 and 10.0.")
+        )
+        XCTAssertNil(
+            resolver.validateWrite(.floatingPoint(10.5), named: "SteppedRate", descriptors: descriptors)
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.enumeration("Continuous"), named: "ExposureMode", descriptors: descriptors),
+            .invalidValue("Continuous is not an advertised value for ExposureMode.")
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.integerVector([1, 2]), named: "WhiteBalanceRGB", descriptors: descriptors),
+            .invalidValue("WhiteBalanceRGB requires exactly 3 vector elements.")
         )
         XCTAssertEqual(
             resolver.validateWrite(.integer(10), named: "MissingFeature", descriptors: descriptors),
