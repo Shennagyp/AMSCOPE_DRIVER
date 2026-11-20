@@ -90,6 +90,43 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         }
         XCTAssertEqual(result, AmcamResolution(index: 3, width: 1920, height: 1080))
     }
+
+    func testFeatureWriteValidationUsesCurrentDescriptorContract() {
+        let resolver = AmcamCameraStateResolver()
+        let descriptors = [
+            CameraFeatureDescriptor(
+                name: "ExposureTime", displayName: "Exposure", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: true
+            ),
+            CameraFeatureDescriptor(
+                name: "ReadOnlyTemperature", displayName: "Temperature", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "UnavailableGain", displayName: "Gain", kind: .integer,
+                isAvailable: false, isReadable: false, isWritable: false
+            )
+        ]
+
+        XCTAssertNil(resolver.validateWrite(.integer(10_000), named: "ExposureTime", descriptors: descriptors))
+        XCTAssertEqual(
+            resolver.validateWrite(.integer(10), named: "ReadOnlyTemperature", descriptors: descriptors),
+            .featureNotWritable("ReadOnlyTemperature")
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.integer(10), named: "UnavailableGain", descriptors: descriptors),
+            .featureUnavailable("UnavailableGain")
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.boolean(true), named: "ExposureTime", descriptors: descriptors),
+            .valueTypeMismatch(feature: "ExposureTime", expected: .integer, actual: .boolean)
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.integer(10), named: "MissingFeature", descriptors: descriptors),
+            .featureNotFound("MissingFeature")
+        )
+    }
+
     func testCapabilityPolicyCannotFabricateUnavailableHardwareFeatures() {
         let profile = AmcamCameraModelProfile(
             modelCode: "MU503",
