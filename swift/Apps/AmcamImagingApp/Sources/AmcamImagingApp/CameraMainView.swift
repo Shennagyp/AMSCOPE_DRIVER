@@ -1,6 +1,7 @@
 import AppKit
 import Darwin
 import AmcamCameraModel
+import AmcamImagingCore
 import Combine
 
 private extension NSView {
@@ -162,7 +163,7 @@ final class CameraMainViewController: NSViewController {
         stopButton.isEnabled = model.isStreaming
     }
 
-    private func makePreviewImage(from frame: CameraPreviewFrame) -> NSImage? {
+    private func makePreviewImage(from frame: RGB8Frame) -> NSImage? {
         guard let representation = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: frame.width,
@@ -178,9 +179,9 @@ final class CameraMainViewController: NSViewController {
             return nil
         }
 
-        frame.rgb8Data.withUnsafeBytes { source in
+        frame.data.withUnsafeBytes { source in
             guard let baseAddress = source.baseAddress else { return }
-            memcpy(destination, baseAddress, frame.rgb8Data.count)
+            memcpy(destination, baseAddress, frame.data.count)
         }
 
         let image = NSImage(size: NSSize(width: frame.width, height: frame.height))
