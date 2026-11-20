@@ -306,6 +306,100 @@ final class CameraApplicationModel: ObservableObject {
         Task { await writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex") }
     }
 
+    private func prepareSelectedCamera() async {
+        guard featureSession == nil,
+              let candidate = candidatesByID[selectedDeviceID],
+              let device = selectedDevice else { return }
+
+        do {
+            let runtimeSession = try await cameraLifecycle.open(
+                GenTLRuntimeDevice(candidate: candidate)
+            )
+            featureSession = runtimeSession
+            featureDescriptors = (try? await runtimeSession.featureDescriptors()) ?? []
+            updateSelectedDeviceResolutions(from: featureDescriptors)
+            await updateCurrentResolution(from: runtimeSession)
+            cameraCapabilities = makeCapabilities(
+                for: device,
+                descriptors: featureDescriptors,
+                hasDataStream: runtimeSession.supportsAcquisition
+            )
+            controls = await makeControlSnapshot(runtimeSession, descriptors: featureDescriptors)
+            status = "Ready — \\(device.displayName)"
+            if featureDescriptors.isEmpty {
+                errorMessage = "The backend opened the device but did not expose typed feature access."
+            } else {
+                errorMessage = nil
+            }
+        } catch {
+            _ = await closeSession()
+            status = "Unable to open camera through GenTLRouter"
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func configureSDK() {
+        Task { await configureSDKOwned() }
+    }
+
+    private func configureSDKOwned() async {
+        guard await closeSession() else { return }
+        router = GenTLRouter()
+        candidatesByID.removeAll()
+        devices.removeAll()
+        selectedDeviceID = ""
+
+        do {
+            try router.registerAmcam(backendID: "amcam-sdk")
+            await refreshDevicesOwned()
+        } catch {
+            status = "AmScope camera provider is unavailable"
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    private func closeSession() async -> Bool {
+        do {
+            try await cameraLifecycle.close()
+            frameConsumerTask?.cancel()
+            frameConsumerTask = nil
+            lifecycleEventTask?.cancel()
+            lifecycleEventTask = nil
+            featureSession = nil
+            currentResolution = nil
+            isStreaming = false
+            cameraCapabilities = nil
+            controls = nil
+            featureDescriptors = []
+            return true
+        } catch {
+            isStreaming = false
+            status = "Camera resource cleanup failed"
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func writeFeature(_ value: CameraFeatureValue, named name: String) async {
+        guard let featureSession else {
+            errorMessage = "Open a camera before changing its features."
+            return
+        }
+        if let feature = capabilityFeature(for: name),
+           cameraCapabilities?.availability(of: feature).isUsable != true {
+            errorMessage = "\\(name) is not available under the selected camera's capability and model-profile policy."
+            return
+        }
+        do {
+            try await featureSession.writeFeature(value, named: name)
+            await refreshControlsOwned()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func capabilityFeature(for name: String) -> AmcamCameraFeature? {
         switch name {
         case "ExposureAuto": return .exposureAuto
