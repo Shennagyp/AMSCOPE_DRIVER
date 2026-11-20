@@ -115,10 +115,10 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         XCTAssertTrue(session.supportsResolutionChange())
         var controls = try session.readControls()
-        XCTAssertTrue(controls.exposure.automaticEnabled)
-        XCTAssertEqual(controls.exposure.readbackMicroseconds, 10_000)
-        XCTAssertEqual(controls.exposure.minimumMicroseconds, 100)
-        XCTAssertEqual(controls.exposure.maximumMicroseconds, 1_000_000)
+        XCTAssertTrue(controls.exposure?.automaticEnabled ?? false)
+        XCTAssertEqual(controls.exposure?.readbackMicroseconds, 10_000)
+        XCTAssertEqual(controls.exposure?.minimumMicroseconds, 100)
+        XCTAssertEqual(controls.exposure?.maximumMicroseconds, 1_000_000)
         XCTAssertEqual(controls.gain?.readbackPercent, 100)
         XCTAssertEqual(controls.gain?.minimumPercent, 100)
         XCTAssertEqual(controls.gain?.maximumPercent, 800)
@@ -136,11 +136,11 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 20_000))
         controls = try session.setAutomaticExposure(enabled: false)
-        XCTAssertFalse(controls.exposure.automaticEnabled)
+        XCTAssertFalse(controls.exposure?.automaticEnabled ?? false)
 
         controls = try session.setExposureTime(microseconds: 20_000)
-        XCTAssertEqual(controls.exposure.readbackMicroseconds, 20_000)
-        XCTAssertEqual(controls.exposure.requestedMicroseconds, 20_000)
+        XCTAssertEqual(controls.exposure?.readbackMicroseconds, 20_000)
+        XCTAssertEqual(controls.exposure?.requestedMicroseconds, 20_000)
 
         controls = try session.setExposureGain(percent: 250)
         XCTAssertEqual(controls.gain?.readbackPercent, 250)
@@ -201,16 +201,16 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 1_000_001))
 
         controls = try session.setAutoExposureMode(.once)
-        XCTAssertEqual(controls.exposure.autoMode, .once)
-        XCTAssertTrue(controls.exposure.automaticEnabled)
+        XCTAssertEqual(controls.exposure?.autoMode, .once)
+        XCTAssertTrue(controls.exposure?.automaticEnabled ?? false)
 
         controls = try session.setAutoExposureMode(.manual)
-        XCTAssertEqual(controls.exposure.autoMode, .manual)
-        XCTAssertFalse(controls.exposure.automaticEnabled)
+        XCTAssertEqual(controls.exposure?.autoMode, .manual)
+        XCTAssertFalse(controls.exposure?.automaticEnabled ?? false)
 
         controls = try session.setAutomaticExposure(enabled: true)
-        XCTAssertEqual(controls.exposure.autoMode, .continuous)
-        XCTAssertTrue(controls.exposure.automaticEnabled)
+        XCTAssertEqual(controls.exposure?.autoMode, .continuous)
+        XCTAssertTrue(controls.exposure?.automaticEnabled ?? false)
 
         let changed = try session.setResolution(index: 1)
         XCTAssertEqual(changed, AmcamResolution(index: 1, width: 1280, height: 960))
