@@ -32,10 +32,10 @@ on:
 permissions:
   contents: read
 
-# Keep validation runs isolated by branch. v6 bypasses the stale v5 queue,
-# whose runtime test run is blocked by the superseded fail-fast close test.
+# Keep validation runs isolated by branch. v7 bypasses superseded v6 runs
+# left queued while the descriptor-driven feature-state changes were landing.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v6
+  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v7
   cancel-in-progress: false
 
 jobs:
