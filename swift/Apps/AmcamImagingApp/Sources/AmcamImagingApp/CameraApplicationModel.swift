@@ -570,7 +570,7 @@ final class CameraApplicationModel: ObservableObject {
                 : "Precise fixed frame rate is not available for this camera.",
             speedLevelSupported: speedDescriptor?.isAvailable == true,
             currentSpeedLevel: currentSpeed,
-            maximumSpeedLevel: speedDescriptor?.numericRange?.maximum.flatMap { Int(exactly: $0) }
+            maximumSpeedLevel: speedDescriptor?.numericRange.flatMap { Int(exactly: $0.maximum) }
         )
 
         return AmcamControlSnapshot(
