@@ -240,7 +240,7 @@ final class CameraApplicationModel: ObservableObject {
         cameraCapabilities = makeCapabilities(
             for: selectedDevice,
             descriptors: featureDescriptors,
-            hasDataStream: featureSession.supportsAcquisition
+            hasDataStream: await featureSession.supportsAcquisition()
         )
         controls = await makeControlSnapshot(featureSession, descriptors: featureDescriptors)
     }
@@ -322,7 +322,7 @@ final class CameraApplicationModel: ObservableObject {
             cameraCapabilities = makeCapabilities(
                 for: device,
                 descriptors: featureDescriptors,
-                hasDataStream: runtimeSession.supportsAcquisition
+                hasDataStream: await runtimeSession.supportsAcquisition()
             )
             controls = await makeControlSnapshot(runtimeSession, descriptors: featureDescriptors)
             status = "Ready — \\(device.displayName)"

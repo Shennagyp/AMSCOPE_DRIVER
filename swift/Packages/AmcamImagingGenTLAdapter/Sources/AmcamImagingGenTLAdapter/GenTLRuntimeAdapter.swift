@@ -30,9 +30,12 @@ public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable 
 public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendable {
     private let device: GenTLDeviceSession
     public init(device: GenTLDeviceSession) { self.device = device }
-    public var supportsAcquisition: Bool {
-        var count: UInt32 = 0
-        return device.api.DevGetNumDataStreams(device.deviceHandle, &count) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
+    public func supportsAcquisition() async -> Bool {
+        let device = self.device
+        return await Task.detached(priority: .userInitiated) {
+            var count: UInt32 = 0
+            return device.api.DevGetNumDataStreams(device.deviceHandle, &count) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
+        }.value
     }
     public func featureDescriptors() async throws -> [CameraFeatureDescriptor] {
         let device = self.device
