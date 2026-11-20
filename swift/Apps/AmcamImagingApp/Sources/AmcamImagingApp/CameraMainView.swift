@@ -420,14 +420,16 @@ final class CameraSettingsViewController: NSViewController {
         }
 
         if let gain = controls.gain {
-            gainSlider?.minValue = Double(gain.minimumPercent)
-            gainSlider?.maxValue = Double(max(gain.minimumPercent, gain.maximumPercent))
-            gainSlider?.doubleValue = Double(gain.readbackPercent)
             gainValue.stringValue = "Current: \(gain.readbackPercent)%"
             let canWriteGain = capabilities.availability(of: .analogGain).isUsable
                 && model.isFeatureWritable("AmcamAnalogGainPercent")
                 && gain.minimumPercent < gain.maximumPercent
                 && model.numericRange(for: "AmcamAnalogGainPercent") != nil
+            if canWriteGain {
+                gainSlider?.minValue = Double(gain.minimumPercent)
+                gainSlider?.maxValue = Double(gain.maximumPercent)
+                gainSlider?.doubleValue = Double(gain.readbackPercent)
+            }
             gainSlider?.isHidden = !canWriteGain
             gainValue.isHidden = false
         }
