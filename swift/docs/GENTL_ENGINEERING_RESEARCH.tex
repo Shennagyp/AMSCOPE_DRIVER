@@ -587,7 +587,7 @@ Further macOS compiler diagnostics exposed a structural collision between the co
 
 The protocol and default implementations now model output handle parameters as pointers to nullable handle values (for example, \texttt{UnsafeMutablePointer<TL\_HANDLE?>?}), matching the imported C function-pointer ABI. The Amcam and native adapters were updated to the same pointer semantics. A C ABI helper, \texttt{GenTLABI\_ErrorFromCode}, explicitly converts the official \texttt{GC\_ERROR\_LIST} enum to the ABI's \texttt{GC\_ERROR} scalar type. Amcam's duplicate raw-handle helpers were removed; the remaining helper validates token identity.
 
-The initial Linux API test pass remains valid evidence for commit \\texttt{430ccf9da3b098cedb79fd932874c031943317cd}. The latest source commit is \\texttt{6364f89117ea3fc76fe4cb62663913eab100f6a1}; workflow run \\texttt{44676898035} completed its Ubuntu 24.04 ABI/API job successfully, including the GenTL ABI package build and all 9 GenTLAPI tests. The four macOS package jobs remain queued, so the updated Amcam/native backends and macOS integration suite are not yet verified.
+The initial Linux API test pass remains valid evidence for commit \texttt{430ccf9da3b098cedb79fd932874c031943317cd}. The latest source commit is \\texttt{6364f89117ea3fc76fe4cb62663913eab100f6a1}; workflow run \\texttt{44676898035} completed its Ubuntu 24.04 ABI/API job successfully, including the GenTL ABI package build and all 9 GenTLAPI tests. The four macOS package jobs remain queued, so the updated Amcam/native backends and macOS integration suite are not yet verified.
 
 
 
@@ -623,5 +623,33 @@ The previous hardware profile records the user's Mac connection as USB 2.0 High 
 A macOS hardware-probe executable has now been added. It uses the real AmcamGenTL backend to enumerate the camera, open an exclusive device session, acquire finite frame batches through the GenTL data-stream buffer/event path, report frame metadata and timestamps, and optionally write the last complete RGB frame as PPM. The CI workflow now builds the Apple Silicon executable and uploads it with usage instructions as an artifact. Workflow run \texttt{44680887948}, commit \texttt{805537cdedd2855c6612cb26e12f7fc3b468c96f}, completed the Amcam test, release-build, and upload steps successfully. The build log identifies the binary as a Mach-O 64-bit arm64 executable and runs its \texttt{--help} path successfully. Artifact \texttt{amcam-camera-probe-macos-arm64} (artifact ID \texttt{14604550684}) was uploaded and expires on 2026-12-04. The overall workflow remains red only because the separate GenTLNative and GenTLRouter jobs fail. The physical camera smoke test remains outstanding.
 
 The next development work is therefore Amcam SDK correctness, camera controls, buffer ownership, event delivery, disconnect cleanup, and execution of the hardware probe on the user's Mac. Linux/Windows native-loader expansion and platform-neutral mock compilation are deferred until the AmScope camera path is reliable on macOS.
+
+
+
+\section{Amcam hardening revision: buffer pool, ABI strings, and control readback --- 2026-11-20}
+
+The next implementation revision remains restricted to the macOS Amcam camera path. No cross-platform loader or mock-producer refactor was started.
+
+\subsection{SDK fixed-width string boundary}
+
+The Amcam device enumeration structure contains fixed 64-byte identifier and display-name arrays. Passing these fields directly to Swift \texttt{String(cString:)} assumes a NUL terminator exists within the field; if a malformed SDK record omitted it, the read could continue beyond the structure field. The C ABI helper now searches for a terminator with bounded \texttt{memchr}, checks the destination capacity, and copies only the validated bytes. Swift rejects malformed or empty identifiers with an explicit enumeration error rather than silently dropping a device.
+
+Three ABI helper tests cover valid copying, unterminated source fields, and insufficient destination capacity. The tests compile and exercise the same C helper used by the SDK loader.
+
+\subsection{Camera control semantics}
+
+A successful return from \texttt{Amcam\_put\_ExpoTime} is not treated as proof that the camera applied the requested value. The session now reads the value back and raises \texttt{controlReadbackMismatch} if the observed exposure differs. The mock SDK has a deterministic fault-injection switch that returns success while intentionally ignoring an exposure write; the integration test verifies the mismatch is detected and the prior readback remains observable.
+
+The mock camera now advertises precise frame-rate support and models the SDK's minimum, maximum, and current frame-rate options. The test exercises range discovery, 0.1 FPS quantization, a successful setter/readback, an out-of-range request, an invalid increment, and the explicit unsupported result for discrete speed-level control when its optional SDK symbols are absent.
+
+\subsection{Multi-buffer acquisition and probe integrity}
+
+The data-stream integration test now uses two consumer-owned buffers for a three-frame finite acquisition. It verifies the expected round-robin delivery order, user-pointer payload, per-buffer metadata, requeue ownership, and completion of the asynchronous finite-acquisition stop. This exercises the buffer-pool lifecycle rather than only a single-buffer happy path.
+
+The hardware probe now announces up to four buffers, constrained by a 512 MiB aggregate allocation ceiling. Each New Buffer event must contain the expected two-word handle/user-pointer payload, and the handle must belong to the announced pool. Before reading image memory, the probe checks the announced buffer capacity, filled size, data size, dimensions, row padding, RGB8 packed PFNC format, and pixel-format namespace. It uses a monotonic host clock, and cleanup failures are reported and produce a failing process exit instead of being silently swallowed.
+
+The latest source commit is \texttt{d5d7138ccba49c77a40c264bd4efa25e9d5eb692}. Workflow run \texttt{44682507702} contains the complete revision and is queued at the time of this record update. The new ABI, exposure fault-injection, precise-frame-rate, multi-buffer, and updated probe changes must not be called verified until that run's \texttt{AmcamGenTL tests}, release-build, and artifact-upload steps complete successfully. The previous successful Amcam test/build evidence remains run \texttt{44680887948}; it predates this revision.
+
+The physical MU503 acceptance test remains outstanding. The probe artifact must be rebuilt from the latest passing source revision before it is used for hardware acceptance.
 
 \end{document}
