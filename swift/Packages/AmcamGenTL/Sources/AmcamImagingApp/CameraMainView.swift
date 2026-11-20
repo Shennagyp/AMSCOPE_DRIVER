@@ -383,12 +383,13 @@ private struct FeatureGroupView: View {
     @ViewBuilder
     private var exposureControls: some View {
         if capability?.availability(of: .exposureAuto).isUsable == true,
-           let exposure = controls?.exposure {
+           let exposure = controls?.exposure,
+           let autoMode = exposure.autoMode {
             HStack {
                 Text("Exposure mode")
                 Spacer()
                 Picker("Exposure mode", selection: Binding(
-                    get: { exposure.autoMode },
+                    get: { autoMode },
                     set: { model.setAutoExposureMode($0) }
                 )) {
                     ForEach(availableExposureModes, id: \.self) { mode in
@@ -398,7 +399,9 @@ private struct FeatureGroupView: View {
                 .labelsHidden()
                 .frame(width: 180)
             }
-            if capability?.availability(of: .exposureManual).isUsable == true {
+            if capability?.availability(of: .exposureManual).isUsable == true,
+               let minimum = exposure.minimumMicroseconds,
+               let maximum = exposure.maximumMicroseconds {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Exposure time")
@@ -408,18 +411,18 @@ private struct FeatureGroupView: View {
                     }
                     Slider(
                         value: $exposureDraft,
-                        in: Double(exposure.minimumMicroseconds)...Double(exposure.maximumMicroseconds),
+                        in: Double(minimum)...Double(maximum),
                         onEditingChanged: { editing in
                             if !editing {
                                 model.setExposureTime(UInt32(exposureDraft.rounded()))
                             }
                         }
                     )
-                    .disabled(exposure.autoMode != .manual)
+                    .disabled(autoMode != .manual)
                     HStack {
-                        Text("\(exposure.minimumMicroseconds) µs")
+                        Text("\(minimum) µs")
                         Spacer()
-                        Text("\(exposure.maximumMicroseconds) µs")
+                        Text("\(maximum) µs")
                     }
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
