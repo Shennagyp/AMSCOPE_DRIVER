@@ -12,7 +12,9 @@ let package = Package(
         .package(path: "../../Packages/GenTLAPI"),
         .package(path: "../../Packages/GenTLRouter"),
         .package(path: "../../Packages/AmcamCameraModel"),
-        .package(path: "../../Packages/AmcamImagingCore")
+        .package(path: "../../Packages/AmcamImagingCore"),
+        .package(path: "../../Packages/AmcamImagingApplicationCore"),
+        .package(path: "../../Packages/AmcamImagingGenTLAdapter")
     ],
     targets: [
         .executableTarget(
@@ -22,7 +24,9 @@ let package = Package(
                 .product(name: "GenTLAPI", package: "GenTLAPI"),
                 .product(name: "GenTLRouter", package: "GenTLRouter"),
                 .product(name: "AmcamCameraModel", package: "AmcamCameraModel"),
-                .product(name: "AmcamImagingCore", package: "AmcamImagingCore")
+                .product(name: "AmcamImagingCore", package: "AmcamImagingCore"),
+                .product(name: "AmcamImagingApplicationCore", package: "AmcamImagingApplicationCore"),
+                .product(name: "AmcamImagingGenTLAdapter", package: "AmcamImagingGenTLAdapter")
             ]
         )
     ]
