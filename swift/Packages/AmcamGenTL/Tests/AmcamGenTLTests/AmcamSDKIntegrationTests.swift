@@ -264,6 +264,44 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(session.currentDimensions().height, 480)
     }
 
+    func testAutoExposureModeRemainsAvailableWithoutManualExposureRange() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let symbol = dlsym(fixtureHandle, "MockAmcam_SetExposureRangeUnavailable") else {
+            XCTFail("Mock SDK is missing MockAmcam_SetExposureRangeUnavailable")
+            return
+        }
+        let setRangeUnavailable = unsafeBitCast(
+            symbol,
+            to: (@convention(c) (Int32) -> Void).self
+        )
+        setRangeUnavailable(1)
+        defer { setRangeUnavailable(0) }
+
+        let capabilities = try session.cameraCapabilities()
+        XCTAssertTrue(capabilities.availability(of: .exposureAuto).isUsable)
+        XCTAssertFalse(capabilities.availability(of: .exposureManual).available)
+
+        var controls = try session.readControls()
+        XCTAssertEqual(controls.exposure?.autoMode, .continuous)
+        XCTAssertNil(controls.exposure?.readbackMicroseconds)
+
+        controls = try session.setAutoExposureMode(.manual)
+        XCTAssertEqual(controls.exposure?.autoMode, .manual)
+        XCTAssertNil(controls.exposure?.readbackMicroseconds)
+
+        controls = try session.setAutoExposureMode(.once)
+        XCTAssertEqual(controls.exposure?.autoMode, .once)
+        XCTAssertThrowsError(try session.setExposureTime(microseconds: 20_000))
+    }
+
     func testUnsupportedExposureDoesNotDisableFrameRateOrStreamingControls() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)
