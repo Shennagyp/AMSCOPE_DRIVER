@@ -4,13 +4,17 @@
 
 A native macOS camera application built on the Amcam SDK backend in this repository. The main window is a full-screen-capable live image surface. A hardware dock provides camera selection, refresh, start, stop, settings, SDK selection, and full-screen controls. Camera settings are presented in a popup sheet.
 
-The application is a client of the Amcam camera API. It does not implement another camera driver and does not use the GenTL native CTI route.
+The target application is a GenTLAPI consumer. GenTLRouter owns backend selection and device-session creation; the selected backend may be a native CTI Producer or the Amcam SDK-backed GenTL implementation. The app must not instantiate AmcamCameraDriver or AmcamCameraSession directly.
+
+**Migration status on `macos-version-optimization`:** the executable has been extracted into `swift/Apps/AmcamImagingApp` so it can depend on GenTLRouter without a SwiftPM package cycle. The current CameraApplicationModel still contains legacy direct Amcam driver/session calls. Those calls are transitional and must be removed by the routed-session migration; the package move alone does not mean the app is already routed.
 
 ## Architecture
 
-- **AmcamGenTL** owns SDK loading, camera enumeration, session lifecycle, frame acquisition, control readback, and model capability discovery.
-- **AmcamCameraProfileRegistry** resolves per-camera policy using the SDK model descriptor name, model flags, safe read-only runtime probes, and the set of controls implemented by this application.
-- **AmcamImagingApp** owns the macOS SwiftUI interface and translates frames to display images.
+- **GenTLAPI** is the app-facing protocol contract; the app must not depend on the transitional BackendConvenience SPI.
+- **GenTLRouter** registers native CTI and Amcam backends, discovers devices and returns backend-bound device sessions.
+- **GenTLFeatureAccess** exposes typed controls alongside the unchanged GenTL 1.6 operation surface. Amcam maps supported controls to SDK methods; native CTI feature access requires a real GenApi XML/port path.
+- **AmcamGenTL** owns SDK loading, camera enumeration, session lifecycle, frame acquisition, control readback and model capability discovery.
+- **AmcamImagingApp** owns the macOS SwiftUI interface and translates backend-neutral frames to display images.
 - **amcam-camera-probe** remains a diagnostic executable; **amcam-imaging** is the user-facing application.
 
 Camera identity is deliberately separated:
