@@ -4,11 +4,22 @@ GenTLAPI is the single application-facing GenTL contract shared by the native CT
 
 ## Authority
 
-The pinned EMVA GenTL 1.6 C header imported by GenTLABI is the authority for ABI declarations: function names and signatures, types, constants, enumerations, structures, packing and handle definitions. The GenTL specification defines the behavioral semantics that the header cannot express.
+The pinned EMVA GenTL 1.6 C header imported by GenTLABI is authoritative for function names and signatures, ABI types, constants, enumerations, structures, packing and handle definitions. The GenTL specification defines runtime semantics that cannot be expressed in C declarations.
 
-GenTLAPI must not maintain a parallel, independently authored copy of these declarations. Its operations must preserve GenTL function meaning, module ownership, output-parameter behavior, error results and lifecycle semantics. Any Swift-safe convenience API must remain a thin layer over the standard contract.
+The public GenTLAPI protocol mirrors the 64 function prototypes in the pinned header:
 
-**Transition status:** the GenTLABI package is now a shared dependency of GenTLAPI, GenTLNative and AmcamGenTL. The native loader's function-pointer aliases now refer to the imported PGC/P* typedefs from the header. However, the current GenTLAPI source still contains a manually authored Swift protocol, function groups and type definitions; it does not yet expose an API contract derived from the imported declarations. Do not treat the dependency wiring or native alias conversion as completion of that API conversion.
+- Imported GenTL C types and opaque pointer handles are used for ABI-level arguments.
+- C output parameters, buffer pointers, string pointers and size parameters remain explicit.
+- Every operation returns the GenTL GC_ERROR status code. The raw API does not replace the C return model with Swift throws or result wrappers.
+- The common contract has no separate hand-maintained public enum, handle or info-value system.
+
+A source-level comparison was performed against the C header declarations. All 64 functions matched by name, parameter types and return type. This is source inspection, not compiler or runtime verification.
+
+The protocol is a Swift call contract over imported C types; it does **not** export C symbols and is not itself a GenTL Producer.
+
+## Transitional backend SPI
+
+The earlier Swift convenience function groups, typed-handle wrappers and decoded info values remain temporarily under the explicit BackendConvenience Swift Package Interface. They are used internally by existing backend lifecycle and mapping code. Application code must use GenTLAPI and must not import BackendConvenience. The transitional layer is scheduled for removal after the internal backend and router logic no longer depends on it.
 
 ## Implementations
 
