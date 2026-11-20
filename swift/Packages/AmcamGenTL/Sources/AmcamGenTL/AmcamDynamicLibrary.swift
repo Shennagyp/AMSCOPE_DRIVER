@@ -31,7 +31,7 @@ final class AmcamDynamicLibrary {
         #if canImport(Darwin) || canImport(Glibc)
         guard let loadedHandle = dlopen(path, RTLD_NOW | RTLD_LOCAL) else {
             let message = dlerror().map { String(cString: $0) } ?? "Unknown dynamic-loader error"
-            throw AmcamCameraError.libraryLoadFailed("Unable to load '\\(path)': \\(message)")
+            throw AmcamCameraError.libraryLoadFailed("Unable to load '\(path)': \(message)")
         }
         self.handle = loadedHandle
         #elseif os(Windows)
