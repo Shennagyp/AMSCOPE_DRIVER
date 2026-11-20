@@ -62,8 +62,7 @@ public actor CameraSessionLifecycle {
     }
 
     /// Opens and adopts a device as one atomic library-owned lifecycle operation.
-    /// The returned session is a borrowed backend handle for feature access; the
-    /// lifecycle actor remains its sole owner and is responsible for closing it.
+    /// The backend session never escapes this actor.
     public func open(_ device: any CameraRuntimeDevice) async throws {
         guard !lifecycleOperationInProgress else {
             throw CameraSessionLifecycleError.operationInProgress
