@@ -296,11 +296,6 @@ public final class AmcamCameraSession: @unchecked Sendable {
         probes[.whiteBalance] = temperatureTintAvailable || rgbGainAvailable
         probes[.colorCorrection] =
             (try? sdk.readOption(activeHandle, option: AmcamSDK.optionColorMatrix)) != nil
-        let pixelFormatFlags: UInt64 =
-            0x0000000000001000 | 0x0000000000002000 | 0x0000000000004000 |
-            0x0000000000008000 | 0x0000000080000000 | 0x0000000040000000 |
-            0x0000000008000000 | 0x0000000010000000 | 0x0000000020000000 |
-            0x0000000100000000 | 0x0000000200000000 | 0x0000000400000000
         probes[.pixelFormatSelection] =
             (try? sdk.readOption(activeHandle, option: AmcamSDK.optionPixelFormat)) != nil &&
             (try? sdk.readSupportedPixelFormats(activeHandle).isEmpty) == false
