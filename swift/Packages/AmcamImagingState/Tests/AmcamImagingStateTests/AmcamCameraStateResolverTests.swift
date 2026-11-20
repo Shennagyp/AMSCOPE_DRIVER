@@ -355,11 +355,14 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             )
         ]
 
-        let capabilities = resolver.capabilities(
+        guard let capabilities = resolver.capabilities(
             for: device,
             descriptors: descriptors,
             hasDataStream: false
-        )
+        ) else {
+            XCTFail("A camera with descriptor evidence should produce a capability snapshot.")
+            return
+        }
 
         let manualExposure = capabilities.availability(of: .exposureManual)
         let autoExposure = capabilities.availability(of: .exposureAuto)
