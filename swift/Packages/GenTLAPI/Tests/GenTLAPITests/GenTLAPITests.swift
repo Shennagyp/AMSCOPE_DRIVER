@@ -1,5 +1,5 @@
 import XCTest
-@testable import GenTLAPI
+@_spi(BackendConvenience) @testable import GenTLAPI
 
 final class GenTLAPITests: XCTestCase {
     func testGenTLVersionAndInfiniteConstantsMatchTheStandard() {
