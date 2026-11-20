@@ -242,7 +242,7 @@ final class AmcamSDK: @unchecked Sendable {
         return result
     }
 
-    func open(identifier: String) throws -> (handle: UnsafeMutableRawPointer, width: Int, height: Int, modelFlags: UInt64?, maximumSpeedLevel: Int?, resolutions: [AmcamResolution], currentResolutionIndex: Int?) {
+    func open(identifier: String) throws -> (handle: UnsafeMutableRawPointer, width: Int, height: Int, modelName: String?, modelFlags: UInt64?, maximumSpeedLevel: Int?, resolutions: [AmcamResolution], currentResolutionIndex: Int?) {
         guard identifier.utf8.allSatisfy({ $0 < 0x80 }) else { throw AmcamCameraError.invalidDeviceIdentifier }
         guard let descriptor = try enumerate().first(where: { $0.identifier == identifier }) else {
             throw AmcamCameraError.deviceNotFound(identifier)
@@ -268,6 +268,7 @@ final class AmcamSDK: @unchecked Sendable {
             handle,
             currentWidth,
             currentHeight,
+            descriptor.modelName,
             descriptor.modelFlags,
             descriptor.maximumSpeedLevel,
             descriptor.previewResolutions,
