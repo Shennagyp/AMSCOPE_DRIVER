@@ -9,7 +9,10 @@ struct AmcamImagingApp: App {
             CameraMainView(model: model)
                 .frame(minWidth: 980, minHeight: 680)
                 .preferredColorScheme(.dark)
-                .onAppear { model.initialize() }
+                .onAppear {
+                    model.initialize()
+                    model.enterFullScreen()
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
