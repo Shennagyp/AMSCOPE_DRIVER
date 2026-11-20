@@ -100,6 +100,7 @@ private enum ProbeError: Error, LocalizedError {
     case unexpectedBuffer(UInt, expected: UInt)
     case incompleteFrame
     case invalidFrameLayout
+    case invalidPixelFormat(UInt64)
     case invalidFramePointer
 
     var errorDescription: String? {
@@ -116,7 +117,9 @@ private enum ProbeError: Error, LocalizedError {
         case .unexpectedBuffer(let actual, let expected):
             return "The New Buffer event returned handle \(actual), expected \(expected)."
         case .incompleteFrame: return "The camera delivered an incomplete or undersized frame."
-        case .invalidFrameLayout: return "The reported RGB24 frame layout is invalid or overflows."
+        case .invalidFrameLayout: return "The reported RGB24 frame layout is invalid, exceeds the announced buffer, or overflows."
+        case .invalidPixelFormat(let value):
+            return "The camera returned unsupported PFNC pixel format 0x\\(String(value, radix: 16)). The probe requires RGB8 packed (0x02180014)."
         case .invalidFramePointer: return "The SDK returned a null frame-buffer pointer."
         }
     }
@@ -260,7 +263,7 @@ struct AmcamCameraProbe {
         print("Announced buffer: \(payloadSize) bytes")
         print("Acquiring \(options.frameCount) frame(s)...")
 
-        let startTime = Date()
+        let startTime = ProcessInfo.processInfo.systemUptime
         try backend.DSStartAcquisition(
             streamHandle,
             flags: GenTLAcquisitionStartFlag.normal.rawValue,
@@ -279,7 +282,7 @@ struct AmcamCameraProbe {
                 eventHandle,
                 timeout: options.timeoutMilliseconds
             )
-            guard eventData.count >= MemoryLayout<UInt>.size else {
+            guard eventData.count == 2 * MemoryLayout<UInt>.size else {
                 throw ProbeError.invalidEventPayload
             }
             let deliveredHandle = eventData.withUnsafeBytes {
@@ -300,9 +303,25 @@ struct AmcamCameraProbe {
                 backend, stream: streamHandle, buffer: bufferHandle,
                 command: GenTLInfoCommand.Buffer.height.rawValue
             )
+            let announcedBufferSize = try readSize(
+                backend, stream: streamHandle, buffer: bufferHandle,
+                command: GenTLInfoCommand.Buffer.size.rawValue
+            )
             let sizeFilled = try readSize(
                 backend, stream: streamHandle, buffer: bufferHandle,
                 command: GenTLInfoCommand.Buffer.sizeFilled.rawValue
+            )
+            let dataSize = try readSize(
+                backend, stream: streamHandle, buffer: bufferHandle,
+                command: GenTLInfoCommand.Buffer.dataSize.rawValue
+            )
+            let pixelFormat = try readUInt64(
+                backend, stream: streamHandle, buffer: bufferHandle,
+                command: GenTLInfoCommand.Buffer.pixelFormat.rawValue
+            )
+            let pixelFormatNamespace = try readUInt64(
+                backend, stream: streamHandle, buffer: bufferHandle,
+                command: GenTLInfoCommand.Buffer.pixelFormatNamespace.rawValue
             )
             let rowPadding = try readSize(
                 backend, stream: streamHandle, buffer: bufferHandle,
@@ -334,12 +353,20 @@ struct AmcamCameraProbe {
                 lastDeviceTimestamp = timestamp
             }
 
+            guard pixelFormat == 0x02180014, pixelFormatNamespace == 4 else {
+                throw ProbeError.invalidPixelFormat(pixelFormat)
+            }
+
             let (packedRowBytes, rowOverflow) = width.multipliedReportingOverflow(by: 3)
             let (bytesPerRow, strideOverflow) = packedRowBytes.addingReportingOverflow(rowPadding)
             let (requiredBytes, payloadOverflow) = bytesPerRow.multipliedReportingOverflow(by: height)
             guard width > 0, height > 0, rowPadding >= 0,
                   !rowOverflow, !strideOverflow, !payloadOverflow,
-                  sizeFilled >= requiredBytes, requiredBytes > 0 else {
+                  announcedBufferSize == payloadSize,
+                  sizeFilled >= requiredBytes,
+                  sizeFilled <= announcedBufferSize,
+                  dataSize == requiredBytes,
+                  requiredBytes > 0 else {
                 throw ProbeError.invalidFrameLayout
             }
 
@@ -379,7 +406,7 @@ struct AmcamCameraProbe {
             }
         }
 
-        let elapsed = max(Date().timeIntervalSince(startTime), 0.000_001)
+        let elapsed = max(ProcessInfo.processInfo.systemUptime - startTime, 0.000_001)
         try backend.DSStopAcquisition(
             streamHandle,
             flags: GenTLAcquisitionStopFlag.normal.rawValue
