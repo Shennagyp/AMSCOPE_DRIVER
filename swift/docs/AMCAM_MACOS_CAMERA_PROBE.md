@@ -6,7 +6,7 @@ The probe uses the actual \`AmcamGenTLImplementation\` and GenTL-style acquisiti
 
 ## Obtain the executable
 
-Open the latest successful **AmcamGenTL tests** workflow run:
+Open the latest workflow run where the **AmcamGenTL tests** job completed successfully. The overall workflow may still be marked failed because unrelated GenTLNative or GenTLRouter jobs are failing:
 
 <https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/workflows/swift-gentl.yml>
 
