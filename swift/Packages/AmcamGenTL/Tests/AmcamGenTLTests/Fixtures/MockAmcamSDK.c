@@ -197,9 +197,8 @@ int32_t Amcam_get_ExpoAGainRange(void *handle, uint16_t *minimum, uint16_t *maxi
 
 int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
     if (!handle || !value) return -1;
-    if (option == 0x0d) *value = 1;
+    if (option == 0x0d) *value = color_matrix_enabled;
     else if (option == 0x1a) *value = pixel_format_code;
-    else if (option == 0x0d) *value = color_matrix_enabled;
     else if (option == 0x32) *value = 1;
     else if (option == 0x2c) *value = 300;
     else if (option == 0x2d) *value = precise_frame_rate_tenths;
