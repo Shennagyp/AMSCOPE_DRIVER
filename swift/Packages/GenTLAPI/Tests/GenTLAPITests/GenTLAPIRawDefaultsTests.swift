@@ -12,12 +12,12 @@ final class GenTLAPIRawDefaultsTests: XCTestCase {
         XCTAssertEqual(api.GCInitLib(), GenTLABI.GenTLABI_ErrorNotImplemented())
         XCTAssertEqual(api.GCCloseLib(), GenTLABI.GenTLABI_ErrorNotImplemented())
 
-        var system: GenTLABI.TL_HANDLE = handle
+        var system: GenTLABI.TL_HANDLE? = handle
         XCTAssertEqual(api.TLOpen(&system), GenTLABI.GenTLABI_ErrorNotImplemented())
 
         var interfaceCount: UInt32 = 0
         XCTAssertEqual(
-            api.TLGetNumInterfaces(system, &interfaceCount),
+            api.TLGetNumInterfaces(system!, &interfaceCount),
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
 
