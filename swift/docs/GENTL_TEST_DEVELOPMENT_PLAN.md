@@ -425,3 +425,8 @@ The dispatch matrix now uses 58 unique per-operation return-code assertions, two
 ### SwiftPM target isolation correction
 
 The C fixture has been moved to the sibling path `Tests/MockGenTLProducer/`, outside `Tests/GenTLNativeTests/`. This is deliberate: the Swift test target must remain a Swift-only target. Keeping a `.c` file nested inside its source directory risks SwiftPM treating the test target as a mixed-language target or compiling the fixture as part of the test module. The test compiles the sibling C source explicitly at runtime with `xcrun clang`, then loads the produced dynamic library. This preserves a clean SwiftPM target boundary.
+
+
+### Optional-export absence coverage expanded to all 17 functions
+
+The optional-export test now builds a Producer with all 17 later-revision symbols omitted and invokes every corresponding Swift protocol method. It verifies each returns exactly `GC_ERR_NOT_IMPLEMENTED`. Where an operation has output parameters, the test initializes sentinel counts, sizes, datatypes, or opaque handles and asserts they remain unchanged. This catches accidental writes or fabricated outputs when a function pointer is absent, not merely loader acceptance.
