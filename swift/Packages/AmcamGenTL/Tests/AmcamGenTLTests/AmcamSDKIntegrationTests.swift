@@ -237,6 +237,71 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         cleanupCompleted = true
     }
 
+
+    func testUndersizedBufferIsReportedWithoutMemoryOverwrite() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+
+        let streamHandle = DS_HANDLE(rawValue: 0x201)
+        let deviceHandle = DEV_HANDLE(rawValue: 0x202)
+        let bufferHandle = BUFFER_HANDLE(rawValue: 0x203)
+        let eventHandle = EVENT_HANDLE(rawValue: 0x204)
+        let stream = try AmcamDataStreamRecord(
+            handle: streamHandle,
+            deviceHandle: deviceHandle,
+            session: session
+        )
+        let event = AmcamEventRecord(
+            handle: eventHandle,
+            eventType: GenTLEventType.newBuffer.rawValue,
+            source: .dataStream(streamHandle)
+        )
+        stream.addEvent(event)
+
+        let undersizedCapacity = 1_024
+        let memory = UnsafeMutableRawPointer.allocate(
+            byteCount: undersizedCapacity,
+            alignment: 64
+        )
+        memory.initializeMemory(as: UInt8.self, repeating: 0xa5, count: undersizedCapacity)
+        var cleanupCompleted = false
+        defer {
+            if !cleanupCompleted {
+                try? stream.stop()
+                try? stream.close()
+                try? session.close()
+            }
+            memory.deallocate()
+        }
+
+        try stream.announce(
+            handle: bufferHandle,
+            memory: memory,
+            size: undersizedCapacity,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+        try stream.queue(bufferHandle)
+        try stream.start(numberToAcquire: 1)
+        _ = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
+
+        let expectedPayload = try XCTUnwrap(
+            AmcamRGB24Layout(width: 640, height: 480)
+        ).payloadSize
+        XCTAssertEqual(memory.load(as: UInt8.self), 0xa5)
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 7), .bool8(true))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 9), .size(0))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 27), .size(expectedPayload))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 29), .bool8(true))
+
+        try stream.stop()
+        try stream.close()
+        try session.close()
+        cleanupCompleted = true
+    }
+
     private func buildMockSDK() throws -> URL {
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
