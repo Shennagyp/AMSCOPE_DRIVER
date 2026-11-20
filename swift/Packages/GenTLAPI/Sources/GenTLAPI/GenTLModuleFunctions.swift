@@ -3,8 +3,8 @@ import Foundation
 /// Library-level GenTL functions.
 @_spi(BackendConvenience)
 public protocol GenTLLibraryFunctions: Sendable {
-    func GCInitLib() throws
-    func GCCloseLib() throws
+    func swiftGCInitLib() throws
+    func swiftGCCloseLib() throws
     func GCGetInfo(command: Int32) throws -> GenTLInfoValue
     func GCGetLastError() -> GenTLErrorInfo
 }
