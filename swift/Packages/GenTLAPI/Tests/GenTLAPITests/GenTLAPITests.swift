@@ -54,6 +54,8 @@ final class GenTLAPITests: XCTestCase {
 
     func testInfoCommandIdentifiersMatchGenTL16() {
         XCTAssertEqual(GenTLInfoCommand.TransportLayer.charEncoding.rawValue, 8)
+        XCTAssertEqual(GenTLInfoCommand.TransportLayer.genTLVersionMajor.rawValue, 9)
+        XCTAssertEqual(GenTLInfoCommand.TransportLayer.genTLVersionMinor.rawValue, 10)
         XCTAssertEqual(GenTLInfoCommand.Interface.transportType.rawValue, 2)
         XCTAssertEqual(GenTLInfoCommand.Device.timestampFrequency.rawValue, 9)
         XCTAssertEqual(GenTLInfoCommand.Port.portName.rawValue, 12)
