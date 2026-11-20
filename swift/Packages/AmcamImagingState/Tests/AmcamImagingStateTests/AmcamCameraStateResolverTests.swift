@@ -62,6 +62,76 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertEqual(snapshot.frameRate.currentSpeedLevel, 2)
     }
 
+    func testControlSnapshotNeverReadsUnavailableOrUnreadableFeatures() async {
+        let resolver = AmcamCameraStateResolver()
+        let descriptors = [
+            CameraFeatureDescriptor(
+                name: "ExposureAuto", displayName: "Auto exposure", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "ExposureTime", displayName: "Exposure", kind: .integer,
+                isAvailable: true, isReadable: false, isWritable: true
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamAnalogGainPercent", displayName: "Gain", kind: .integer,
+                isAvailable: false, isReadable: true, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamColorMatrixEnabled", displayName: "Color matrix", kind: .boolean,
+                isAvailable: false, isReadable: true, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamPixelFormat", displayName: "Pixel format", kind: .enumeration,
+                isAvailable: true, isReadable: false, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamFixedFrameRate", displayName: "Fixed frame rate", kind: .floatingPoint,
+                isAvailable: false, isReadable: true, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamFrameSpeedLevel", displayName: "Frame speed", kind: .integer,
+                isAvailable: true, isReadable: false, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamWhiteBalanceTemperature", displayName: "White balance temperature",
+                kind: .integer, isAvailable: false, isReadable: true, isWritable: false
+            )
+        ]
+        var attemptedReads: [String] = []
+        _ = await resolver.controlSnapshot(descriptors: descriptors) { name in
+            attemptedReads.append(name)
+            XCTFail("Unavailable or unreadable feature was read: \\(name)")
+            throw CameraFeatureAccessError.featureUnavailable(name)
+        }
+        XCTAssertTrue(attemptedReads.isEmpty)
+    }
+
+    func testCurrentResolutionDoesNotReadUnavailableFeature() async {
+        let resolver = AmcamCameraStateResolver()
+        let device = AmcamDevice(
+            identifier: "camera", displayName: "Camera", modelName: "MU503",
+            modelFlags: nil, maximumSpeedLevel: nil,
+            sensorPixelSizeMicrometers: nil,
+            previewResolutions: [AmcamResolution(index: 3, width: 1920, height: 1080)]
+        )
+        var didRead = false
+        let result = await resolver.currentResolution(
+            for: device,
+            descriptors: [
+                CameraFeatureDescriptor(
+                    name: "AmcamResolutionIndex", displayName: "Resolution", kind: .enumeration,
+                    isAvailable: false, isReadable: true, isWritable: false
+                )
+            ]
+        ) { _ in
+            didRead = true
+            return .enumeration("3:1920x1080")
+        }
+        XCTAssertNil(result)
+        XCTAssertFalse(didRead)
+    }
+
     func testMalformedResolutionOptionsAreIgnored() {
         let resolver = AmcamCameraStateResolver()
         let descriptor = CameraFeatureDescriptor(
@@ -84,7 +154,15 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             sensorPixelSizeMicrometers: nil,
             previewResolutions: [AmcamResolution(index: 3, width: 1920, height: 1080)]
         )
-        let result = await resolver.currentResolution(for: device) { name in
+        let result = await resolver.currentResolution(
+            for: device,
+            descriptors: [
+                CameraFeatureDescriptor(
+                    name: "AmcamResolutionIndex", displayName: "Resolution", kind: .enumeration,
+                    isAvailable: true, isReadable: true, isWritable: true
+                )
+            ]
+        ) { name in
             XCTAssertEqual(name, "AmcamResolutionIndex")
             return .enumeration("3:1920x1080")
         }
