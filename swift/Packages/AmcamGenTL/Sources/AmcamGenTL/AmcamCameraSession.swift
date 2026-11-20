@@ -579,8 +579,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
         } else {
             exposure = nil
         }
-        let whiteBalanceReadback = try? sdk.readTemperatureTint(handle)
-        let whiteBalanceRGBGain = try? sdk.readWhiteBalanceGain(handle)
+        let whiteBalanceReadback = sdk.temperatureTintControlAvailable
+            ? try? sdk.readTemperatureTint(handle)
+            : nil
+        let whiteBalanceRGBGain = sdk.rgbWhiteBalanceControlAvailable
+            ? try? sdk.readWhiteBalanceGain(handle)
+            : nil
         let whiteBalance: AmcamWhiteBalanceControl?
         if whiteBalanceReadback != nil || whiteBalanceRGBGain?.count == 3 {
             whiteBalance = AmcamWhiteBalanceControl(
