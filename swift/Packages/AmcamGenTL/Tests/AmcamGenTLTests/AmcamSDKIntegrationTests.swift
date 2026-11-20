@@ -741,6 +741,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         let fixedRate = try XCTUnwrap(byName["AmcamFixedFrameRate"])
         let speedLevel = try XCTUnwrap(byName["AmcamFrameSpeedLevel"])
         let resolution = try XCTUnwrap(byName["AmcamResolutionIndex"])
+        let rgbGain = try XCTUnwrap(byName["AmcamWhiteBalanceRGBGain"])
 
         XCTAssertEqual(colorMatrix.kind, .boolean)
         XCTAssertTrue(colorMatrix.isAvailable)
@@ -762,6 +763,14 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(tint.numericRange?.minimum, 200)
         XCTAssertEqual(tint.numericRange?.maximum, 2_500)
         XCTAssertTrue(tint.isAvailable)
+
+        XCTAssertEqual(rgbGain.kind, .integerVector)
+        XCTAssertEqual(rgbGain.elementCount, 3)
+        XCTAssertTrue(rgbGain.isAvailable)
+        XCTAssertEqual(
+            try implementation.readFeature("AmcamWhiteBalanceRGBGain", from: handle),
+            .integerVector([100, 100, 100])
+        )
 
         XCTAssertEqual(fixedRate.kind, .floatingPoint)
         XCTAssertEqual(fixedRate.unit, "fps")
@@ -785,6 +794,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         try implementation.writeFeature(.enumeration("0"), named: "AmcamPixelFormat", to: handle)
         try implementation.writeFeature(.integer(7_200), named: "AmcamWhiteBalanceTemperature", to: handle)
         try implementation.writeFeature(.integer(1_250), named: "AmcamWhiteBalanceTint", to: handle)
+        try implementation.writeFeature(.integerVector([125, 130, 140]), named: "AmcamWhiteBalanceRGBGain", to: handle)
         try implementation.writeFeature(.floatingPoint(12.3), named: "AmcamFixedFrameRate", to: handle)
         try implementation.writeFeature(.enumeration("1:1280x960"), named: "AmcamResolutionIndex", to: handle)
 
@@ -792,6 +802,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(try implementation.readFeature("AmcamPixelFormat", from: handle), .enumeration("0"))
         XCTAssertEqual(try implementation.readFeature("AmcamWhiteBalanceTemperature", from: handle), .integer(7_200))
         XCTAssertEqual(try implementation.readFeature("AmcamWhiteBalanceTint", from: handle), .integer(1_250))
+        XCTAssertEqual(try implementation.readFeature("AmcamWhiteBalanceRGBGain", from: handle), .integerVector([125, 130, 140]))
         XCTAssertEqual(try implementation.readFeature("AmcamFixedFrameRate", from: handle), .floatingPoint(12.3))
         XCTAssertEqual(
             try implementation.readFeature("AmcamResolutionIndex", from: handle),

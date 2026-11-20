@@ -9,6 +9,7 @@ final class GenTLFeatureAccessContractTests: XCTestCase {
         XCTAssertEqual(GenTLFeatureValue.floatingPoint(1.25).kind, .floatingPoint)
         XCTAssertEqual(GenTLFeatureValue.string("camera").kind, .string)
         XCTAssertEqual(GenTLFeatureValue.enumeration("Continuous").kind, .enumeration)
+        XCTAssertEqual(GenTLFeatureValue.integerVector([1, 2, 3]).kind, .integerVector)
     }
 
     func testNumericRangeRejectsInvalidBoundsAndIncrement() {
@@ -41,6 +42,18 @@ final class GenTLFeatureAccessContractTests: XCTestCase {
         XCTAssertFalse(descriptor.isWritable)
         XCTAssertEqual(descriptor.numericRange?.minimum, 10)
         XCTAssertEqual(descriptor.numericRange?.maximum, 1_000_000)
+
+        let vector = GenTLFeatureDescriptor(
+            name: "AmcamWhiteBalanceRGBGain",
+            displayName: "White Balance RGB Gain",
+            kind: .integerVector,
+            elementCount: 3,
+            isAvailable: true,
+            isReadable: true,
+            isWritable: true
+        )
+        XCTAssertEqual(vector.kind, .integerVector)
+        XCTAssertEqual(vector.elementCount, 3)
     }
 
     func testVendorFeatureCanBeRepresentedWithoutClaimingSFNCSemantics() {
