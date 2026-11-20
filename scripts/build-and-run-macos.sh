@@ -77,6 +77,7 @@ cp "$executable" "$app_bundle/Contents/MacOS/$APP_PRODUCT"
 # owns a directory under vendor/<vendor>/<platform>/ in the source checkout.
 vendor_source="$REPOSITORY_ROOT/vendor"
 vendor_destination="$app_bundle/Contents/Frameworks/Vendors"
+rm -rf "$vendor_destination"
 mkdir -p "$vendor_destination"
 
 if [[ -d "$vendor_source" ]]; then
