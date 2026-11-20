@@ -114,6 +114,8 @@ An absent later-revision function is reported as not implemented when invoked. T
 
 ### Phase 1 — Extract the shared ABI package
 
+**Status: completed on 2026-11-20.** The shared package, package dependencies and removal of the former nested ABI copy are committed on this branch.
+
 - Move the GenTL C target, header and layout-check source into GenTLABI.
 - Keep the header byte-for-byte unchanged during the move.
 - Expose the ABI module as a package product.
@@ -134,6 +136,8 @@ An absent later-revision function is reported as not implemented when invoked. T
 **Exit condition:** every public GenTL operation and ABI-relevant type has a traceable source in the pinned header or the standard specification.
 
 ### Phase 3 — Bind the native CTI implementation
+
+**Status: partially completed.** Native function-pointer aliases now reference the PGC/P* typedefs imported from the pinned header. Runtime symbol loading and native lifecycle safeguards remain in place; the complete ABI/API audit and mock-CTI verification remain outstanding.
 
 - Bind the native loader to imported function-pointer typedefs.
 - Verify every required symbol against the GenTL 1.0 inventory.
@@ -192,16 +196,18 @@ These components must be adapted to the corrected API contract where required; t
 
 ## 8. Current implementation status
 
-The current branch already contains:
+The current branch contains:
 
-- A pinned GenTL 1.6 header and a C ABI target with structure-layout checks.
+- A standalone GenTLABI Swift package with the unchanged GenTL 1.6 header and C layout-check source. The header remains at one repository path; its Git blob object ID is 140c340dbf240c3c95ba13266d9965964b961517.
+- GenTLAPI, GenTLNative and AmcamGenTL package manifests wired to the shared GenTLABI product.
 - A native CTI loader and a substantial native implementation.
+- Native function-pointer aliases that now refer to the 64 distinct PGC/P* function-pointer typedefs declared by the pinned GenTL header. The native alias block no longer restates those C signatures with handwritten @convention(c) declarations.
 - An Amcam-backed implementation and a backend router.
-- Lifecycle and buffer/event safeguards described in the package conformance document.
+- Existing lifecycle, buffer, queue and event safeguards.
 
-However, the current GenTLAPI package still contains a manually authored Swift protocol, function groups and type definitions. It is GenTL-shaped, but it is not yet a direct binding derived from the imported C declarations. The ABI target is also nested under GenTLNative rather than shared as its own package.
+The main architectural gap remains: GenTLAPI still contains a manually authored Swift protocol, custom handle wrappers, error wrapper, information-value model and handwritten enum/command definitions. It has a dependency on GenTLABI, but its public function contract and ABI-relevant types have not yet been converted to use the imported GenTL declarations as their source of truth. Its Swift convenience method signatures also differ from the C prototypes in parameters, return shape and output-buffer handling.
 
-Those two points are the architectural correction addressed by this plan. Documentation changes do not mean the code conversion is already complete.
+The ABI package extraction is complete; the native function-pointer typedef binding has begun. The common GenTLAPI conversion is the next major phase. Documentation status is not evidence that those code changes or tests have completed.
 
 ## 9. Definition of done
 
