@@ -6,7 +6,7 @@ typedef void (*AmcamEventCallback)(uint32_t event, void *context);
 
 static AmcamModelV2 model = {
     .name = "Mock AmScope Camera",
-    .flag = 0,
+    .flag = 0x0000004000000000ULL,
     .maxspeed = 4,
     .preview = 3,
     .still = 0,
@@ -28,6 +28,7 @@ static uint32_t pull_count;
 static int32_t auto_exposure = 1;
 static uint32_t exposure_time = 10000;
 static int ignore_exposure_write = 0;
+static int32_t precise_frame_rate_tenths = 150;
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
 
@@ -129,12 +130,19 @@ int32_t Amcam_get_ExpTimeRange(void *handle, uint32_t *minimum, uint32_t *maximu
 }
 int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
     if (!handle || !value) return -1;
-    *value = option == 0x32 ? 1 : (option == 0x2c ? 300 : 0);
+    if (option == 0x32) *value = 1;
+    else if (option == 0x2c) *value = 300;
+    else if (option == 0x2d) *value = precise_frame_rate_tenths;
+    else return -1;
     return 0;
 }
 int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
-    (void)value;
-    return handle && option ? 0 : -1;
+    if (!handle) return -1;
+    if (option == 0x2d && value >= 1 && value <= 300) {
+        precise_frame_rate_tenths = value;
+        return 0;
+    }
+    return -1;
 }
 
 void MockAmcam_Reset(void) {
@@ -147,6 +155,7 @@ void MockAmcam_Reset(void) {
     auto_exposure = 1;
     exposure_time = 10000;
     ignore_exposure_write = 0;
+    precise_frame_rate_tenths = 150;
 }
 void MockAmcam_SetIgnoreExposureWrite(int32_t enabled) {
     ignore_exposure_write = enabled != 0;
