@@ -432,7 +432,8 @@ final class CameraSettingsViewController: NSViewController {
                     temperatureSlider?.minValue = range.minimum
                     temperatureSlider?.maxValue = max(range.minimum + 1, range.maximum)
                 }
-                temperatureSlider?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceTemperature")
+                temperatureSlider?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
+                    || !model.isFeatureWritable("AmcamWhiteBalanceTemperature")
                     || model.numericRange(for: "AmcamWhiteBalanceTemperature") == nil
                 temperatureValue.stringValue = "Current: \(temperature) K"
                 temperatureValue.isHidden = false
@@ -443,7 +444,8 @@ final class CameraSettingsViewController: NSViewController {
                     tintSlider?.minValue = range.minimum
                     tintSlider?.maxValue = max(range.minimum + 1, range.maximum)
                 }
-                tintSlider?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceTint")
+                tintSlider?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
+                    || !model.isFeatureWritable("AmcamWhiteBalanceTint")
                     || model.numericRange(for: "AmcamWhiteBalanceTint") == nil
                 tintValue.stringValue = "Current: \(tint)"
                 tintValue.isHidden = false
@@ -452,14 +454,16 @@ final class CameraSettingsViewController: NSViewController {
                 redField.stringValue = String(rgb[0])
                 greenField.stringValue = String(rgb[1])
                 blueField.stringValue = String(rgb[2])
-                rgbGainRow?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceRGBGain")
+                rgbGainRow?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
+                    || !model.isFeatureWritable("AmcamWhiteBalanceRGBGain")
             }
         }
 
         if let image = controls.image {
             if let enabled = image.colorMatrixEnabled {
                 colorMatrixButton.state = enabled ? .on : .off
-                colorMatrixButton.isHidden = !model.isFeatureWritable("AmcamColorMatrixEnabled")
+                colorMatrixButton.isHidden = !capabilities.availability(of: .colorCorrection).isUsable
+                    || !model.isFeatureWritable("AmcamColorMatrixEnabled")
             }
             pixelFormatPicker.removeAllItems()
             for code in image.supportedPixelFormats {
