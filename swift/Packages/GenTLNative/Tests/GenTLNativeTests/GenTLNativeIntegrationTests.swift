@@ -3,6 +3,8 @@ import Foundation
 import XCTest
 import GenTLABI
 import GenTLAPI
+
+private let mockHandle = UnsafeMutableRawPointer(bitPattern: 0x1111)!
 @_spi(BackendFactory) @testable import GenTLNative
 
 final class GenTLNativeIntegrationTests: XCTestCase {
@@ -166,7 +168,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
 
         var eventStorage: EVENT_HANDLE = nil
         let registerResult = withUnsafeMutablePointer(to: &eventStorage) {
-            api.GCRegisterEvent(nil, 0, $0)
+            api.GCRegisterEvent(mockHandle, 0, $0)
         }
         XCTAssertEqual(registerResult, GC_ERR_SUCCESS)
         let eventHandle = try XCTUnwrap(eventStorage)
@@ -205,62 +207,62 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let operations: [(name: String, index: UInt32, expected: GC_ERROR, invoke: () -> GC_ERROR)] = [
             ("GCGetInfo", 0, -11000, { api.GCGetInfo(0x1234, nil, nil, nil) }),
             ("GCGetLastError", 1, -12001, { api.GCGetLastError(nil, nil, nil) }),
-            ("GCGetPortURL", 6, -12006, { api.GCGetPortURL(nil, nil, nil) }),
-            ("GCGetPortInfo", 7, -12007, { api.GCGetPortInfo(nil, 0, nil, nil, nil) }),
+            ("GCGetPortURL", 6, -12006, { api.GCGetPortURL(mockHandle, nil, nil) }),
+            ("GCGetPortInfo", 7, -12007, { api.GCGetPortInfo(mockHandle, 0, nil, nil, nil) }),
             ("EventGetData", 10, -12010, { api.EventGetData(eventHandle, nil, nil, 0) }),
             ("EventGetDataInfo", 11, -12011, { api.EventGetDataInfo(eventHandle, nil, 0, 0, nil, nil, nil) }),
             ("EventGetInfo", 12, -12012, { api.EventGetInfo(eventHandle, 0, nil, nil, nil) }),
             ("EventFlush", 13, -12013, { api.EventFlush(eventHandle) }),
             ("EventKill", 14, 0, { api.EventKill(eventHandle) }),
             ("TLOpen", 15, -12015, { api.TLOpen(nil) }),
-            ("TLClose", 16, -12016, { api.TLClose(nil) }),
-            ("TLGetInfo", 17, -12017, { api.TLGetInfo(nil, 0, nil, nil, nil) }),
-            ("TLGetNumInterfaces", 18, -12018, { api.TLGetNumInterfaces(nil, nil) }),
-            ("TLGetInterfaceID", 19, -12019, { api.TLGetInterfaceID(nil, 0, nil, nil) }),
-            ("TLGetInterfaceInfo", 20, -12020, { api.TLGetInterfaceInfo(nil, nil, 0, nil, nil, nil) }),
-            ("TLOpenInterface", 21, -12021, { api.TLOpenInterface(nil, nil, nil) }),
-            ("TLUpdateInterfaceList", 22, -12022, { api.TLUpdateInterfaceList(nil, nil, 0) }),
-            ("IFClose", 23, -12023, { api.IFClose(nil) }),
-            ("IFGetInfo", 24, -12024, { api.IFGetInfo(nil, 0, nil, nil, nil) }),
-            ("IFGetNumDevices", 25, -12025, { api.IFGetNumDevices(nil, nil) }),
-            ("IFGetDeviceID", 26, -12026, { api.IFGetDeviceID(nil, 0, nil, nil) }),
-            ("IFUpdateDeviceList", 27, -12027, { api.IFUpdateDeviceList(nil, nil, 0) }),
-            ("IFGetDeviceInfo", 28, -12028, { api.IFGetDeviceInfo(nil, nil, 0, nil, nil, nil) }),
-            ("IFOpenDevice", 29, -12029, { api.IFOpenDevice(nil, nil, 0, nil) }),
-            ("DevGetPort", 30, -12030, { api.DevGetPort(nil, nil) }),
-            ("DevGetNumDataStreams", 31, -12031, { api.DevGetNumDataStreams(nil, nil) }),
-            ("DevGetDataStreamID", 32, -12032, { api.DevGetDataStreamID(nil, 0, nil, nil) }),
-            ("DevOpenDataStream", 33, -12033, { api.DevOpenDataStream(nil, nil, nil) }),
-            ("DevGetInfo", 34, -12034, { api.DevGetInfo(nil, 0, nil, nil, nil) }),
-            ("DevClose", 35, -12035, { api.DevClose(nil) }),
-            ("DSAnnounceBuffer", 36, -12036, { api.DSAnnounceBuffer(nil, nil, 0, nil, nil) }),
-            ("DSAllocAndAnnounceBuffer", 37, -12037, { api.DSAllocAndAnnounceBuffer(nil, 0, nil, nil) }),
-            ("DSFlushQueue", 38, -12038, { api.DSFlushQueue(nil, 0) }),
-            ("DSStartAcquisition", 39, -12039, { api.DSStartAcquisition(nil, 0, 0) }),
-            ("DSStopAcquisition", 40, -12040, { api.DSStopAcquisition(nil, 0) }),
-            ("DSGetInfo", 41, -12041, { api.DSGetInfo(nil, 0, nil, nil, nil) }),
-            ("DSGetBufferID", 42, -12042, { api.DSGetBufferID(nil, 0, nil) }),
-            ("DSClose", 43, -12043, { api.DSClose(nil) }),
-            ("DSRevokeBuffer", 44, -12044, { api.DSRevokeBuffer(nil, nil, nil, nil) }),
-            ("DSQueueBuffer", 45, -12045, { api.DSQueueBuffer(nil, nil) }),
-            ("DSGetBufferInfo", 46, -12046, { api.DSGetBufferInfo(nil, nil, 0, nil, nil, nil) }),
-            ("GCGetNumPortURLs", 47, -12047, { api.GCGetNumPortURLs(nil, nil) }),
-            ("GCGetPortURLInfo", 48, -12048, { api.GCGetPortURLInfo(nil, 0, 0, nil, nil, nil) }),
-            ("GCReadPortStacked", 49, -12049, { api.GCReadPortStacked(nil, nil, nil) }),
-            ("GCWritePortStacked", 50, -12050, { api.GCWritePortStacked(nil, nil, nil) }),
-            ("DSGetBufferChunkData", 51, -12051, { api.DSGetBufferChunkData(nil, nil, nil, nil) }),
-            ("IFGetParentTL", 52, -12052, { api.IFGetParentTL(nil, nil) }),
-            ("DevGetParentIF", 53, -12053, { api.DevGetParentIF(nil, nil) }),
-            ("DSGetParentDev", 54, -12054, { api.DSGetParentDev(nil, nil) }),
-            ("DSGetNumBufferParts", 55, -12055, { api.DSGetNumBufferParts(nil, nil, nil) }),
-            ("DSGetBufferPartInfo", 56, -12056, { api.DSGetBufferPartInfo(nil, nil, 0, 0, nil, nil, nil) }),
-            ("DSAnnounceCompositeBuffer", 57, -12057, { api.DSAnnounceCompositeBuffer(nil, 0, nil, nil, nil, nil) }),
-            ("DSGetBufferInfoStacked", 58, -12058, { api.DSGetBufferInfoStacked(nil, nil, nil, 0) }),
-            ("DSGetBufferPartInfoStacked", 59, -12059, { api.DSGetBufferPartInfoStacked(nil, nil, nil, 0) }),
-            ("DSGetNumFlows", 60, -12060, { api.DSGetNumFlows(nil, nil) }),
-            ("DSGetFlowInfo", 61, -12061, { api.DSGetFlowInfo(nil, 0, 0, nil, nil, nil) }),
-            ("DSGetNumBufferSegments", 62, -12062, { api.DSGetNumBufferSegments(nil, nil, nil) }),
-            ("DSGetBufferSegmentInfo", 63, -12063, { api.DSGetBufferSegmentInfo(nil, nil, 0, 0, nil, nil, nil) })
+            ("TLClose", 16, -12016, { api.TLClose(mockHandle) }),
+            ("TLGetInfo", 17, -12017, { api.TLGetInfo(mockHandle, 0, nil, nil, nil) }),
+            ("TLGetNumInterfaces", 18, -12018, { api.TLGetNumInterfaces(mockHandle, nil) }),
+            ("TLGetInterfaceID", 19, -12019, { api.TLGetInterfaceID(mockHandle, 0, nil, nil) }),
+            ("TLGetInterfaceInfo", 20, -12020, { api.TLGetInterfaceInfo(mockHandle, nil, 0, nil, nil, nil) }),
+            ("TLOpenInterface", 21, -12021, { api.TLOpenInterface(mockHandle, nil, nil) }),
+            ("TLUpdateInterfaceList", 22, -12022, { api.TLUpdateInterfaceList(mockHandle, nil, 0) }),
+            ("IFClose", 23, -12023, { api.IFClose(mockHandle) }),
+            ("IFGetInfo", 24, -12024, { api.IFGetInfo(mockHandle, 0, nil, nil, nil) }),
+            ("IFGetNumDevices", 25, -12025, { api.IFGetNumDevices(mockHandle, nil) }),
+            ("IFGetDeviceID", 26, -12026, { api.IFGetDeviceID(mockHandle, 0, nil, nil) }),
+            ("IFUpdateDeviceList", 27, -12027, { api.IFUpdateDeviceList(mockHandle, nil, 0) }),
+            ("IFGetDeviceInfo", 28, -12028, { api.IFGetDeviceInfo(mockHandle, nil, 0, nil, nil, nil) }),
+            ("IFOpenDevice", 29, -12029, { api.IFOpenDevice(mockHandle, nil, 0, nil) }),
+            ("DevGetPort", 30, -12030, { api.DevGetPort(mockHandle, nil) }),
+            ("DevGetNumDataStreams", 31, -12031, { api.DevGetNumDataStreams(mockHandle, nil) }),
+            ("DevGetDataStreamID", 32, -12032, { api.DevGetDataStreamID(mockHandle, 0, nil, nil) }),
+            ("DevOpenDataStream", 33, -12033, { api.DevOpenDataStream(mockHandle, nil, nil) }),
+            ("DevGetInfo", 34, -12034, { api.DevGetInfo(mockHandle, 0, nil, nil, nil) }),
+            ("DevClose", 35, -12035, { api.DevClose(mockHandle) }),
+            ("DSAnnounceBuffer", 36, -12036, { api.DSAnnounceBuffer(mockHandle, nil, 0, nil, nil) }),
+            ("DSAllocAndAnnounceBuffer", 37, -12037, { api.DSAllocAndAnnounceBuffer(mockHandle, 0, nil, nil) }),
+            ("DSFlushQueue", 38, -12038, { api.DSFlushQueue(mockHandle, 0) }),
+            ("DSStartAcquisition", 39, -12039, { api.DSStartAcquisition(mockHandle, 0, 0) }),
+            ("DSStopAcquisition", 40, -12040, { api.DSStopAcquisition(mockHandle, 0) }),
+            ("DSGetInfo", 41, -12041, { api.DSGetInfo(mockHandle, 0, nil, nil, nil) }),
+            ("DSGetBufferID", 42, -12042, { api.DSGetBufferID(mockHandle, 0, nil) }),
+            ("DSClose", 43, -12043, { api.DSClose(mockHandle) }),
+            ("DSRevokeBuffer", 44, -12044, { api.DSRevokeBuffer(mockHandle,mockHandle, nil, nil) }),
+            ("DSQueueBuffer", 45, -12045, { api.DSQueueBuffer(mockHandle,mockHandle) }),
+            ("DSGetBufferInfo", 46, -12046, { api.DSGetBufferInfo(mockHandle,mockHandle, 0, nil, nil, nil) }),
+            ("GCGetNumPortURLs", 47, -12047, { api.GCGetNumPortURLs(mockHandle, nil) }),
+            ("GCGetPortURLInfo", 48, -12048, { api.GCGetPortURLInfo(mockHandle, 0, 0, nil, nil, nil) }),
+            ("GCReadPortStacked", 49, -12049, { api.GCReadPortStacked(mockHandle, nil, nil) }),
+            ("GCWritePortStacked", 50, -12050, { api.GCWritePortStacked(mockHandle, nil, nil) }),
+            ("DSGetBufferChunkData", 51, -12051, { api.DSGetBufferChunkData(mockHandle,mockHandle, nil, nil) }),
+            ("IFGetParentTL", 52, -12052, { api.IFGetParentTL(mockHandle, nil) }),
+            ("DevGetParentIF", 53, -12053, { api.DevGetParentIF(mockHandle, nil) }),
+            ("DSGetParentDev", 54, -12054, { api.DSGetParentDev(mockHandle, nil) }),
+            ("DSGetNumBufferParts", 55, -12055, { api.DSGetNumBufferParts(mockHandle,mockHandle, nil) }),
+            ("DSGetBufferPartInfo", 56, -12056, { api.DSGetBufferPartInfo(mockHandle,mockHandle, 0, 0, nil, nil, nil) }),
+            ("DSAnnounceCompositeBuffer", 57, -12057, { api.DSAnnounceCompositeBuffer(mockHandle, 0, nil, nil, nil, nil) }),
+            ("DSGetBufferInfoStacked", 58, -12058, { api.DSGetBufferInfoStacked(mockHandle,mockHandle, nil, 0) }),
+            ("DSGetBufferPartInfoStacked", 59, -12059, { api.DSGetBufferPartInfoStacked(mockHandle,mockHandle, nil, 0) }),
+            ("DSGetNumFlows", 60, -12060, { api.DSGetNumFlows(mockHandle, nil) }),
+            ("DSGetFlowInfo", 61, -12061, { api.DSGetFlowInfo(mockHandle, 0, 0, nil, nil, nil) }),
+            ("DSGetNumBufferSegments", 62, -12062, { api.DSGetNumBufferSegments(mockHandle,mockHandle, nil) }),
+            ("DSGetBufferSegmentInfo", 63, -12063, { api.DSGetBufferSegmentInfo(mockHandle,mockHandle, 0, 0, nil, nil, nil) })
         ]
 
         for operation in operations {
@@ -271,7 +273,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(api.GCUnregisterEvent(nil, 0), GC_ERR_SUCCESS)
+        XCTAssertEqual(api.GCUnregisterEvent(mockHandle, 0), GC_ERR_SUCCESS)
         XCTAssertEqual(api.GCCloseLib(), GC_ERR_SUCCESS)
 
         guard let library = dlopen(producerURL.path, RTLD_NOW | RTLD_LOCAL) else {
@@ -338,48 +340,48 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let unsupported = GC_ERR_NOT_IMPLEMENTED
 
         var numberOfURLs: UInt32 = 0xDEADBEEF
-        XCTAssertEqual(api.GCGetNumPortURLs(nil, &numberOfURLs), unsupported)
+        XCTAssertEqual(api.GCGetNumPortURLs(mockHandle, &numberOfURLs), unsupported)
         XCTAssertEqual(numberOfURLs, 0xDEADBEEF)
 
         var infoType: INFO_DATATYPE = 0x1234
         var infoSize = 0x12345678
         XCTAssertEqual(
-            api.GCGetPortURLInfo(nil, 0, 0, &infoType, nil, &infoSize),
+            api.GCGetPortURLInfo(mockHandle, 0, 0, &infoType, nil, &infoSize),
             unsupported
         )
         XCTAssertEqual(infoType, 0x1234)
         XCTAssertEqual(infoSize, 0x12345678)
 
         var stackCount = 0x12345678
-        XCTAssertEqual(api.GCReadPortStacked(nil, nil, &stackCount), unsupported)
+        XCTAssertEqual(api.GCReadPortStacked(mockHandle, nil, &stackCount), unsupported)
         XCTAssertEqual(stackCount, 0x12345678)
-        XCTAssertEqual(api.GCWritePortStacked(nil, nil, &stackCount), unsupported)
+        XCTAssertEqual(api.GCWritePortStacked(mockHandle, nil, &stackCount), unsupported)
         XCTAssertEqual(stackCount, 0x12345678)
 
         var chunkCount = 0x12345678
-        XCTAssertEqual(api.DSGetBufferChunkData(nil, nil, nil, &chunkCount), unsupported)
+        XCTAssertEqual(api.DSGetBufferChunkData(mockHandle,mockHandle, nil, &chunkCount), unsupported)
         XCTAssertEqual(chunkCount, 0x12345678)
 
         var systemHandle: TL_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x1111)
-        XCTAssertEqual(api.IFGetParentTL(nil, &systemHandle), unsupported)
+        XCTAssertEqual(api.IFGetParentTL(mockHandle, &systemHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(systemHandle)), 0x1111)
 
         var interfaceHandle: IF_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x2222)
-        XCTAssertEqual(api.DevGetParentIF(nil, &interfaceHandle), unsupported)
+        XCTAssertEqual(api.DevGetParentIF(mockHandle, &interfaceHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(interfaceHandle)), 0x2222)
 
         var deviceHandle: DEV_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x3333)
-        XCTAssertEqual(api.DSGetParentDev(nil, &deviceHandle), unsupported)
+        XCTAssertEqual(api.DSGetParentDev(mockHandle, &deviceHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(deviceHandle)), 0x3333)
 
         var partCount: UInt32 = 0xDEADBEEF
-        XCTAssertEqual(api.DSGetNumBufferParts(nil, nil, &partCount), unsupported)
+        XCTAssertEqual(api.DSGetNumBufferParts(mockHandle,mockHandle, &partCount), unsupported)
         XCTAssertEqual(partCount, 0xDEADBEEF)
 
         infoType = 0x1234
         infoSize = 0x12345678
         XCTAssertEqual(
-            api.DSGetBufferPartInfo(nil, nil, 0, 0, &infoType, nil, &infoSize),
+            api.DSGetBufferPartInfo(mockHandle,mockHandle, 0, 0, &infoType, nil, &infoSize),
             unsupported
         )
         XCTAssertEqual(infoType, 0x1234)
@@ -387,32 +389,32 @@ final class GenTLNativeIntegrationTests: XCTestCase {
 
         var announcedBuffer: BUFFER_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x4444)
         XCTAssertEqual(
-            api.DSAnnounceCompositeBuffer(nil, 0, nil, nil, nil, &announcedBuffer),
+            api.DSAnnounceCompositeBuffer(mockHandle, 0, nil, nil, nil, &announcedBuffer),
             unsupported
         )
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(announcedBuffer)), 0x4444)
 
-        XCTAssertEqual(api.DSGetBufferInfoStacked(nil, nil, nil, 0), unsupported)
-        XCTAssertEqual(api.DSGetBufferPartInfoStacked(nil, nil, nil, 0), unsupported)
+        XCTAssertEqual(api.DSGetBufferInfoStacked(mockHandle,mockHandle, nil, 0), unsupported)
+        XCTAssertEqual(api.DSGetBufferPartInfoStacked(mockHandle,mockHandle, nil, 0), unsupported)
 
         var flowCount: UInt32 = 0xDEADBEEF
-        XCTAssertEqual(api.DSGetNumFlows(nil, &flowCount), unsupported)
+        XCTAssertEqual(api.DSGetNumFlows(mockHandle, &flowCount), unsupported)
         XCTAssertEqual(flowCount, 0xDEADBEEF)
 
         infoType = 0x1234
         infoSize = 0x12345678
-        XCTAssertEqual(api.DSGetFlowInfo(nil, 0, 0, &infoType, nil, &infoSize), unsupported)
+        XCTAssertEqual(api.DSGetFlowInfo(mockHandle, 0, 0, &infoType, nil, &infoSize), unsupported)
         XCTAssertEqual(infoType, 0x1234)
         XCTAssertEqual(infoSize, 0x12345678)
 
         var segmentCount: UInt32 = 0xDEADBEEF
-        XCTAssertEqual(api.DSGetNumBufferSegments(nil, nil, &segmentCount), unsupported)
+        XCTAssertEqual(api.DSGetNumBufferSegments(mockHandle,mockHandle, &segmentCount), unsupported)
         XCTAssertEqual(segmentCount, 0xDEADBEEF)
 
         infoType = 0x1234
         infoSize = 0x12345678
         XCTAssertEqual(
-            api.DSGetBufferSegmentInfo(nil, nil, 0, 0, &infoType, nil, &infoSize),
+            api.DSGetBufferSegmentInfo(mockHandle,mockHandle, 0, 0, &infoType, nil, &infoSize),
             unsupported
         )
         XCTAssertEqual(infoType, 0x1234)
