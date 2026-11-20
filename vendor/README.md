@@ -32,5 +32,10 @@ file is not modified. Set `REQUIRE_AMCAM_SDK=1` to fail packaging when the
 AmScope SDK is missing; without it, the app can launch with that provider
 unavailable.
 
+The local build uses an ad-hoc signature for the copied native libraries and
+application bundle. This is a development signing step, not a distribution
+trust solution. Distribution builds must use a Developer ID identity to sign
+the final app bundle and complete Apple's notarization process.
+
 Do not commit proprietary SDK binaries unless the vendor license explicitly
 permits redistribution.
