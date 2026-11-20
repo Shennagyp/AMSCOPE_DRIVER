@@ -177,7 +177,7 @@ Other commands:
 
 - `make build-local` — build all packages and assemble the app without launching it.
 - `make run-probe` — build and run the camera diagnostic from source.
-- `make test-local` — run `swift test` across all ten Swift packages (including the GenTL ABI package). Hosted CI runs nine package test jobs and separately builds the GenTL ABI package.
+- `make test-local` — run `swift test` across all ten Swift packages (including the GenTL ABI package). Hosted CI tests nine packages across Linux and macOS: the Linux job covers AmcamCameraModel, AmcamImagingCore, AmcamImagingRuntime and AmcamImagingState; five macOS matrix jobs cover the backend packages. CI separately builds the GenTL ABI package.
 
 The vendor SDK is proprietary and is not bundled. For physical AmScope camera access, place a compatible arm64 `libamcam.dylib` under `vendor/amcam/macos/libamcam.dylib`, or install it in one of the backend's standard per-user/system locations. The build script copies a local vendor SDK into the app bundle; `AMCAM_SDK_SOURCE=/absolute/path/to/libamcam.dylib` can specify a source file at build time. The backend resolves the bundled SDK first. There is no SDK file picker in the UI. Without a compatible SDK, the app can launch but the AmScope provider is unavailable. The app is ad-hoc signed for local testing, not notarized.
 
