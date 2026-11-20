@@ -138,11 +138,11 @@ public struct AmcamGainControl: Equatable, Sendable {
     public let readbackPercent: UInt16
     public let minimumPercent: UInt16
     public let maximumPercent: UInt16
-    public let defaultPercent: UInt16
+    public let defaultPercent: UInt16?
     public let requestedPercent: UInt16?
 
     public init(readbackPercent: UInt16, minimumPercent: UInt16, maximumPercent: UInt16,
-                defaultPercent: UInt16, requestedPercent: UInt16? = nil) {
+                defaultPercent: UInt16?, requestedPercent: UInt16? = nil) {
         self.readbackPercent = readbackPercent
         self.minimumPercent = minimumPercent
         self.maximumPercent = maximumPercent
