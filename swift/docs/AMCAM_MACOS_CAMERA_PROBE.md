@@ -12,7 +12,7 @@ The current source revision was verified in [workflow run 44683070601](https://g
 - SHA-256: `b23ee03db32c19c8def9f7c341e882f70f6741d04b453edf29dbd67e3e8adb13`
 - Expiration: December 4, 2026
 
-The artifact is an Apple Silicon arm64 executable, matching the Mac's architecture. The overall workflow remains marked failed because the separate GenTLNative and GenTLRouter jobs fail; those failures do not affect the successful Amcam package, probe build, or artifact upload. The artifact contains the executable and this instruction file. The vendor SDK is proprietary and is not included.
+The artifact is an Apple Silicon arm64 executable, matching the Mac's architecture. The same workflow also passed the imaging app build and uploaded the app artifact (ID `14606959758`). The overall workflow remains marked failed because the separate GenTLNative and GenTLRouter jobs fail; those failures do not affect the successful Amcam package, probe build, or artifact upload. The artifact contains the executable and this instruction file. The vendor SDK is proprietary and is not included.
 
 The original vendor Amcam SDK had already streamed successfully on this Mac. This probe is the next verification layer: it exercises the new Swift AmcamGenTL backend against the actual vendor dylib and physical camera, rather than retesting only the SDK itself.
 
