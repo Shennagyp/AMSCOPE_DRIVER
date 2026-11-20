@@ -358,3 +358,10 @@ Record the exact Xcode/Swift versions and full output. Fix compiler errors befor
 ### Important scope limit
 
 This first mock is intentionally a dispatch/loader fixture, not yet a simulated camera. All required base exports exist, but most return `GC_ERR_NOT_IMPLEMENTED`. It proves the intended test architecture and creates the first real C ABI dispatch test; it does not yet support Producer discovery or acquisition. The next mock increment should implement a minimal valid Producer/System/Interface/Device path, then stream/buffer/event acquisition.
+
+
+## 12. Continuous integration baseline
+
+Added `.github/workflows/swift-gentl.yml` for macOS 14. It records OS, Xcode, Swift, and Clang versions; builds `GenTLABI`; and runs the test suites for `GenTLAPI`, `GenTLNative`, `AmcamGenTL`, and `GenTLRouter`. The workflow is triggered by pushes and pull requests targeting `swift-gentl-api`, and can be manually dispatched from GitHub Actions.
+
+The workflow file is committed, but no workflow run has been observed yet. Its existence is not evidence of a successful CI run. If GitHub Actions does not start automatically for the repository, check repository Actions settings and workflow permissions; do not treat the empty run list as a pass.
