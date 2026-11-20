@@ -1,7 +1,7 @@
 import Foundation
-@_spi(BackendConvenience) @_spi(BackendConvenience) import GenTLAPI
-import GenTLNative
-import AmcamGenTL
+@_spi(BackendConvenience) import GenTLAPI
+@_spi(BackendConvenience) import GenTLNative
+@_spi(BackendConvenience) import AmcamGenTL
 
 public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case emptyBackendID
@@ -80,9 +80,9 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let backendID: String
     public let interfaceID: String
     public let deviceID: String
-    public let api: any GenTLBackendConvenience
-    public let systemHandle: TL_HANDLE
-    public let interfaceHandle: IF_HANDLE
+    let api: any GenTLBackendConvenience
+    let systemHandle: TL_HANDLE
+    let interfaceHandle: IF_HANDLE
 
     private let context: GenTLProviderContext
 
@@ -308,8 +308,8 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
 /// Open device ownership. Close the device before releasing its GenTL route.
 public final class GenTLDeviceSession: @unchecked Sendable {
-    public let api: any GenTLBackendConvenience
-    public let deviceHandle: DEV_HANDLE
+    let api: any GenTLBackendConvenience
+    let deviceHandle: DEV_HANDLE
 
     private let context: GenTLProviderContext
     private let lock = NSLock()
@@ -370,6 +370,7 @@ public final class GenTLRouter: @unchecked Sendable {
         return registrations.keys.sorted()
     }
 
+    @_spi(BackendConvenience)
     public func register(
         backendID: String,
         makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience
