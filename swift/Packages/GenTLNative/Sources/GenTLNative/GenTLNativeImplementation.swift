@@ -1374,7 +1374,8 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                     throw GC_ERROR.invalidValue
                 }
                 return (value, registration.eventType)
-            } catch let error as GC_ERROR where error == .invalidParameter {
+            } catch let error as GC_ERROR
+                where error == .invalidParameter || error == .notImplemented {
                 // EVENT_SIZE_MAX (EventGetInfo command 3) was standardized in
                 // GenTL 1.2. GenTL 1.0 defines the New Buffer event payload as
                 // exactly EVENT_NEW_BUFFER_DATA: two pointers. That fixed
