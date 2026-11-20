@@ -61,6 +61,28 @@ public actor CameraSessionLifecycle {
         )
     }
 
+    /// Opens and adopts a device as one atomic library-owned lifecycle operation.
+    /// The returned session is a borrowed backend handle for feature access; the
+    /// lifecycle actor remains its sole owner and is responsible for closing it.
+    public func open(_ device: any CameraRuntimeDevice) async throws -> any CameraRuntimeSession {
+        guard !lifecycleOperationInProgress else {
+            throw CameraSessionLifecycleError.operationInProgress
+        }
+        guard session == nil, acquisition == nil, captureTask == nil else {
+            throw CameraSessionLifecycleError.sessionAlreadyAttached
+        }
+
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+
+        let openedSession = try await device.open()
+        session = openedSession
+        lastDeliveredFrameSequence = nil
+        return openedSession
+    }
+
+    /// Attaches a session that has already been opened by a test or specialized
+    /// host. Production frontends should use open(_:) so the library owns it.
     public func attach(_ newSession: any CameraRuntimeSession) throws {
         guard !lifecycleOperationInProgress else {
             throw CameraSessionLifecycleError.operationInProgress

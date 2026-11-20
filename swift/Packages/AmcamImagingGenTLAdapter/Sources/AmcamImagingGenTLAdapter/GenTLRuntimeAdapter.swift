@@ -6,8 +6,31 @@ import GenTLRouter
 /// Adapts one already-open GenTL device session to the portable lifecycle contract.
 /// The caller delegates device close responsibility to this wrapper. It may retain
 /// the session reference for feature access, but must not close it independently.
+public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable {
+    private let candidate: GenTLDeviceCandidate
+    private let access: GenTLDeviceAccess
+
+    public init(candidate: GenTLDeviceCandidate, access: GenTLDeviceAccess = .exclusive) {
+        self.candidate = candidate
+        self.access = access
+    }
+
+    public func open() async throws -> any CameraRuntimeSession {
+        let candidate = self.candidate
+        let access = self.access
+        let device = try await Task.detached(priority: .userInitiated) {
+            try candidate.open(access: access)
+        }.value
+        return GenTLRuntimeSession(device: device)
+    }
+}
+
+/// A GenTL session owned and closed by CameraSessionLifecycle. `featureSession`
+/// is a borrowed handle for typed feature access; callers must never close it.
 public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendable {
     private let device: GenTLDeviceSession
+
+    public var featureSession: GenTLDeviceSession { device }
 
     public init(device: GenTLDeviceSession) {
         self.device = device

@@ -324,14 +324,13 @@ final class CameraApplicationModel: ObservableObject {
               let device = selectedDevice else { return }
 
         do {
-            let openedSession = try candidate.open(access: .exclusive)
-            do {
-                try await cameraLifecycle.attach(GenTLRuntimeSession(device: openedSession))
-            } catch {
-                try? openedSession.close()
-                throw error
+            let runtimeSession = try await cameraLifecycle.open(
+                GenTLRuntimeDevice(candidate: candidate)
+            )
+            guard let openedSession = (runtimeSession as? GenTLRuntimeSession)?.featureSession else {
+                throw GenTLRuntimeAdapterError.unexpectedSessionType
             }
-            // Borrowed for feature access only. The imaging library owns closure.
+            // Borrowed for feature access only. The imaging library opened and owns it.
             deviceSession = openedSession
             featureDescriptors = (try? openedSession.featureDescriptors()) ?? []
             updateSelectedDeviceResolutions(from: featureDescriptors)
