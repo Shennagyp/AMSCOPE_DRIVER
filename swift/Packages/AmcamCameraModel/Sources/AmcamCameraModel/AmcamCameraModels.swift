@@ -215,8 +215,9 @@ public struct AmcamFrame: Sendable {
     public let bytes: Data
     public let sequence: UInt32?
     public let deviceTimestampMicroseconds: UInt64?
+    public let metadata: AmcamFrameMetadata?
 
-    public init(width: Int, height: Int, bytesPerRow: Int, pixelFormat: AmcamPixelFormat, bytes: Data, sequence: UInt32?, deviceTimestampMicroseconds: UInt64?) {
+    public init(width: Int, height: Int, bytesPerRow: Int, pixelFormat: AmcamPixelFormat, bytes: Data, sequence: UInt32?, deviceTimestampMicroseconds: UInt64?, metadata: AmcamFrameMetadata? = nil) {
         self.width = width
         self.height = height
         self.bytesPerRow = bytesPerRow
@@ -224,5 +225,6 @@ public struct AmcamFrame: Sendable {
         self.bytes = bytes
         self.sequence = sequence
         self.deviceTimestampMicroseconds = deviceTimestampMicroseconds
+        self.metadata = metadata
     }
 }
