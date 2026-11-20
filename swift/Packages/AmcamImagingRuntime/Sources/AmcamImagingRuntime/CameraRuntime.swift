@@ -79,8 +79,29 @@ public struct CameraFeatureDescriptor: Equatable, Sendable, Identifiable {
         self.enumerationValues = enumerationValues
     }
 }
-public enum CameraFeatureAccessError: Error, Equatable, Sendable {
+public enum CameraFeatureAccessError: Error, Equatable, Sendable, LocalizedError {
     case unsupported
+    case featureNotFound(String)
+    case featureUnavailable(String)
+    case featureNotReadable(String)
+    case featureNotWritable(String)
+    case valueTypeMismatch(feature: String, expected: CameraFeatureKind, actual: CameraFeatureKind)
+    case invalidValue(String)
+    case backendFailure(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unsupported: return "This camera backend does not expose typed feature access."
+        case .featureNotFound(let name): return "Camera feature '\\(name)' was not found."
+        case .featureUnavailable(let name): return "Camera feature '\\(name)' is currently unavailable."
+        case .featureNotReadable(let name): return "Camera feature '\\(name)' is not readable."
+        case .featureNotWritable(let name): return "Camera feature '\\(name)' is not writable."
+        case .valueTypeMismatch(let name, let expected, let actual):
+            return "Camera feature '\\(name)' expects \\(expected.rawValue), received \\(actual.rawValue)."
+        case .invalidValue(let message): return message
+        case .backendFailure(let message): return message
+        }
+    }
 }
 /// Application-facing camera session. Transport handles remain inside adapters.
 public protocol CameraRuntimeSession: Sendable {

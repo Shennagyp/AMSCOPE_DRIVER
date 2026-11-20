@@ -36,4 +36,14 @@ final class CameraFeatureContractTests: XCTestCase {
         XCTAssertEqual(descriptor.unit, "us")
         XCTAssertEqual(descriptor.numericRange?.maximum, 100_000)
     }
+    func testFeatureAccessErrorsRemainBackendNeutral() {
+        XCTAssertEqual(
+            CameraFeatureAccessError.featureNotWritable("ExposureTime").errorDescription,
+            "Camera feature 'ExposureTime' is not writable."
+        )
+        XCTAssertEqual(
+            CameraFeatureAccessError.valueTypeMismatch(feature: "Gain", expected: .integer, actual: .string).errorDescription,
+            "Camera feature 'Gain' expects integer, received string."
+        )
+    }
 }

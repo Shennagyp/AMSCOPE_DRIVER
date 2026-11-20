@@ -35,13 +35,25 @@ public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendabl
         return device.api.DevGetNumDataStreams(device.deviceHandle, &count) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
     }
     public func featureDescriptors() throws -> [CameraFeatureDescriptor] {
-        try device.featureDescriptors().map(Self.map)
+        do {
+            return try device.featureDescriptors().map(Self.map)
+        } catch {
+            throw Self.mapFeatureError(error)
+        }
     }
     public func readFeature(_ name: String) throws -> CameraFeatureValue {
-        Self.map(try device.readFeature(name))
+        do {
+            return Self.map(try device.readFeature(name))
+        } catch {
+            throw Self.mapFeatureError(error)
+        }
     }
     public func writeFeature(_ value: CameraFeatureValue, named name: String) throws {
-        try device.writeFeature(Self.map(value), named: name)
+        do {
+            try device.writeFeature(Self.map(value), named: name)
+        } catch {
+            throw Self.mapFeatureError(error)
+        }
     }
     public func makeAcquisition() async throws -> any CameraRuntimeAcquisition {
         let device = self.device
@@ -54,6 +66,21 @@ public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendabl
         let device = self.device
         try await Task.detached(priority: .userInitiated) { try device.close() }.value
     }
+    private static func mapFeatureError(_ error: Error) -> CameraFeatureAccessError {
+        guard let error = error as? GenTLFeatureAccessError else {
+            return .backendFailure(error.localizedDescription)
+        }
+        switch error {
+        case .featureNotFound(let name): return .featureNotFound(name)
+        case .featureUnavailable(let name): return .featureUnavailable(name)
+        case .featureNotReadable(let name): return .featureNotReadable(name)
+        case .featureNotWritable(let name): return .featureNotWritable(name)
+        case .valueTypeMismatch(let feature, let expected, let actual):
+            return .valueTypeMismatch(feature: feature, expected: map(expected), actual: map(actual))
+        case .invalidValue(let message): return .invalidValue(message)
+        }
+    }
+
     private static func map(_ kind: GenTLFeatureKind) -> CameraFeatureKind {
         switch kind {
         case .boolean: return .boolean
