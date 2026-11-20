@@ -226,7 +226,7 @@ public enum GenTLInfoCommand {
     public enum TransportLayer: Int32, Sendable {
         case id = 0, vendor = 1, model = 2, version = 3, transportType = 4
         case fileName = 5, pathName = 6, displayName = 7, charEncoding = 8
-        case genTLVersionMajor = 9, genTLVersionMinor = 10
+        case genTLVersionMajor = 9, genTLVersionMinor = 10 // GenTL 1.5
     }
     public enum Interface: Int32, Sendable {
         case id = 0, displayName = 1, transportType = 2
@@ -260,11 +260,11 @@ public enum GenTLInfoCommand {
         case dataLargerThanBuffer = 29, containsChunkData = 30, isComposite = 31
     }
     public enum Event: Int32, Sendable {
-        case eventType = 0, numInQueue = 1, numFired = 2, maxSize = 3
-        case infoDataSizeMax = 4
+        case eventType = 0, numInQueue = 1, numFired = 2
+        case maxSize = 3, infoDataSizeMax = 4 // GenTL 1.2
     }
     public enum EventData: Int32, Sendable {
-        case id = 0, value = 1, numericID = 2
+        case id = 0, value = 1, numericID = 2 // NUMID: GenTL 1.3
     }
 }
 
