@@ -56,18 +56,28 @@ final class CameraApplicationModel: ObservableObject {
               value.isFinite,
               range.minimum.isFinite,
               range.maximum.isFinite,
-              range.maximum > range.minimum else {
+              range.maximum >= range.minimum else {
             return nil
         }
-        if let increment = range.increment,
-           (!increment.isFinite || increment <= 0) {
-            return nil
+        guard let increment = range.increment else {
+            return Swift.min(Swift.max(value, range.minimum), range.maximum)
         }
-        let clamped = Swift.min(Swift.max(value, range.minimum), range.maximum)
-        guard let increment = range.increment else { return clamped }
+        guard increment.isFinite, increment > 0 else { return nil }
+
+        // Snap against the descriptor's origin, but never clamp to a maximum
+        // that is not itself on the advertised increment grid.
+        let maximumSteps = ((range.maximum - range.minimum) / increment).rounded(.down)
+        guard maximumSteps.isFinite, maximumSteps >= 0 else { return nil }
+        let maximumValidValue = range.minimum + maximumSteps * increment
+        guard maximumValidValue.isFinite else { return nil }
+
+        let clamped = Swift.min(Swift.max(value, range.minimum), maximumValidValue)
         let steps = ((clamped - range.minimum) / increment).rounded()
         let snapped = range.minimum + steps * increment
-        return Swift.min(Swift.max(snapped, range.minimum), range.maximum)
+        guard snapped.isFinite,
+              snapped >= range.minimum,
+              snapped <= maximumValidValue else { return nil }
+        return snapped
     }
 
     func initialize() {
@@ -325,7 +335,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func setResolution(_ index: Int) {
-        guard let descriptor = featureDescriptors.first(where: { $0.name == "AmcamResolutionIndex" }),
+        guard let descriptor = featureDescriptors.last(where: { $0.name == "AmcamResolutionIndex" }),
               let symbol = descriptor.enumerationValues.first(where: {
                   Int($0.split(separator: ":").first ?? "") == index
               }) else {
