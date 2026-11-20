@@ -8,6 +8,7 @@ on:
       - macos-version-optimization
     paths:
       - "swift/Packages/**"
+      - "swift/Apps/**"
       - "swift/docs/**"
       - ".github/workflows/swift-gentl.yml"
   pull_request:
@@ -16,6 +17,7 @@ on:
       - macos-version-optimization
     paths:
       - "swift/Packages/**"
+      - "swift/Apps/**"
       - "swift/docs/**"
       - ".github/workflows/swift-gentl.yml"
   workflow_dispatch:
@@ -86,8 +88,8 @@ jobs:
       - name: Build macOS imaging application
         if: matrix.package == 'AmcamGenTL'
         run: |
-          swift build --package-path "${{ matrix.path }}" --configuration release --product amcam-imaging
-          bin_path="$(swift build --package-path "${{ matrix.path }}" --configuration release --show-bin-path)"
+          swift build --package-path swift/Apps/AmcamImagingApp --configuration release --product amcam-imaging
+          bin_path="$(swift build --package-path swift/Apps/AmcamImagingApp --configuration release --show-bin-path)"
           app_root="$RUNNER_TEMP/amcam-imaging"
           app_bundle="$app_root/Amcam Imaging.app"
           mkdir -p "$app_bundle/Contents/MacOS"
