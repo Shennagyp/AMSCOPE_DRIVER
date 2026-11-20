@@ -71,6 +71,46 @@ jobs:
           path: ${{ runner.temp }}/amcam-camera-probe/
           retention-days: 14
 
+      - name: Build macOS imaging application
+        if: matrix.package == 'AmcamGenTL'
+        run: |
+          swift build --package-path "${{ matrix.path }}" --configuration release --product amcam-imaging
+          bin_path="$(swift build --package-path "${{ matrix.path }}" --configuration release --show-bin-path)"
+          app_root="$RUNNER_TEMP/amcam-imaging"
+          app_bundle="$app_root/Amcam Imaging.app"
+          mkdir -p "$app_bundle/Contents/MacOS"
+          cp "$bin_path/amcam-imaging" "$app_bundle/Contents/MacOS/amcam-imaging"
+          cat > "$app_bundle/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>amcam-imaging</string>
+            <key>CFBundleIdentifier</key><string>com.amscope.imaging</string>
+            <key>CFBundleName</key><string>Amcam Imaging</string>
+            <key>CFBundleDisplayName</key><string>Amcam Imaging</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleVersion</key><string>0.1.0</string>
+            <key>CFBundleShortVersionString</key><string>0.1.0</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
+            <key>NSPrincipalClass</key><string>NSApplication</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          codesign --force --deep --sign - "$app_bundle"
+          codesign --verify --deep --strict "$app_bundle"
+          file "$app_bundle/Contents/MacOS/amcam-imaging"
+          ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$app_root/Amcam-Imaging-macos-arm64.zip"
+
+      - name: Upload macOS imaging application
+        if: matrix.package == 'AmcamGenTL'
+        uses: actions/upload-artifact@v4
+        with:
+          name: amcam-imaging-macos-arm64
+          path: ${{ runner.temp }}/amcam-imaging/Amcam-Imaging-macos-arm64.zip
+          retention-days: 14
+
   portable-contract-tests:
     name: GenTL ABI and API contract (Linux)
     runs-on: ubuntu-24.04
