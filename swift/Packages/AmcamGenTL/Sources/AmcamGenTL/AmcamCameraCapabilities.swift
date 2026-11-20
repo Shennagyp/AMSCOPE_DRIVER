@@ -1,0 +1,223 @@
+import Foundation
+
+/// Camera features exposed by the Amcam SDK wrapper. A feature is not considered
+/// usable merely because its C symbol exists: model flags, safe runtime probes,
+/// model profile policy, and implementation coverage are evaluated separately.
+public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendable, Identifiable {
+    case liveCapture, resolution
+    case exposureAuto, exposureManual, analogGain
+    case preciseFrameRate, discreteFrameSpeed
+    case hardwareROI, binningAndSkipping, monochromeOutput
+    case whiteBalance, colorCorrection, imageLevelRange, blackLevel
+    case triggerSoftware, triggerExternal, selfTrigger
+    case focusMotor, autoFocus
+    case thermoelectricCooling, sensorTemperature, coolingFan, heatAntiFog
+    case conversionGain, lowNoiseMode, hardwareLevelRange
+    case filterWheel, embeddedLightSource, pixelFormatSelection
+
+    public var id: String { rawValue }
+
+    public var group: AmcamCameraFeatureGroup {
+        switch self {
+        case .liveCapture, .resolution, .hardwareROI, .binningAndSkipping,
+             .monochromeOutput, .pixelFormatSelection: return .capture
+        case .exposureAuto, .exposureManual, .analogGain: return .exposureAndGain
+        case .preciseFrameRate, .discreteFrameSpeed: return .frameRate
+        case .whiteBalance, .colorCorrection, .imageLevelRange, .blackLevel,
+             .conversionGain, .lowNoiseMode: return .image
+        case .triggerSoftware, .triggerExternal, .selfTrigger: return .trigger
+        case .focusMotor, .autoFocus: return .focus
+        case .thermoelectricCooling, .sensorTemperature, .coolingFan, .heatAntiFog: return .thermal
+        case .hardwareLevelRange: return .calibration
+        case .filterWheel, .embeddedLightSource: return .accessories
+        }
+    }
+}
+
+public enum AmcamCameraFeatureGroup: String, CaseIterable, Codable, Hashable, Sendable, Identifiable {
+    case capture, exposureAndGain, frameRate, image, trigger, focus, thermal, calibration, accessories
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .capture: return "Capture"
+        case .exposureAndGain: return "Exposure & Gain"
+        case .frameRate: return "Frame Rate"
+        case .image: return "Image"
+        case .trigger: return "Trigger"
+        case .focus: return "Focus"
+        case .thermal: return "Cooling & Temperature"
+        case .calibration: return "Calibration"
+        case .accessories: return "Accessories"
+        }
+    }
+
+    public var features: [AmcamCameraFeature] {
+        AmcamCameraFeature.allCases.filter { $0.group == self }
+    }
+}
+
+public enum AmcamFeatureEvidence: String, Codable, Sendable {
+    case modelFlag, runtimeProbe, sdkSymbol, modelProfile, implementation
+}
+
+public struct AmcamFeatureAvailability: Codable, Equatable, Sendable, Identifiable {
+    public let feature: AmcamCameraFeature
+    public let available: Bool
+    public let implemented: Bool
+    public let evidence: AmcamFeatureEvidence?
+    public let reason: String?
+    public var id: AmcamCameraFeature { feature }
+    public var isUsable: Bool { available && implemented }
+
+    public init(feature: AmcamCameraFeature, available: Bool, implemented: Bool,
+                evidence: AmcamFeatureEvidence?, reason: String? = nil) {
+        self.feature = feature
+        self.available = available
+        self.implemented = implemented
+        self.evidence = evidence
+        self.reason = reason
+    }
+}
+
+/// Explicit per-model allow/deny policy, keyed by the SDK model descriptor name.
+/// A profile can narrow hardware capabilities but cannot fabricate them.
+public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
+    public let modelCode: String
+    public let displayName: String?
+    public let allowedFeatures: Set<AmcamCameraFeature>
+    public let deniedFeatures: Set<AmcamCameraFeature>
+
+    public init(modelCode: String, displayName: String? = nil,
+                allowedFeatures: Set<AmcamCameraFeature>,
+                deniedFeatures: Set<AmcamCameraFeature> = []) {
+        self.modelCode = modelCode
+        self.displayName = displayName
+        self.allowedFeatures = allowedFeatures
+        self.deniedFeatures = deniedFeatures
+    }
+}
+
+public struct AmcamCameraCapabilities: Equatable, Sendable {
+    public let modelCode: String
+    public let modelFlags: UInt64
+    public let features: [AmcamFeatureAvailability]
+
+    public init(modelCode: String, modelFlags: UInt64, features: [AmcamFeatureAvailability]) {
+        self.modelCode = modelCode
+        self.modelFlags = modelFlags
+        self.features = features
+    }
+
+    public func availability(of feature: AmcamCameraFeature) -> AmcamFeatureAvailability {
+        features.first { $0.feature == feature } ?? AmcamFeatureAvailability(
+            feature: feature, available: false, implemented: false,
+            evidence: nil, reason: "No capability record exists for this feature."
+        )
+    }
+
+    public var availableGroups: [AmcamCameraFeatureGroup] {
+        AmcamCameraFeatureGroup.allCases.filter { group in
+            group.features.contains { availability(of: $0).isUsable }
+        }
+    }
+}
+
+/// Resolves the SDK model flags, non-mutating runtime probes, model-specific
+/// policy, and application implementation coverage into one capability view.
+/// Features without a dedicated model flag require a successful runtime probe.
+public struct AmcamCameraProfileRegistry: Sendable {
+    public typealias ProbeResults = [AmcamCameraFeature: Bool]
+    private let profiles: [String: AmcamCameraModelProfile]
+
+    public init(profiles: [AmcamCameraModelProfile] = []) {
+        self.profiles = Dictionary(
+            profiles.map { ($0.modelCode.trimmingCharacters(in: .whitespacesAndNewlines), $0) },
+            uniquingKeysWith: { _, newest in newest }
+        )
+    }
+
+    public func profile(for modelCode: String) -> AmcamCameraModelProfile? {
+        profiles[modelCode.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
+    public func resolve(
+        modelCode: String, modelFlags: UInt64, maximumSpeedLevel: Int?,
+        probes: ProbeResults, implemented: Set<AmcamCameraFeature>
+    ) -> AmcamCameraCapabilities {
+        let profile = profile(for: modelCode)
+        let records = AmcamCameraFeature.allCases.map { feature -> AmcamFeatureAvailability in
+            let flag = Self.requiredFlag(for: feature)
+            let probe = probes[feature]
+            let baseAvailable: Bool
+            let evidence: AmcamFeatureEvidence?
+            let reason: String?
+
+            if let flag {
+                baseAvailable = (modelFlags & flag) != 0
+                evidence = .modelFlag
+                reason = baseAvailable ? nil : "The camera model does not advertise this capability."
+            } else if feature == .resolution || feature == .liveCapture {
+                baseAvailable = true
+                evidence = .implementation
+                reason = nil
+            } else if feature == .discreteFrameSpeed {
+                baseAvailable = maximumSpeedLevel.map { $0 >= 0 } == true && probe == true
+                evidence = .runtimeProbe
+                reason = baseAvailable ? nil : "The model does not expose a usable discrete speed-level range."
+            } else {
+                baseAvailable = probe == true
+                evidence = probe == nil ? nil : .runtimeProbe
+                reason = baseAvailable ? nil : "The feature was not confirmed by a successful read-only SDK probe."
+            }
+
+            let profileAllows = profile.map { $0.allowedFeatures.contains(feature) } ?? true
+            let profileDenies = profile?.deniedFeatures.contains(feature) ?? false
+            let available = baseAvailable && profileAllows && !profileDenies
+            let policyReason: String?
+            if profileDenies {
+                policyReason = "Disabled by the explicit model profile."
+            } else if !profileAllows {
+                policyReason = "Not included in the explicit model profile allow-list."
+            } else {
+                policyReason = reason
+            }
+            let isImplemented = implemented.contains(feature)
+            return AmcamFeatureAvailability(
+                feature: feature, available: available, implemented: isImplemented,
+                evidence: evidence ?? (isImplemented ? .implementation : nil),
+                reason: !isImplemented
+                    ? "The application backend does not implement this control yet."
+                    : policyReason
+            )
+        }
+        return AmcamCameraCapabilities(modelCode: modelCode, modelFlags: modelFlags, features: records)
+    }
+
+    private static func requiredFlag(for feature: AmcamCameraFeature) -> UInt64? {
+        switch feature {
+        case .hardwareROI: return 0x00000008
+        case .monochromeOutput: return 0x00000010
+        case .binningAndSkipping: return 0x00000020
+        case .thermoelectricCooling: return 0x00000080
+        case .sensorTemperature: return 0x00000400
+        case .coolingFan: return 0x00010000
+        case .triggerSoftware: return 0x00080000
+        case .triggerExternal: return 0x00100000
+        case .blackLevel: return 0x00400000
+        case .autoFocus: return 0x00800000
+        case .conversionGain: return 0x04000000
+        case .preciseFrameRate: return 0x0000004000000000
+        case .focusMotor: return 0x0000002000000000
+        case .heatAntiFog: return 0x0000008000000000
+        case .lowNoiseMode: return 0x0000010000000000
+        case .hardwareLevelRange: return 0x0000020000000000
+        case .embeddedLightSource: return 0x0000080000000000
+        case .filterWheel: return 0x0000100000000000
+        case .selfTrigger: return 0x0040000000000000
+        case .exposureAuto, .exposureManual, .analogGain, .resolution, .liveCapture,
+             .discreteFrameSpeed, .whiteBalance, .colorCorrection, .imageLevelRange,
+             .pixelFormatSelection: return nil
+        }
+    }
+}
