@@ -708,6 +708,104 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(try implementation.readFeature("AmcamAnalogGainPercent", from: GenTLFeatureDeviceHandle(rawValue: device.rawValue)), .integer(200))
     }
 
+    func testTypedFeatureAccessExposesOnlyProbedCameraControlsAndVerifiesWrites() throws {
+        let libraryURL = try buildMockSDK()
+        let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)
+        try implementation.swiftGCInitLib()
+        let system = try implementation.TLOpen()
+        let interface = try implementation.TLOpenInterface(
+            system,
+            interfaceID: try implementation.TLGetInterfaceID(system, index: 0)
+        )
+        _ = try implementation.IFUpdateDeviceList(interface, timeout: 0)
+        let deviceID = try implementation.IFGetDeviceID(interface, index: 0)
+        let device = try implementation.IFOpenDevice(
+            interface,
+            deviceID: deviceID,
+            accessFlags: GenTLDeviceAccess.exclusive.rawValue
+        )
+        let handle = GenTLFeatureDeviceHandle(rawValue: device.rawValue)
+        defer {
+            try? implementation.DevClose(device)
+            try? implementation.IFClose(interface)
+            try? implementation.TLClose(system)
+            try? implementation.swiftGCCloseLib()
+        }
+
+        let descriptors = try implementation.featureDescriptors(for: handle)
+        let byName = Dictionary(uniqueKeysWithValues: descriptors.map { ($0.name, $0) })
+        let colorMatrix = try XCTUnwrap(byName["AmcamColorMatrixEnabled"])
+        let pixelFormat = try XCTUnwrap(byName["AmcamPixelFormat"])
+        let temperature = try XCTUnwrap(byName["AmcamWhiteBalanceTemperature"])
+        let tint = try XCTUnwrap(byName["AmcamWhiteBalanceTint"])
+        let fixedRate = try XCTUnwrap(byName["AmcamFixedFrameRate"])
+        let speedLevel = try XCTUnwrap(byName["AmcamFrameSpeedLevel"])
+        let resolution = try XCTUnwrap(byName["AmcamResolutionIndex"])
+
+        XCTAssertEqual(colorMatrix.kind, .boolean)
+        XCTAssertTrue(colorMatrix.isAvailable)
+        XCTAssertTrue(colorMatrix.isReadable)
+        XCTAssertTrue(colorMatrix.isWritable)
+
+        XCTAssertEqual(pixelFormat.kind, .enumeration)
+        XCTAssertEqual(pixelFormat.enumerationValues, ["0", "8"])
+        XCTAssertTrue(pixelFormat.isAvailable)
+        XCTAssertTrue(pixelFormat.isWritable)
+
+        XCTAssertEqual(temperature.kind, .integer)
+        XCTAssertEqual(temperature.unit, "K")
+        XCTAssertEqual(temperature.numericRange?.minimum, 2_000)
+        XCTAssertEqual(temperature.numericRange?.maximum, 15_000)
+        XCTAssertTrue(temperature.isAvailable)
+
+        XCTAssertEqual(tint.kind, .integer)
+        XCTAssertEqual(tint.numericRange?.minimum, 200)
+        XCTAssertEqual(tint.numericRange?.maximum, 2_500)
+        XCTAssertTrue(tint.isAvailable)
+
+        XCTAssertEqual(fixedRate.kind, .floatingPoint)
+        XCTAssertEqual(fixedRate.unit, "fps")
+        XCTAssertEqual(fixedRate.numericRange?.minimum, 0.1)
+        XCTAssertEqual(fixedRate.numericRange?.maximum, 30.0)
+        XCTAssertEqual(fixedRate.numericRange?.increment, 0.1)
+        XCTAssertTrue(fixedRate.isAvailable)
+
+        XCTAssertFalse(speedLevel.isAvailable, "The mock camera does not advertise a usable speed-level control.")
+        XCTAssertEqual(resolution.kind, .enumeration)
+        XCTAssertEqual(
+            resolution.enumerationValues,
+            ["0:2560x1922", "1:1280x960", "2:640x480"]
+        )
+        XCTAssertEqual(
+            try implementation.readFeature("AmcamResolutionIndex", from: handle),
+            .enumeration("2:640x480")
+        )
+
+        try implementation.writeFeature(.boolean(false), named: "AmcamColorMatrixEnabled", to: handle)
+        try implementation.writeFeature(.enumeration("0"), named: "AmcamPixelFormat", to: handle)
+        try implementation.writeFeature(.integer(7_200), named: "AmcamWhiteBalanceTemperature", to: handle)
+        try implementation.writeFeature(.integer(1_250), named: "AmcamWhiteBalanceTint", to: handle)
+        try implementation.writeFeature(.floatingPoint(12.3), named: "AmcamFixedFrameRate", to: handle)
+        try implementation.writeFeature(.enumeration("1:1280x960"), named: "AmcamResolutionIndex", to: handle)
+
+        XCTAssertEqual(try implementation.readFeature("AmcamColorMatrixEnabled", from: handle), .boolean(false))
+        XCTAssertEqual(try implementation.readFeature("AmcamPixelFormat", from: handle), .enumeration("0"))
+        XCTAssertEqual(try implementation.readFeature("AmcamWhiteBalanceTemperature", from: handle), .integer(7_200))
+        XCTAssertEqual(try implementation.readFeature("AmcamWhiteBalanceTint", from: handle), .integer(1_250))
+        XCTAssertEqual(try implementation.readFeature("AmcamFixedFrameRate", from: handle), .floatingPoint(12.3))
+        XCTAssertEqual(
+            try implementation.readFeature("AmcamResolutionIndex", from: handle),
+            .enumeration("1:1280x960")
+        )
+
+        XCTAssertThrowsError(
+            try implementation.writeFeature(.enumeration("99"), named: "AmcamPixelFormat", to: handle)
+        )
+        XCTAssertThrowsError(
+            try implementation.writeFeature(.integer(16_000), named: "AmcamWhiteBalanceTemperature", to: handle)
+        )
+    }
+
     private func buildMockSDK() throws -> URL {
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
