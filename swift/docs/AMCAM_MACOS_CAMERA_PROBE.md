@@ -4,18 +4,18 @@ This is a hardware smoke-test executable for the Amcam SDK backend. It is built 
 
 The probe uses the actual \`AmcamGenTLImplementation\` and GenTL-style acquisition path. It does not substitute a mock SDK at runtime. It does not modify exposure, gain, or frame-rate settings.
 
-## Obtain the executable
+## Build the probe from source
 
-The current source revision was built and tested in [workflow run 44711499416](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44711499416). The AmcamGenTL test job, camera-probe release build, and probe artifact upload succeeded.
+From the repository root on macOS with Apple's Swift toolchain installed:
 
-- Artifact: `amcam-camera-probe-macos-arm64`
-- Artifact ID: `14617607266`
-- SHA-256: `b59e0add3313556ab751d29bb6b9da91862062fc1f5e08233d174fb663600d82`
-- Expires: December 4, 2026 at 09:33 UTC.
+```sh
+make run-probe PROBE_ARGS='--help'
+```
 
-The same run also built and uploaded the AmScope Imaging app (artifact ID `14617182885`). The GenTLAPI, GenTLNative and GenTLRouter package-test jobs were still queued when these artifacts were produced; the complete five-package matrix is not yet confirmed green. The executable is an Apple Silicon arm64 build. The vendor SDK is proprietary and is not included.
+The probe requires an explicit SDK path because it is a diagnostic tool. Unlike the imaging app, it does not use the app-bundle vendor locator. The app itself resolves its SDK from the bundled vendor directory and standard per-user/system installation locations.
 
-The probe uses the actual `AmcamGenTLImplementation` and GenTL-style acquisition path. It does not substitute a mock SDK at runtime. It does not modify exposure, gain, or frame-rate settings.
+`make run-probe` builds the executable locally from the current checkout; it does not require a downloaded Actions artifact or the full Xcode application.
+
 ## Find the vendor SDK
 
 Supply the actual Amcam SDK dynamic library, normally named \`libamcam.dylib\`. Known deployment locations include:
