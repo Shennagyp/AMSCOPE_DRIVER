@@ -78,7 +78,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
         let api: any GenTLAPI = implementation
 
-        var infoType: INFO_DATATYPE = INFO_DATATYPE_UNKNOWN
+        var infoType: INFO_DATATYPE = Int32(INFO_DATATYPE_UNKNOWN.rawValue)
         var payload: UInt32 = 0
         var payloadSize = MemoryLayout<UInt32>.size
 
@@ -96,7 +96,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         }
 
         XCTAssertEqual(result, -11000)
-        XCTAssertEqual(infoType, INFO_DATATYPE_UINT32)
+        XCTAssertEqual(infoType, Int32(INFO_DATATYPE_UINT32.rawValue))
         XCTAssertEqual(payload, 0xC0FFEE01)
         XCTAssertEqual(payloadSize, MemoryLayout<UInt32>.size)
     }
@@ -164,13 +164,13 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
         let api: any GenTLAPI = implementation
 
-        XCTAssertEqual(api.GCInitLib(), GC_ERR_SUCCESS)
+        XCTAssertEqual(api.GCInitLib(), GenTLABI_ErrorFromCode(GC_ERR_SUCCESS))
 
         var eventStorage: GenTLABI.EVENT_HANDLE? = nil
         let registerResult = withUnsafeMutablePointer(to: &eventStorage) {
             api.GCRegisterEvent(mockHandle, 0, $0)
         }
-        XCTAssertEqual(registerResult, GC_ERR_SUCCESS)
+        XCTAssertEqual(registerResult, GenTLABI_ErrorFromCode(GC_ERR_SUCCESS))
         let eventHandle = try XCTUnwrap(eventStorage)
         XCTAssertEqual(UInt(bitPattern: eventHandle), 0x1234)
 
@@ -273,8 +273,8 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(api.GCUnregisterEvent(mockHandle, 0), GC_ERR_SUCCESS)
-        XCTAssertEqual(api.GCCloseLib(), GC_ERR_SUCCESS)
+        XCTAssertEqual(api.GCUnregisterEvent(mockHandle, 0), GenTLABI_ErrorFromCode(GC_ERR_SUCCESS))
+        XCTAssertEqual(api.GCCloseLib(), GenTLABI_ErrorFromCode(GC_ERR_SUCCESS))
 
         guard let library = dlopen(producerURL.path, RTLD_NOW | RTLD_LOCAL) else {
             return XCTFail("Could not reopen mock CTI for test-control inspection.")
@@ -337,7 +337,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let producerURL = try buildMockProducer(omittingOptionalExports: true)
         let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
         let api: any GenTLAPI = implementation
-        let unsupported = GC_ERR_NOT_IMPLEMENTED
+        let unsupported: GC_ERROR = GenTLABI_ErrorFromCode(GC_ERR_NOT_IMPLEMENTED)
 
         var numberOfURLs: UInt32 = 0xDEADBEEF
         XCTAssertEqual(api.GCGetNumPortURLs(mockHandle, &numberOfURLs), unsupported)
@@ -362,11 +362,11 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(api.DSGetBufferChunkData(mockHandle,mockHandle, nil, &chunkCount), unsupported)
         XCTAssertEqual(chunkCount, 0x12345678)
 
-        var systemHandle: TL_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x1111)
+        var systemHandle: TL_HANDLE? = UnsafeMutableRawPointer(bitPattern: 0x1111)
         XCTAssertEqual(api.IFGetParentTL(mockHandle, &systemHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(systemHandle)), 0x1111)
 
-        var interfaceHandle: IF_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x2222)
+        var interfaceHandle: IF_HANDLE? = UnsafeMutableRawPointer(bitPattern: 0x2222)
         XCTAssertEqual(api.DevGetParentIF(mockHandle, &interfaceHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(interfaceHandle)), 0x2222)
 
