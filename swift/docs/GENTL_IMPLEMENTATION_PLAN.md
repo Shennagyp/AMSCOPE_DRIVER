@@ -308,3 +308,8 @@ Added a test for the compiled GenTL 1.6.0 header version code and the runtime AB
 ### CI runner provisioning blocker (2026-11-20)
 
 The new macOS workflow has been triggered, but its four jobs fail before any step starts: GitHub reports `runner_id: 0`, empty step arrays, and no job logs. Rerunning failed jobs did not change this. The Swift build/test commands have not executed. Treat this as a GitHub Actions hosted-runner availability/billing/permission blocker, not as a source-code test failure. A later Ubuntu job failed identically before starting steps, confirming the issue is not limited to macOS runners. Local macOS/Xcode execution or repaired runner access is required for the next evidence gate.
+
+
+### Native argument fault injection (2026-11-20)
+
+Added negative tests for invalid GCGetInfo command, GCReadPort address, and GCWritePort payload. They assert exact custom error propagation and unchanged output buffers/sizes. Execution remains blocked by hosted runner provisioning.
