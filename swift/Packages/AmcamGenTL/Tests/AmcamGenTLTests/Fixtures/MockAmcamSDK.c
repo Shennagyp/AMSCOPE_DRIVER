@@ -28,6 +28,7 @@ static uint32_t pull_count;
 static int32_t auto_exposure = 1;
 static uint32_t exposure_time = 10000;
 static int ignore_exposure_write = 0;
+static uint16_t exposure_gain = 100;
 static int32_t precise_frame_rate_tenths = 150;
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
@@ -128,6 +129,25 @@ int32_t Amcam_get_ExpTimeRange(void *handle, uint32_t *minimum, uint32_t *maximu
     *default_value = 10000;
     return 0;
 }
+int32_t Amcam_get_ExpoAGain(void *handle, uint16_t *value) {
+    if (!handle || !value) return -1;
+    *value = exposure_gain;
+    return 0;
+}
+int32_t Amcam_put_ExpoAGain(void *handle, uint16_t value) {
+    if (!handle) return -1;
+    if (value < 100 || value > 800) return -1;
+    exposure_gain = value;
+    return 0;
+}
+int32_t Amcam_get_ExpoAGainRange(void *handle, uint16_t *minimum, uint16_t *maximum, uint16_t *default_value) {
+    if (!handle || !minimum || !maximum || !default_value) return -1;
+    *minimum = 100;
+    *maximum = 800;
+    *default_value = 100;
+    return 0;
+}
+
 int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
     if (!handle || !value) return -1;
     if (option == 0x32) *value = 1;
