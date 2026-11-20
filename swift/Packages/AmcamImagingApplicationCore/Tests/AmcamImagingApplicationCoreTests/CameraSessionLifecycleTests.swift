@@ -57,20 +57,15 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
     }
 
     func start() async throws {
-        lock.lock()
-        startAttemptsValue += 1
-        let shouldFail = startFailuresRemaining > 0
-        if shouldFail { startFailuresRemaining -= 1 }
-        lock.unlock()
-        if shouldFail { throw FakeRuntimeError.startFailed }
+        if recordStartAttemptAndShouldFail() {
+            throw FakeRuntimeError.startFailed
+        }
     }
 
     func nextFrame(timeoutMilliseconds: UInt64) async throws -> CameraFramePayload {
-        lock.lock()
-        let shouldTimeout = timeoutsRemaining > 0
-        if shouldTimeout { timeoutsRemaining -= 1 }
-        lock.unlock()
-        if shouldTimeout { throw CameraAcquisitionFailure.timeout }
+        if consumeTimeout() {
+            throw CameraAcquisitionFailure.timeout
+        }
 
         guard let frame = await iterator.next() else {
             throw CameraAcquisitionFailure.stopped
@@ -79,26 +74,52 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
     }
 
     func stop() async throws {
-        lock.lock()
-        stopAttemptsValue += 1
-        lock.unlock()
+        recordStopAttempt()
         continuation.finish()
     }
 
     func close() async throws {
-        lock.lock()
-        closeAttemptsValue += 1
-        let shouldFail = closeFailuresRemaining > 0
-        if shouldFail { closeFailuresRemaining -= 1 }
-        lock.unlock()
-
-        if shouldFail { throw FakeRuntimeError.closeFailed }
+        if recordCloseAttemptAndShouldFail() {
+            throw FakeRuntimeError.closeFailed
+        }
         if let frameOnClose { continuation.yield(frameOnClose) }
         continuation.finish()
     }
 
     func emit(_ frame: CameraFramePayload) {
         continuation.yield(frame)
+    }
+
+    private func recordStartAttemptAndShouldFail() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        startAttemptsValue += 1
+        let shouldFail = startFailuresRemaining > 0
+        if shouldFail { startFailuresRemaining -= 1 }
+        return shouldFail
+    }
+
+    private func consumeTimeout() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let shouldTimeout = timeoutsRemaining > 0
+        if shouldTimeout { timeoutsRemaining -= 1 }
+        return shouldTimeout
+    }
+
+    private func recordStopAttempt() {
+        lock.lock()
+        defer { lock.unlock() }
+        stopAttemptsValue += 1
+    }
+
+    private func recordCloseAttemptAndShouldFail() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        closeAttemptsValue += 1
+        let shouldFail = closeFailuresRemaining > 0
+        if shouldFail { closeFailuresRemaining -= 1 }
+        return shouldFail
     }
 }
 
