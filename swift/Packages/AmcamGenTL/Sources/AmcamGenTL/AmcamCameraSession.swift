@@ -289,6 +289,19 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         probes[.analogGain] = sdk.exposureGainControlAvailable &&
             (try? sdk.readExposureGain(activeHandle)) != nil
+        probes[.whiteBalance] = sdk.whiteBalanceReadAvailable &&
+            ((try? sdk.readTemperatureTint(activeHandle)) != nil ||
+             (try? sdk.readWhiteBalanceGain(activeHandle)) != nil)
+        probes[.colorCorrection] =
+            (try? sdk.readOption(activeHandle, option: AmcamSDK.optionColorMatrix)) != nil
+        let pixelFormatFlags: UInt64 =
+            0x0000000000001000 | 0x0000000000002000 | 0x0000000000004000 |
+            0x0000000000008000 | 0x0000000080000000 | 0x0000000040000000 |
+            0x0000000008000000 | 0x0000000010000000 | 0x0000000020000000 |
+            0x0000000100000000 | 0x0000000200000000 | 0x0000000400000000
+        probes[.pixelFormatSelection] =
+            (modelFlags.map { ($0 & pixelFormatFlags) != 0 } ?? false) ||
+            (try? sdk.readOption(activeHandle, option: AmcamSDK.optionPixelFormat)) != nil
         probes[.resolution] = !resolutions.isEmpty && sdk.resolutionChangeAvailable
         let implemented: Set<AmcamCameraFeature> = [
             .liveCapture, .resolution, .exposureAuto, .exposureManual, .analogGain,
