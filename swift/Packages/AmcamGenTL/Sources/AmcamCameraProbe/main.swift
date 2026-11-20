@@ -154,25 +154,54 @@ struct AmcamCameraProbe {
         var acquisitionStarted = false
 
         defer {
+            var cleanupFailures: [String] = []
+            func attemptCleanup(_ operation: String, _ action: () throws -> Void) {
+                do {
+                    try action()
+                } catch {
+                    cleanupFailures.append("\(operation): \(error.localizedDescription)")
+                }
+            }
+
             if let stream {
                 if acquisitionStarted {
-                    try? backend.DSStopAcquisition(
-                        stream,
-                        flags: GenTLAcquisitionStopFlag.normal.rawValue
-                    )
+                    attemptCleanup("DSStopAcquisition") {
+                        try backend.DSStopAcquisition(
+                            stream,
+                            flags: GenTLAcquisitionStopFlag.normal.rawValue
+                        )
+                    }
                 }
                 if eventRegistered {
-                    try? backend.GCUnregisterEvent(
-                        .dataStream(stream),
-                        eventType: GenTLEventType.newBuffer.rawValue
-                    )
+                    attemptCleanup("GCUnregisterEvent") {
+                        try backend.GCUnregisterEvent(
+                            .dataStream(stream),
+                            eventType: GenTLEventType.newBuffer.rawValue
+                        )
+                    }
                 }
-                try? backend.DSClose(stream)
+                attemptCleanup("DSClose") { try backend.DSClose(stream) }
             }
-            if let device { try? backend.DevClose(device) }
-            if let interface { try? backend.IFClose(interface) }
-            if let system { try? backend.TLClose(system) }
-            if initialized { try? backend.swiftGCCloseLib() }
+            if let device {
+                attemptCleanup("DevClose") { try backend.DevClose(device) }
+            }
+            if let interface {
+                attemptCleanup("IFClose") { try backend.IFClose(interface) }
+            }
+            if let system {
+                attemptCleanup("TLClose") { try backend.TLClose(system) }
+            }
+            if initialized {
+                attemptCleanup("GCCloseLib") { try backend.swiftGCCloseLib() }
+            }
+
+            if !cleanupFailures.isEmpty {
+                fputs(
+                    "CLEANUP ERROR:\\n" + cleanupFailures.joined(separator: "\\n") + "\\n",
+                    stderr
+                )
+                exit(EXIT_FAILURE)
+            }
         }
 
         try backend.swiftGCInitLib()
