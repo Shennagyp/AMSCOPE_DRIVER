@@ -27,7 +27,8 @@ let package = Package(
             name: "GenTLRouterTests",
             dependencies: [
                 "GenTLRouter",
-                .product(name: "GenTLAPI", package: "GenTLAPI")
+                .product(name: "GenTLAPI", package: "GenTLAPI"),
+                .product(name: "GenTLABI", package: "GenTLABI")
             ]
         )
     ]
