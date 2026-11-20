@@ -370,3 +370,43 @@ The workflow file is committed, but no workflow run has been observed yet. Its e
 ### Clarification to the initial T0 inventory
 
 The native test directory already contained `GenTLProducerCatalogTests.swift` and `GenTLProducerLibraryTests.swift`; the earlier inspection only checked for a guessed filename, `GenTLNativeTests.swift`, and did not establish that the directory was empty. The existing suites already cover catalog path handling, the 47-symbol GenTL 1.0 base-set inventory, and later-revision optional-symbol classification. The new `GenTLNativeIntegrationTests.swift` extends those suites rather than replacing them. The actual directory now contains all three Swift test files plus the C fixture.
+
+
+## 13. Work log — exhaustive protocol-to-native dispatch matrix
+
+### Expanded mock Producer
+
+The C fixture now declares all 64 GenTL exports from the pinned header, not only the 47 required base exports. It retains the loader policy distinction:
+- 47 GenTL 1.0 base exports are always present except in the explicit `MOCK_OMIT_GCGETINFO` negative-test variant.
+- 17 later-revision exports can be omitted together using `MOCK_OMIT_OPTIONAL_EXPORTS`.
+- Every ordinary stub returns a unique error value derived from its header operation index. A wrong function-pointer mapping therefore produces the wrong result instead of passing because every stub returns the same generic error.
+- Stateful library/event functions return success where needed to let the native implementation complete a legal registration and shutdown sequence.
+- A test-only `MockCTI_GetCallCount` export records actual C invocation counts by operation index. It is outside the GenTL ABI and is used only by tests.
+
+### Expanded protocol/native test
+
+Added `testEveryProtocolOperationDispatchesToItsMatchingNativeExport`. It:
+1. loads the compiled fixture through `GenTLNativeImplementation`;
+2. stores the implementation as `any GenTLAPI`;
+3. initializes the Producer;
+4. registers an event and validates the returned native handle;
+5. invokes the other 60 protocol operations with type-correct neutral arguments;
+6. asserts each operation's unique native return code;
+7. unregisters the event and closes the Producer;
+8. reads the test-only C counters and asserts the expected native invocation count for every operation, including the internal `EventKill` call performed by unregister.
+
+Together with the four explicit stateful operations, this covers all 64 protocol requirements. The existing output-pointer test remains separate and checks the custom `GCGetInfo` datatype, payload marker, output size, and error result. The optional-export negative test now builds the mock with all 17 later-revision exports omitted and verifies the API returns `GC_ERR_NOT_IMPLEMENTED` without modifying the output sentinel.
+
+### Source-level consistency audit
+
+A script compared:
+- all 64 `GC_API` declarations in the pinned C header;
+- all 64 `GenTLAPI` protocol requirements;
+- all 64 exports in the mock fixture;
+- all 60 non-lifecycle calls in the dispatch test, plus explicit init/register/unregister/close calls.
+
+Results: 64 header operations, 64 protocol requirements, 64 mock exports, zero missing or extra exports, 60 per-operation unique-return assertions, and four explicit lifecycle assertions. This is static source inspection only.
+
+### Current blocker and next gate
+
+The C fixture and Swift tests have not yet been compiled or executed. The immediate next task is to run the macOS CI workflow or the package commands locally, fix every compile/runtime failure, and record evidence. Only after that gate should the mock grow into a simulated Producer/System/Interface/Device topology and acquisition pipeline.
