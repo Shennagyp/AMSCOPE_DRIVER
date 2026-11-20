@@ -1,6 +1,7 @@
 import Foundation
 
 /// GenTL 1.6 return codes. Raw values are defined by the EMVA GenTL header.
+@_spi(BackendConvenience)
 public struct GC_ERROR: RawRepresentable, Error, Hashable, Sendable, CustomStringConvertible {
     public let rawValue: Int32
 
@@ -92,6 +93,7 @@ public struct GC_ERROR: RawRepresentable, Error, Hashable, Sendable, CustomStrin
     public static let GC_ERR_AMBIGUOUS = ambiguous
 }
 
+@_spi(BackendConvenience)
 public struct GenTLVersion: Hashable, Sendable {
     public let major: UInt16
     public let minor: UInt16
@@ -106,6 +108,7 @@ public struct GenTLVersion: Hashable, Sendable {
     public static let v1_6 = GenTLVersion(major: 1, minor: 6)
 }
 
+@_spi(BackendConvenience)
 public enum GenTLConstants {
     public static let infiniteTimeout: UInt64 = .max
     public static let infiniteCount: UInt64 = .max
@@ -114,6 +117,7 @@ public enum GenTLConstants {
 
 /// Typed representation of the opaque void* handles defined by GenTL.
 /// The raw value is an opaque token; callers must not infer object identity from it.
+@_spi(BackendConvenience)
 public struct GenTLHandle<Tag: Hashable & Sendable>: Hashable, Sendable {
     public let rawValue: UInt
 
@@ -124,23 +128,38 @@ public struct GenTLHandle<Tag: Hashable & Sendable>: Hashable, Sendable {
     public var isValid: Bool { rawValue != GenTLConstants.invalidHandle }
 }
 
+@_spi(BackendConvenience)
 public enum TLModule: Hashable, Sendable {}
+@_spi(BackendConvenience)
 public enum IFModule: Hashable, Sendable {}
+@_spi(BackendConvenience)
 public enum DEVModule: Hashable, Sendable {}
+@_spi(BackendConvenience)
 public enum DSModule: Hashable, Sendable {}
+@_spi(BackendConvenience)
 public enum PORTModule: Hashable, Sendable {}
+@_spi(BackendConvenience)
 public enum BUFFERModule: Hashable, Sendable {}
+@_spi(BackendConvenience)
 public enum EVENTModule: Hashable, Sendable {}
 
+@_spi(BackendConvenience)
 public typealias TL_HANDLE = GenTLHandle<TLModule>
+@_spi(BackendConvenience)
 public typealias IF_HANDLE = GenTLHandle<IFModule>
+@_spi(BackendConvenience)
 public typealias DEV_HANDLE = GenTLHandle<DEVModule>
+@_spi(BackendConvenience)
 public typealias DS_HANDLE = GenTLHandle<DSModule>
+@_spi(BackendConvenience)
 public typealias PORT_HANDLE = GenTLHandle<PORTModule>
+@_spi(BackendConvenience)
 public typealias BUFFER_HANDLE = GenTLHandle<BUFFERModule>
+@_spi(BackendConvenience)
 public typealias EVENT_HANDLE = GenTLHandle<EVENTModule>
 
 /// GenTL event sources may be System, Interface, Device, Data Stream or Buffer modules.
+@_spi(BackendConvenience)
 public enum EVENTSRC_HANDLE: Hashable, Sendable {
     case system(TL_HANDLE)
     case interface(IF_HANDLE)
@@ -151,6 +170,7 @@ public enum EVENTSRC_HANDLE: Hashable, Sendable {
 
 /// An info value returned by the GenTL INFO functions.
 /// The raw case preserves values that are not yet decoded by this Swift wrapper.
+@_spi(BackendConvenience)
 public enum GenTLInfoValue: Equatable, Sendable {
     case string(String)
     case stringList([String])
@@ -168,6 +188,7 @@ public enum GenTLInfoValue: Equatable, Sendable {
     case raw(Data)
 }
 
+@_spi(BackendConvenience)
 public struct GenTLErrorInfo: Equatable, Sendable {
     public let code: GC_ERROR
     public let message: String
@@ -180,6 +201,7 @@ public struct GenTLErrorInfo: Equatable, Sendable {
 
 /// Memory supplied by a GenTL consumer to DSAnnounceBuffer.
 /// Its storage must remain alive and unchanged until DSRevokeBuffer succeeds.
+@_spi(BackendConvenience)
 public struct GenTLBufferMemory: @unchecked Sendable {
     public let baseAddress: UnsafeMutableRawPointer
     public let size: Int
@@ -191,6 +213,7 @@ public struct GenTLBufferMemory: @unchecked Sendable {
 }
 
 /// Memory and private data returned when a consumer-owned buffer is revoked.
+@_spi(BackendConvenience)
 public struct GenTLRevokedBuffer: @unchecked Sendable {
     public let baseAddress: UnsafeMutableRawPointer?
     public let privateData: UnsafeMutableRawPointer?
@@ -203,6 +226,7 @@ public struct GenTLRevokedBuffer: @unchecked Sendable {
 
 
 /// GenTL INFO function data-type identifiers (INFO_DATATYPE in GenTL 1.6).
+@_spi(BackendConvenience)
 public enum GenTLInfoDataType: Int32, Sendable {
     case unknown = 0
     case string = 1
@@ -222,6 +246,7 @@ public enum GenTLInfoDataType: Int32, Sendable {
 }
 
 /// Standard GenTL 1.6 command identifiers used by INFO functions.
+@_spi(BackendConvenience)
 public enum GenTLInfoCommand {
     public enum TransportLayer: Int32, Sendable {
         case id = 0, vendor = 1, model = 2, version = 3, transportType = 4
@@ -290,6 +315,7 @@ public enum GenTLInfoCommand {
 }
 
 /// Standard GenTL event identifiers.
+@_spi(BackendConvenience)
 public enum GenTLEventType: Int32, Sendable {
     case error = 0
     case newBuffer = 1
@@ -300,6 +326,7 @@ public enum GenTLEventType: Int32, Sendable {
 }
 
 /// Standard GenTL acquisition queue operations.
+@_spi(BackendConvenience)
 public enum GenTLQueueOperation: Int32, Sendable {
     case inputToOutput = 0
     case outputDiscard = 1
@@ -309,6 +336,7 @@ public enum GenTLQueueOperation: Int32, Sendable {
 }
 
 /// Standard GenTL device access modes.
+@_spi(BackendConvenience)
 public enum GenTLDeviceAccess: Int32, Sendable {
     case unknown = 0
     case none = 1
@@ -318,6 +346,7 @@ public enum GenTLDeviceAccess: Int32, Sendable {
 }
 
 /// Device availability reported by DEVICE_INFO_ACCESS_STATUS.
+@_spi(BackendConvenience)
 public enum GenTLDeviceAccessStatus: Int32, Sendable {
     case unknown = 0
     case readWrite = 1
@@ -330,12 +359,14 @@ public enum GenTLDeviceAccessStatus: Int32, Sendable {
 
 
 /// Character encoding values reported by TL_INFO_CHAR_ENCODING (GenTL 1.4).
+@_spi(BackendConvenience)
 public enum GenTLCharacterEncoding: Int32, Sendable {
     case ascii = 0
     case utf8 = 1
 }
 
 /// Standard GenTL payload types.
+@_spi(BackendConvenience)
 public enum GenTLPayloadType: Int32, Sendable {
     case unknown = 0
     case image = 1
@@ -352,6 +383,7 @@ public enum GenTLPayloadType: Int32, Sendable {
 }
 
 /// Standard pixel-format namespace identifiers.
+@_spi(BackendConvenience)
 public enum GenTLPixelFormatNamespace: Int32, Sendable {
     case unknown = 0
     case gev = 1
@@ -361,6 +393,7 @@ public enum GenTLPixelFormatNamespace: Int32, Sendable {
 }
 
 /// Standard pixel byte-order values (GenTL 1.4).
+@_spi(BackendConvenience)
 public enum GenTLPixelEndianness: Int32, Sendable {
     case unknown = 0
     case little = 1
@@ -368,6 +401,7 @@ public enum GenTLPixelEndianness: Int32, Sendable {
 }
 
 /// Data types used by multipart Buffer Part metadata (GenTL 1.5).
+@_spi(BackendConvenience)
 public enum GenTLPartDataType: Int32, Sendable {
     case unknown = 0
     case image2D = 1
@@ -384,6 +418,7 @@ public enum GenTLPartDataType: Int32, Sendable {
 }
 
 /// Schemes used by URL_INFO_SCHEME (GenTL 1.5).
+@_spi(BackendConvenience)
 public enum GenTLURLScheme: Int32, Sendable {
     case local = 0
     case http = 1
@@ -391,16 +426,19 @@ public enum GenTLURLScheme: Int32, Sendable {
 }
 
 /// Standard acquisition flags.
+@_spi(BackendConvenience)
 public enum GenTLAcquisitionStartFlag: Int32, Sendable {
     case normal = 0
 }
 
+@_spi(BackendConvenience)
 public enum GenTLAcquisitionStopFlag: Int32, Sendable {
     case normal = 0
     case kill = 1
 }
 
 /// Register-stack read request. Each entry is one independent address/size operation.
+@_spi(BackendConvenience)
 public struct GenTLPortReadRequest: Sendable, Equatable {
     public let address: UInt64
     public let size: Int
@@ -412,6 +450,7 @@ public struct GenTLPortReadRequest: Sendable, Equatable {
 }
 
 /// Register-stack write request.
+@_spi(BackendConvenience)
 public struct GenTLPortWriteRequest: Sendable, Equatable {
     public let address: UInt64
     public let data: Data
@@ -423,6 +462,7 @@ public struct GenTLPortWriteRequest: Sendable, Equatable {
 }
 
 /// Chunk metadata reported by DSGetBufferChunkData.
+@_spi(BackendConvenience)
 public struct GenTLChunkData: Sendable, Equatable {
     public let chunkID: UInt64
     public let offset: Int64
@@ -436,6 +476,7 @@ public struct GenTLChunkData: Sendable, Equatable {
 }
 
 /// One request entry for GenTL 1.6 DSGetBufferPartInfoStacked.
+@_spi(BackendConvenience)
 public struct GenTLBufferPartInfoStackedRequest: Sendable, Equatable {
     public let partIndex: UInt32
     public let command: Int32
@@ -447,6 +488,7 @@ public struct GenTLBufferPartInfoStackedRequest: Sendable, Equatable {
 }
 
 /// One memory segment for GenTL 1.6 composite-buffer announcement.
+@_spi(BackendConvenience)
 public struct GenTLCompositeBufferSegment: @unchecked Sendable {
     public let memory: GenTLBufferMemory
 
