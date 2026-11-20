@@ -17,6 +17,7 @@ private struct CallCounts {
     var bufferRevoke = 0
     var bufferQueue = 0
     var dataStreamClose = 0
+    var acquisitionStop = 0
 }
 
 private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
@@ -501,6 +502,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iStopFlags: GenTLABI.ACQ_STOP_FLAGS
     ) -> GenTLABI.GC_ERROR {
+        record { $0.acquisitionStop += 1 }
         return hDataStream == streamToken && iStopFlags == 0
             ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
             : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
@@ -667,6 +669,51 @@ final class GenTLRouterLifecycleTests: XCTestCase {
 
         XCTAssertEqual(api.snapshot().bufferQueue, 2, "One initial enqueue and one failed return attempt are expected.")
         XCTAssertEqual(api.queuedBuffers(), 1, "A failed return must not be retried and double-enqueue the handle.")
+    }
+
+    func testConcurrentStopExecutesProducerStopExactlyOnce() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "concurrent-stop") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        try acquisition.start()
+
+        DispatchQueue.concurrentPerform(iterations: 8) { _ in
+            do {
+                try acquisition.stop()
+            } catch {
+                XCTFail("Concurrent stop failed: \\(error)")
+            }
+        }
+
+        XCTAssertEqual(api.snapshot().acquisitionStop, 1)
+        try acquisition.close()
+        try device.close()
+    }
+
+    func testConcurrentCloseReleasesStreamResourcesExactlyOnce() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "concurrent-close") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        try acquisition.start()
+
+        DispatchQueue.concurrentPerform(iterations: 4) { _ in
+            do {
+                try acquisition.close()
+            } catch {
+                XCTFail("Concurrent close failed: \\(error)")
+            }
+        }
+
+        XCTAssertEqual(api.snapshot().acquisitionStop, 1)
+        XCTAssertEqual(api.snapshot().bufferRevoke, 1)
+        XCTAssertEqual(api.snapshot().dataStreamClose, 1)
+        try device.close()
     }
 
     func testEventTimeoutDoesNotPoisonAcquisitionSession() throws {
