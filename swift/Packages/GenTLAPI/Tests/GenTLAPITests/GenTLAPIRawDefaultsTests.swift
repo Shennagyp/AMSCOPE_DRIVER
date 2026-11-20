@@ -27,7 +27,7 @@ final class GenTLAPIRawDefaultsTests: XCTestCase {
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
         XCTAssertEqual(
-            api.GCRegisterEvent(handle, 0, handle),
+            api.GCRegisterEvent(handle, 0,nil),
             GenTLABI.GenTLABI_ErrorNotImplemented()
         )
         XCTAssertEqual(
