@@ -201,22 +201,41 @@ public actor CameraSessionLifecycle {
                 case .stopped:
                     return
                 case .failed(let message):
-                    reportFailure(message, generation: activeGeneration)
+                    await reportFailure(message, from: acquisition, generation: activeGeneration)
                     return
                 }
             } catch {
-                reportFailure(error.localizedDescription, generation: activeGeneration)
+                await reportFailure(error.localizedDescription, from: acquisition, generation: activeGeneration)
                 return
             }
         }
     }
 
-    private func reportFailure(_ message: String, generation activeGeneration: UInt64) {
+    private func reportFailure(
+        _ message: String,
+        from acquisition: any CameraRuntimeAcquisition,
+        generation activeGeneration: UInt64
+    ) async {
         guard activeGeneration == generation, isStreaming else { return }
+
+        // A fatal read must stop the producer, not merely abandon the reader.
+        // Treat this as a lifecycle operation so a concurrent close cannot race
+        // the backend stop call against acquisition cleanup.
+        lifecycleOperationInProgress = true
         generation &+= 1
         isStreaming = false
         publish(.streamingChanged(false))
-        publish(.failure(message))
+
+        do {
+            try await acquisition.stop()
+            lifecycleOperationInProgress = false
+            publish(.failure(message))
+        } catch {
+            lifecycleOperationInProgress = false
+            publish(.failure(
+                "\(message) The acquisition also failed to stop: \(error.localizedDescription)"
+            ))
+        }
     }
 
     private func publish(_ event: CameraSessionLifecycleEvent) {

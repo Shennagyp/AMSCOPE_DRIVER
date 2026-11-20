@@ -47,6 +47,7 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
     private var closeFailuresRemaining: Int
     private var startFailuresRemaining: Int
     private var timeoutsRemaining: Int
+    private var readFailureMessage: String?
     private let frameOnClose: CameraFramePayload?
     private let closeGate: AsyncGate?
 
@@ -76,6 +77,7 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
         closeFailures: Int = 0,
         startFailures: Int = 0,
         timeoutCount: Int = 0,
+        readFailureMessage: String? = nil,
         frameOnClose: CameraFramePayload? = nil,
         closeGate: AsyncGate? = nil
     ) {
@@ -85,6 +87,7 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
         closeFailuresRemaining = closeFailures
         startFailuresRemaining = startFailures
         timeoutsRemaining = timeoutCount
+        self.readFailureMessage = readFailureMessage
         self.frameOnClose = frameOnClose
         self.closeGate = closeGate
     }
@@ -96,6 +99,9 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
     }
 
     func nextFrame(timeoutMilliseconds: UInt64) async throws -> CameraFramePayload {
+        if let message = consumeReadFailure() {
+            throw CameraAcquisitionFailure.failed(message)
+        }
         if consumeTimeout() {
             throw CameraAcquisitionFailure.timeout
         }
@@ -132,6 +138,14 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
         let shouldFail = startFailuresRemaining > 0
         if shouldFail { startFailuresRemaining -= 1 }
         return shouldFail
+    }
+
+    private func consumeReadFailure() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        let message = readFailureMessage
+        readFailureMessage = nil
+        return message
     }
 
     private func consumeTimeout() -> Bool {
@@ -357,6 +371,33 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let snapshot = await lifecycle.snapshot()
         XCTAssertTrue(snapshot.isStreaming)
         try await lifecycle.stop()
+        try await lifecycle.close()
+    }
+
+    func testFatalReadStopsAcquisitionAndReportsFailure() async throws {
+        let acquisition = FakeAcquisition(readFailureMessage: "Injected frame-read failure")
+        let session = FakeSession(acquisition: acquisition)
+        let lifecycle = CameraSessionLifecycle()
+        let events = await lifecycle.events()
+        var iterator = events.makeAsyncIterator()
+
+        try await lifecycle.attach(session)
+        try await lifecycle.start()
+
+        var reportedFailure: String?
+        while let event = await iterator.next() {
+            if case .failure(let message) = event {
+                reportedFailure = message
+                break
+            }
+        }
+
+        let snapshot = await lifecycle.snapshot()
+        XCTAssertEqual(reportedFailure, "Injected frame-read failure")
+        XCTAssertFalse(snapshot.isStreaming)
+        XCTAssertTrue(snapshot.hasAcquisition, "The stopped acquisition remains owned until explicit close.")
+        XCTAssertEqual(acquisition.stopAttempts, 1)
+
         try await lifecycle.close()
     }
 
