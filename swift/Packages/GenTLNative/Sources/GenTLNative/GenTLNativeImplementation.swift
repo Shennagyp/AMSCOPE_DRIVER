@@ -1316,10 +1316,17 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 throw GC_ERROR.resourceInUse
             }
 
-            // Block new EventGetData/EventGetInfo/EventKill calls before asking
-            // the Producer to abort any reads already in progress.
+            // Resolve the native pointers before blocking new calls. EventKill
+            // is the standard operation that terminates a waiting EventGetData;
+            // GCUnregisterEvent itself only removes the registration.
+            let eventPointers = try matchingHandles.map {
+                try pointer(EVENT_HANDLE(rawValue: $0))
+            }
             unregisteringEventHandles.formUnion(matchingHandles)
             do {
+                for eventPointer in eventPointers {
+                    try check(functions.eventKill(eventPointer))
+                }
                 try check(functions.gcUnregisterEvent(try eventSourcePointer(source), eventType))
             } catch {
                 unregisteringEventHandles.subtract(matchingHandles)
@@ -1328,10 +1335,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             return matchingHandles
         }
 
-        // The Producer must abort outstanding EventGetData calls as part of
-        // GCUnregisterEvent. Keep the opaque handles registered until those
-        // calls have actually returned to Swift, so no in-flight call uses a
-        // handle after the consumer releases its registration record.
+        // Keep the opaque handles registered until every killed read has
+        // actually returned to Swift; no in-flight call may use a released
+        // event handle or unloaded Producer function pointer.
         eventReadCondition.lock()
         while handles.contains(where: {
             activeEventDataReadsByHandle[$0, default: 0] > 0
