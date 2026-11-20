@@ -6,7 +6,7 @@ This document records the behavior implemented on the current branch. It is not 
 
 The current public Swift contract follows the GenTL 1.6 function groups and uses typed opaque handles, Swift values and Swift error propagation for GenTL errors. Its names and module boundaries are GenTL-shaped.
 
-**Important architectural gap:** this contract is currently hand-authored in Swift. It has not yet been converted into a binding that derives its ABI-relevant types and declarations from the imported GenTL C header. The GenTLABI C target currently lives inside GenTLNative. The plan moves it into a shared package and aligns GenTLAPI to those imported declarations. Until those phases are complete, this document describes the existing implementation, not the final API binding.
+**Important architectural gap:** this contract is currently hand-authored in Swift. It has not yet been converted into a binding that derives its ABI-relevant types and declarations from the imported GenTL C header. The ABI target has now been extracted into the standalone GenTLABI package and is a declared dependency of GenTLAPI, GenTLNative and AmcamGenTL. The native implementation's C function-pointer aliases now reference the imported PGC/P* typedefs. The public GenTLAPI protocol and custom type system remain to be converted. Until that work is complete, this document describes the existing implementation, not the final API binding.
 
 The Swift protocol is not a C ABI and is not a GenTL Producer. Only GenTLNative calls the C ABI exported by third-party CTI Producers. AmcamGenTL implements the common Swift contract by using the Amcam SDK directly.
 
@@ -29,7 +29,7 @@ GenTLNative forwards GenTL function calls to a manufacturer-supplied CTI Produce
 - EVENT_SIZE_MAX is a GenTL 1.2 EventGetInfo command. When a GenTL 1.0 Producer rejects that command, the native Consumer can still receive the standard fixed-size New Buffer event structure (two pointers). It does not guess a maximum for variable Error-event payloads and returns GC_ERR_NOT_IMPLEMENTED for that legacy case.
 - Producer handles remain opaque; this implementation does not synthesize handle IDs.
 - If the native implementation is deallocated before a successful GCCloseLib, its CTI library is retained for process lifetime rather than unloaded with potentially live Producer state.
-- The pinned GenTL 1.6 header is currently compiled into the GenTLNative ABI target, with layout checks for the packed GenTL structures used by this consumer. This target will be extracted into the shared GenTLABI package as specified by the implementation plan.
+- The pinned GenTL 1.6 header is compiled through the standalone GenTLABI package, with layout checks for the packed GenTL structures used by this consumer. Native function-pointer aliases now refer to the PGC/P* typedefs imported from that header. This target will be extracted into the shared GenTLABI package as specified by the implementation plan.
 
 Actual camera capability and compatibility still depend on the selected CTI Producer, its macOS architecture and its implementation of the standard.
 
