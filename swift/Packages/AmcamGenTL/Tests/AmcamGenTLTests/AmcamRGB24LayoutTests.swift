@@ -21,6 +21,15 @@ final class AmcamRGB24LayoutTests: XCTestCase {
         }
     }
 
+    func testTightlyPackedRowsDoNotIncludeDIBPadding() throws {
+        let layout = try XCTUnwrap(
+            AmcamRGB24Layout(width: 641, height: 2, tightlyPackedRows: true)
+        )
+        XCTAssertEqual(layout.bytesPerRow, 1_923)
+        XCTAssertEqual(layout.rowPaddingBytes, 0)
+        XCTAssertEqual(layout.payloadSize, 3_846)
+    }
+
     func testRejectsInvalidOrOverflowingDimensions() {
         XCTAssertNil(AmcamRGB24Layout(width: 0, height: 1))
         XCTAssertNil(AmcamRGB24Layout(width: 1, height: 0))
