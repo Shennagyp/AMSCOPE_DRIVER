@@ -11,7 +11,8 @@ let package = Package(
         .package(path: "../../Packages/AmcamCameraModel"),
         .package(path: "../../Packages/AmcamImagingCore"),
         .package(path: "../../Packages/AmcamImagingRuntime"),
-        .package(path: "../../Packages/AmcamImagingGenTLAdapter")
+        .package(path: "../../Packages/AmcamImagingGenTLAdapter"),
+        .package(path: "../../Packages/AmcamImagingState")
     ],
     targets: [
         .executableTarget(
@@ -20,7 +21,8 @@ let package = Package(
                 .product(name: "AmcamCameraModel", package: "AmcamCameraModel"),
                 .product(name: "AmcamImagingCore", package: "AmcamImagingCore"),
                 .product(name: "AmcamImagingRuntime", package: "AmcamImagingRuntime"),
-                .product(name: "AmcamImagingGenTLAdapter", package: "AmcamImagingGenTLAdapter")
+                .product(name: "AmcamImagingGenTLAdapter", package: "AmcamImagingGenTLAdapter"),
+                .product(name: "AmcamImagingState", package: "AmcamImagingState")
             ]
         )
     ]
