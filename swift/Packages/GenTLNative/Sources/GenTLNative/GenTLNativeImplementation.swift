@@ -183,13 +183,6 @@ private typealias DSGetBufferPartInfoStackedFunction = @convention(c) (
     UnsafeMutablePointer<DS_BUFFER_PART_INFO_STACKED>?, Int
 ) -> Int32
 
-/// GenTL Consumer implementation backed by a manufacturer-supplied .cti Producer.
-///
-/// The implementation owns one loaded CTI library. Handles returned by the
-/// Producer remain opaque and are never synthesized or reinterpreted as IDs.
-/// Keeps a CTI loaded if its GenTL lifecycle was not cleanly closed.
-/// Unloading a Producer with open module handles would invalidate native code
-/// and callback pointers still owned by that Producer.
 private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
     static let shared = GenTLProducerLibraryRetainer()
 
@@ -203,6 +196,13 @@ private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
     }
 }
 
+/// GenTL Consumer implementation backed by a manufacturer-supplied .cti Producer.
+///
+/// The implementation owns one loaded CTI library. Handles returned by the
+/// Producer remain opaque and are never synthesized or reinterpreted as IDs.
+/// Keeps a CTI loaded if its GenTL lifecycle was not cleanly closed.
+/// Unloading a Producer with open module handles would invalidate native code
+/// and callback pointers still owned by that Producer.
 public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     private struct Functions {
         let gcInitLib: GCInitLibFunction
