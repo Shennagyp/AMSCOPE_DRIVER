@@ -85,7 +85,7 @@ final class CameraApplicationModel: ObservableObject {
         candidatesByID = discoveredCandidates
 
         if !discoveredDevices.contains(where: { $0.identifier == selectedDeviceID }) {
-            guard await closeSession(),
+            guard await closeSession(expectedGeneration: operation),
                   isCurrentCameraSelectionOperation(operation) else {
                 if isCurrentCameraSelectionOperation(operation) {
                     status = "Camera disappeared; previous session cleanup is incomplete"
@@ -126,7 +126,7 @@ final class CameraApplicationModel: ObservableObject {
 
     private func selectDeviceOwned(_ identifier: String, operation: UInt64) async {
         guard isCurrentCameraSelectionOperation(operation),
-              await closeSession(),
+              await closeSession(expectedGeneration: operation),
               isCurrentCameraSelectionOperation(operation) else { return }
         selectedDeviceID = identifier
         latestFrame = nil
@@ -259,7 +259,8 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func shutdown() async -> Bool {
-        await closeSession()
+        let operation = cameraSelectionGeneration
+        return await closeSession(expectedGeneration: operation)
     }
 
     func refreshControls() {
@@ -386,7 +387,7 @@ final class CameraApplicationModel: ObservableObject {
                 : nil
         } catch {
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
-            _ = await closeSession()
+            _ = await closeSession(expectedGeneration: operation)
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
             status = "Unable to open camera through the AmScope camera provider"
             errorMessage = error.localizedDescription
@@ -400,7 +401,7 @@ final class CameraApplicationModel: ObservableObject {
 
     private func configureSDKOwned(operation: UInt64) async {
         guard isCurrentCameraSelectionOperation(operation) else { return }
-        guard await closeSession(),
+        guard await closeSession(expectedGeneration: operation),
               isCurrentCameraSelectionOperation(operation) else { return }
         cameraProvider = nil
         candidatesByID.removeAll()
@@ -427,9 +428,14 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     @discardableResult
-    private func closeSession() async -> Bool {
+    private func closeSession(expectedGeneration operation: UInt64) async -> Bool {
+        guard isCurrentCameraSelectionOperation(operation) else { return false }
         do {
             try await cameraLifecycle.close()
+            // Actor reentrancy permits a new selection while backend cleanup is
+            // suspended. A stale close must not clear the replacement selection's
+            // UI state after the lifecycle operation completes.
+            guard isCurrentCameraSelectionOperation(operation) else { return false }
             frameConsumerTask?.cancel()
             frameConsumerTask = nil
             lifecycleEventTask?.cancel()
@@ -441,6 +447,7 @@ final class CameraApplicationModel: ObservableObject {
             featureDescriptors = []
             return true
         } catch {
+            guard isCurrentCameraSelectionOperation(operation) else { return false }
             isStreaming = false
             status = "Camera resource cleanup failed"
             errorMessage = error.localizedDescription
