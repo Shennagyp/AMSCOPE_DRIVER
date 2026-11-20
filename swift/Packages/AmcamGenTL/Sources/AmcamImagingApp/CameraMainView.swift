@@ -71,6 +71,7 @@ struct CameraMainView: View {
                 .frame(width: 440, height: 560)
                 .preferredColorScheme(.dark)
         }
+        .onDisappear { model.shutdown() }
         .alert("Camera error", isPresented: Binding(
             get: { model.errorMessage != nil && model.latestImage != nil },
             set: { if !$0 { model.errorMessage = nil } }
@@ -123,6 +124,10 @@ private struct CameraHardwareDock: View {
             }
             .buttonStyle(.bordered)
             .disabled(!model.isStreaming)
+
+            Button("SDK…") { model.chooseSDK() }
+                .buttonStyle(.bordered)
+                .help("Select the vendor Amcam SDK")
 
             Button {
                 model.refreshControls()
@@ -187,7 +192,15 @@ private struct CameraSettingsView: View {
                     .padding(20)
                 }
             } else {
-                ContentUnavailableView("No camera is open", systemImage: "camera")
+                VStack(spacing: 10) {
+                    Image(systemName: "camera")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.secondary)
+                    Text("No camera is open")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             if let error = model.errorMessage {
