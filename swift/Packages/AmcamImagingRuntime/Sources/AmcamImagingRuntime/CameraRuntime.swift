@@ -92,12 +92,12 @@ public enum CameraFeatureAccessError: Error, Equatable, Sendable, LocalizedError
     public var errorDescription: String? {
         switch self {
         case .unsupported: return "This camera backend does not expose typed feature access."
-        case .featureNotFound(let name): return "Camera feature '\\(name)' was not found."
-        case .featureUnavailable(let name): return "Camera feature '\\(name)' is currently unavailable."
-        case .featureNotReadable(let name): return "Camera feature '\\(name)' is not readable."
-        case .featureNotWritable(let name): return "Camera feature '\\(name)' is not writable."
+        case .featureNotFound(let name): return "Camera feature '\(name)' was not found."
+        case .featureUnavailable(let name): return "Camera feature '\(name)' is currently unavailable."
+        case .featureNotReadable(let name): return "Camera feature '\(name)' is not readable."
+        case .featureNotWritable(let name): return "Camera feature '\(name)' is not writable."
         case .valueTypeMismatch(let name, let expected, let actual):
-            return "Camera feature '\\(name)' expects \\(expected.rawValue), received \\(actual.rawValue)."
+            return "Camera feature '\(name)' expects \(expected.rawValue), received \(actual.rawValue)."
         case .invalidValue(let message): return message
         case .backendFailure(let message): return message
         }
