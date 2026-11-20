@@ -114,6 +114,11 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         defer { try? session.close() }
 
         XCTAssertTrue(session.supportsResolutionChange())
+        let capabilities = try session.cameraCapabilities()
+        XCTAssertTrue(capabilities.availability(of: .whiteBalance).available)
+        XCTAssertFalse(capabilities.availability(of: .whiteBalance).implemented)
+        XCTAssertTrue(capabilities.availability(of: .colorCorrection).available)
+        XCTAssertTrue(capabilities.availability(of: .pixelFormatSelection).available)
         var controls = try session.readControls()
         XCTAssertTrue(controls.exposure?.automaticEnabled ?? false)
         XCTAssertEqual(controls.exposure?.readbackMicroseconds, 10_000)
