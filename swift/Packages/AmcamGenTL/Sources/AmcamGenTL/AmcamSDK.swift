@@ -67,6 +67,7 @@ final class AmcamSDK: @unchecked Sendable {
     static let frameCountFlag: UInt32 = 0x0100
     static let frameMechanicalShutterFlag: UInt32 = 0x0200
     static let frameConversionGainFlag: UInt32 = 0x0001_0000
+    static let notImplementedHRESULT = Int32(bitPattern: 0x8000_4001)
     static let requestedPullBits: Int32 = 24
     static let preciseFrameRateFlag: UInt64 = 0x0000004000000000
     static let optionMaximumPreciseFrameRate: UInt32 = 0x2c
@@ -573,34 +574,46 @@ final class AmcamSDK: @unchecked Sendable {
         _ handle: UnsafeMutableRawPointer,
         buffer: UnsafeMutableRawPointer,
         frameInfo: UnsafeMutablePointer<AmcamFrameInfoV2>,
-        metadata: UnsafeMutablePointer<AmcamFrameMetadata?>? = nil
+        metadata: UnsafeMutablePointer<AmcamFrameMetadata?>? = nil,
+        operationName: UnsafeMutablePointer<String?>? = nil
     ) -> Int32 {
         // Amcam documents rowPitch = -1 as zero padding (tightly packed rows).
-        // For RGB24 that means exactly width * 3 bytes per row.
+        // E_NOTIMPL is model-specific: retry the next API generation only for
+        // that explicit result. Device, timeout, and buffer errors remain visible.
         if let pullV4 = api.pullImageV4 {
+            operationName?.pointee = "Amcam_PullImageV4"
             var info = AmcamFrameInfoV4()
             let result = pullV4(handle, buffer, 0, Self.requestedPullBits, -1, &info)
-            guard result >= 0 else { return result }
-            copy(info.v3, to: frameInfo)
-            metadata?.pointee = Self.metadata(from: info)
-            return result
+            if result != Self.notImplementedHRESULT {
+                guard result >= 0 else { return result }
+                copy(info.v3, to: frameInfo)
+                metadata?.pointee = Self.metadata(from: info)
+                return result
+            }
         }
         if let pullV3 = api.pullImageV3 {
+            operationName?.pointee = "Amcam_PullImageV3"
             var info = AmcamFrameInfoV3()
             let result = pullV3(handle, buffer, 0, Self.requestedPullBits, -1, &info)
-            guard result >= 0 else { return result }
-            copy(info, to: frameInfo)
-            metadata?.pointee = Self.metadata(from: info)
-            return result
+            if result != Self.notImplementedHRESULT {
+                guard result >= 0 else { return result }
+                copy(info, to: frameInfo)
+                metadata?.pointee = Self.metadata(from: info)
+                return result
+            }
         }
         if let pullWithPitch = api.pullImageWithRowPitchV2 {
+            operationName?.pointee = "Amcam_PullImageWithRowPitchV2"
             let result = pullWithPitch(handle, buffer, Self.requestedPullBits, -1, frameInfo)
-            if result >= 0 {
-                metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
+            if result != Self.notImplementedHRESULT {
+                if result >= 0 {
+                    metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
+                }
+                return result
             }
-            return result
         }
-        guard let pullV2 = api.pullImage else { return -1 }
+        guard let pullV2 = api.pullImage else { return Self.notImplementedHRESULT }
+        operationName?.pointee = "Amcam_PullImageV2"
         let result = pullV2(handle, buffer, Self.requestedPullBits, frameInfo)
         if result >= 0 {
             metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
