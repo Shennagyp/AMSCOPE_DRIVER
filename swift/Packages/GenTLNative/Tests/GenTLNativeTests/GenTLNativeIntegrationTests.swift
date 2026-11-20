@@ -6,7 +6,7 @@ import GenTLAPI
 @_spi(BackendFactory) @testable import GenTLNative
 
 final class GenTLNativeIntegrationTests: XCTestCase {
-    private func buildMockProducer(omittingGetInfo: Bool = false, omittingOptionalExports: Bool = false) throws -> URL {
+    private func buildMockProducer(omittingRequiredSymbol: String? = nil, omittingOptionalExports: Bool = false) throws -> URL {
         let testDirectory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
         let source = testDirectory
@@ -234,17 +234,24 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(callCount(9), 1, "GCUnregisterEvent must be invoked exactly once.")
     }
 
-    func testNativeLoaderRejectsCTIMissingRequiredEntryPoint() throws {
-        let producerURL = try buildMockProducer(omittingGetInfo: true)
+    func testNativeLoaderRejectsEachMissingRequiredEntryPoint() throws {
+        for requiredSymbol in GenTLProducerLibrary.requiredEntryPoints {
+            let producerURL = try buildMockProducer(omittingRequiredSymbol: requiredSymbol)
 
-        XCTAssertThrowsError(try GenTLNativeImplementation(ctiURL: producerURL)) { error in
-            guard let loaderError = error as? GenTLProducerLibraryError else {
-                return XCTFail("Unexpected error type: \(error)")
+            XCTAssertThrowsError(
+                try GenTLNativeImplementation(ctiURL: producerURL),
+                "Loader accepted CTI without required symbol \(requiredSymbol)"
+            ) { error in
+                guard let loaderError = error as? GenTLProducerLibraryError else {
+                    return XCTFail("Unexpected error type for \(requiredSymbol): \(error)")
+                }
+                guard case .missingRequiredSymbol(let symbol) = loaderError else {
+                    return XCTFail("Unexpected loader error for \(requiredSymbol): \(loaderError)")
+                }
+                XCTAssertEqual(symbol, requiredSymbol)
             }
-            guard case .missingRequiredSymbol(let symbol) = loaderError else {
-                return XCTFail("Unexpected loader error: \(loaderError)")
-            }
-            XCTAssertEqual(symbol, "GCGetInfo")
+
+            try? FileManager.default.removeItem(at: producerURL.deletingLastPathComponent())
         }
     }
 
