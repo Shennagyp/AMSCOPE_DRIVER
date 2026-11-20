@@ -320,11 +320,6 @@ struct AmcamCameraProbe {
                 backend, stream: streamHandle, buffer: bufferHandle,
                 command: GenTLInfoCommand.Buffer.timestamp.rawValue
             )
-            if timestamp > 0 {
-                if firstDeviceTimestamp == nil { firstDeviceTimestamp = timestamp }
-                lastDeviceTimestamp = timestamp
-            }
-
             guard !isIncomplete else {
                 incompleteFrames += 1
                 print("Frame \(frameIndex + 1): INCOMPLETE")
@@ -332,6 +327,11 @@ struct AmcamCameraProbe {
                     try backend.DSQueueBuffer(streamHandle, buffer: bufferHandle)
                 }
                 continue
+            }
+
+            if timestamp > 0 {
+                if firstDeviceTimestamp == nil { firstDeviceTimestamp = timestamp }
+                lastDeviceTimestamp = timestamp
             }
 
             let (packedRowBytes, rowOverflow) = width.multipliedReportingOverflow(by: 3)
