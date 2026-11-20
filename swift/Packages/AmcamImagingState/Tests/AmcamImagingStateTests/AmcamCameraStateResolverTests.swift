@@ -375,4 +375,20 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertTrue(autoExposure.reason?.contains("allow-list") == true)
     }
 
+    func testNumericNormalizationNeverProducesOffGridMaximum() {
+        let resolver = AmcamCameraStateResolver()
+        let steppedRange = CameraFeatureNumericRange(minimum: 0, maximum: 10, increment: 3)!
+
+        XCTAssertEqual(resolver.normalizedNumericValue(10, range: steppedRange), 9)
+        XCTAssertEqual(resolver.normalizedNumericValue(8.4, range: steppedRange), 9)
+        XCTAssertEqual(resolver.normalizedNumericValue(-5, range: steppedRange), 0)
+
+        let offsetRange = CameraFeatureNumericRange(minimum: 2, maximum: 11, increment: 4)!
+        XCTAssertEqual(resolver.normalizedNumericValue(11, range: offsetRange), 10)
+
+        let continuousRange = CameraFeatureNumericRange(minimum: 1, maximum: 5)!
+        XCTAssertEqual(resolver.normalizedNumericValue(9, range: continuousRange), 5)
+        XCTAssertNil(resolver.normalizedNumericValue(.infinity, range: continuousRange))
+    }
+
 }
