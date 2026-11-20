@@ -119,6 +119,9 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(controls.exposure.readbackMicroseconds, 10_000)
         XCTAssertEqual(controls.exposure.minimumMicroseconds, 100)
         XCTAssertEqual(controls.exposure.maximumMicroseconds, 1_000_000)
+        XCTAssertEqual(controls.gain?.readbackPercent, 100)
+        XCTAssertEqual(controls.gain?.minimumPercent, 100)
+        XCTAssertEqual(controls.gain?.maximumPercent, 800)
         XCTAssertTrue(controls.frameRate.supported)
         XCTAssertEqual(controls.frameRate.minimumFramesPerSecond, 0.1)
         XCTAssertEqual(controls.frameRate.maximumFramesPerSecond, 30.0)
@@ -138,6 +141,10 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         controls = try session.setExposureTime(microseconds: 20_000)
         XCTAssertEqual(controls.exposure.readbackMicroseconds, 20_000)
         XCTAssertEqual(controls.exposure.requestedMicroseconds, 20_000)
+
+        controls = try session.setExposureGain(percent: 250)
+        XCTAssertEqual(controls.gain?.readbackPercent, 250)
+        XCTAssertThrowsError(try session.setExposureGain(percent: 801))
 
         let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
         XCTAssertNotNil(fixtureHandle)
