@@ -62,6 +62,10 @@ final class GenTLAPITests: XCTestCase {
 
         XCTAssertEqual(GenTLInfoCommand.Stream.payloadSize.rawValue, 7)
         XCTAssertEqual(GenTLInfoCommand.Stream.transportType.rawValue, 10)
+        XCTAssertEqual(GenTLInfoCommand.Stream.numChunksMax.rawValue, 11)
+        XCTAssertEqual(GenTLInfoCommand.Stream.bufferAlignment.rawValue, 13)
+        XCTAssertEqual(GenTLInfoCommand.Stream.flowTable.rawValue, 14)
+        XCTAssertEqual(GenTLInfoCommand.Stream.genDCPrefetchDescriptor.rawValue, 15)
 
         XCTAssertEqual(GenTLInfoCommand.Buffer.pixelFormat.rawValue, 20)
         XCTAssertEqual(GenTLInfoCommand.Buffer.dataSize.rawValue, 27)
@@ -71,5 +75,11 @@ final class GenTLAPITests: XCTestCase {
         XCTAssertEqual(GenTLInfoCommand.Event.maxSize.rawValue, 3)
         XCTAssertEqual(GenTLInfoCommand.Event.infoDataSizeMax.rawValue, 4)
         XCTAssertEqual(GenTLInfoCommand.EventData.numericID.rawValue, 2)
+        XCTAssertEqual(GenTLInfoCommand.URL.url.rawValue, 0)
+        XCTAssertEqual(GenTLInfoCommand.URL.fileName.rawValue, 10)
+        XCTAssertEqual(GenTLInfoCommand.BufferPart.base.rawValue, 0)
+        XCTAssertEqual(GenTLInfoCommand.BufferPart.dataPurposeID.rawValue, 13)
+        XCTAssertEqual(GenTLInfoCommand.Flow.size.rawValue, 0)
+        XCTAssertEqual(GenTLInfoCommand.Segment.dataSize.rawValue, 4)
     }
 }
