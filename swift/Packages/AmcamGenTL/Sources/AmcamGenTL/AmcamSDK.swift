@@ -22,6 +22,9 @@ private typealias SetOptionFunction = @convention(c) (UnsafeMutableRawPointer?, 
 private typealias GetSpeedFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?) -> Int32
 private typealias SetSpeedFunction = @convention(c) (UnsafeMutableRawPointer?, UInt16) -> Int32
 private typealias GetFrameRateFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?, UnsafeMutablePointer<UInt32>?, UnsafeMutablePointer<UInt32>?) -> Int32
+private typealias GetExposureGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?) -> Int32
+private typealias SetExposureGainFunction = @convention(c) (UnsafeMutableRawPointer?, UInt16) -> Int32
+private typealias GetExposureGainRangeFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?, UnsafeMutablePointer<UInt16>?, UnsafeMutablePointer<UInt16>?) -> Int32
 typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
 /// Keeps an Amcam SDK loaded when a camera handle could not be closed safely.
@@ -73,6 +76,9 @@ final class AmcamSDK: @unchecked Sendable {
         let getSpeed: GetSpeedFunction?
         let setSpeed: SetSpeedFunction?
         let getFrameRate: GetFrameRateFunction?
+        let getExposureGain: GetExposureGainFunction?
+        let setExposureGain: SetExposureGainFunction?
+        let getExposureGainRange: GetExposureGainRangeFunction?
     }
 
     private let library: UnsafeMutableRawPointer
@@ -112,7 +118,10 @@ final class AmcamSDK: @unchecked Sendable {
                 setOption: try load("Amcam_put_Option", as: SetOptionFunction.self),
                 getSpeed: try? load("Amcam_get_Speed", as: GetSpeedFunction.self),
                 setSpeed: try? load("Amcam_put_Speed", as: SetSpeedFunction.self),
-                getFrameRate: try? load("Amcam_get_FrameRate", as: GetFrameRateFunction.self)
+                getFrameRate: try? load("Amcam_get_FrameRate", as: GetFrameRateFunction.self),
+                getExposureGain: try? load("Amcam_get_ExpoAGain", as: GetExposureGainFunction.self),
+                setExposureGain: try? load("Amcam_put_ExpoAGain", as: SetExposureGainFunction.self),
+                getExposureGainRange: try? load("Amcam_get_ExpoAGainRange", as: GetExposureGainRangeFunction.self)
             )
             guard let versionPointer = resolved.version() else {
                 throw AmcamCameraError.incompatibleSDK(expected: expectedVersion, actual: "null")
@@ -351,6 +360,34 @@ final class AmcamSDK: @unchecked Sendable {
     func setExposureTime(_ handle: UnsafeMutableRawPointer, microseconds: UInt32) throws {
         let result = api.setExposureTime(handle, microseconds)
         try checkControlResult("Amcam_put_ExpoTime", result)
+    }
+
+    var exposureGainControlAvailable: Bool {
+        api.getExposureGain != nil && api.setExposureGain != nil && api.getExposureGainRange != nil
+    }
+
+    func readExposureGain(_ handle: UnsafeMutableRawPointer) throws -> (current: UInt16, minimum: UInt16, maximum: UInt16, defaultValue: UInt16) {
+        guard let getGain = api.getExposureGain,
+              let getRange = api.getExposureGainRange else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose exposure analog-gain queries.")
+        }
+        var current: UInt16 = 0
+        var minimum: UInt16 = 0
+        var maximum: UInt16 = 0
+        var defaultValue: UInt16 = 0
+        try checkControlResult("Amcam_get_ExpoAGain", getGain(handle, &current))
+        try checkControlResult("Amcam_get_ExpoAGainRange", getRange(handle, &minimum, &maximum, &defaultValue))
+        guard minimum <= maximum, current >= minimum, current <= maximum else {
+            throw AmcamCameraError.unsupportedControl("The camera returned an invalid analog-gain range or readback.")
+        }
+        return (current, minimum, maximum, defaultValue)
+    }
+
+    func setExposureGain(_ handle: UnsafeMutableRawPointer, percent: UInt16) throws {
+        guard let setGain = api.setExposureGain else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose exposure analog-gain control.")
+        }
+        try checkControlResult("Amcam_put_ExpoAGain", setGain(handle, percent))
     }
 
     func readOption(_ handle: UnsafeMutableRawPointer, option: UInt32) throws -> Int32 {
