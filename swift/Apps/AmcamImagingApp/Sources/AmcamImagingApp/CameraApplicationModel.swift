@@ -36,6 +36,17 @@ final class CameraApplicationModel: ObservableObject {
 
     @Published private(set) var currentResolution: AmcamResolution?
 
+    func isFeatureWritable(_ name: String) -> Bool {
+        guard let descriptor = featureDescriptors.last(where: { $0.name == name }) else {
+            return false
+        }
+        return descriptor.isAvailable && descriptor.isWritable
+    }
+
+    func enumerationValues(for name: String) -> [String] {
+        featureDescriptors.last(where: { $0.name == name })?.enumerationValues ?? []
+    }
+
     func initialize() {
         guard !hasInitialized else { return }
         hasInitialized = true
