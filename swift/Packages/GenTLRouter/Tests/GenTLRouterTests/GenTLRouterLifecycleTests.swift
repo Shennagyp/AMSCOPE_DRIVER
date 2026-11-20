@@ -247,6 +247,16 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         lock.unlock()
     }
 
+    func setBufferPixels(_ pixels: [UInt8]) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard pixels.count == 6, let bufferMemory else { return }
+        pixels.withUnsafeBytes { source in
+            guard let base = source.baseAddress else { return }
+            bufferMemory.copyMemory(from: base, byteCount: source.count)
+        }
+    }
+
     func setFailBufferRevoke(_ value: Bool) {
         lock.lock()
         failBufferRevoke = value
@@ -379,6 +389,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_ERROR)
         }
         queuedBufferCount += 1
+        eventDelivered = false
         lock.unlock()
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
@@ -418,7 +429,9 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
             }
         }
         piSize.pointee = words.count * MemoryLayout<UInt>.size
+        lock.lock()
         eventDelivered = true
+        lock.unlock()
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
 
@@ -605,6 +618,30 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         try device.close()
     }
 
+
+
+    func testReusedAnnouncedBufferDoesNotMutatePreviouslyDeliveredFrame() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "reused-buffer-copy") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        defer {
+            try? acquisition.close()
+            try? device.close()
+        }
+
+        try acquisition.start(numberToAcquire: 2)
+        let firstFrame = try acquisition.nextFrame(timeoutMilliseconds: 100)
+        api.setBufferPixels([9, 8, 7, 6, 5, 4])
+        let secondFrame = try acquisition.nextFrame(timeoutMilliseconds: 100)
+
+        XCTAssertEqual(firstFrame.bytes, Data([1, 2, 3, 4, 5, 6]))
+        XCTAssertEqual(secondFrame.bytes, Data([9, 8, 7, 6, 5, 4]))
+        XCTAssertEqual(api.queuedBuffers(), 3, "The single announced buffer is requeued after each copied frame.")
+        try acquisition.stop()
+    }
 
     func testFailedBufferRequeueIsNotRetriedWithSameHandle() throws {
         let api = RecordingGenTLAPI()
