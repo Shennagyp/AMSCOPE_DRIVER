@@ -366,7 +366,8 @@ private struct FeatureGroupView: View {
 
     private var availableExposureModes: [AmcamAutoExposureMode] {
         var modes: [AmcamAutoExposureMode] = [.continuous, .once]
-        if capability?.availability(of: .exposureManual).isUsable == true {
+        if capability?.availability(of: .exposureManual).isUsable == true ||
+           controls?.exposure?.autoMode == .manual {
             modes.insert(.manual, at: 0)
         }
         return modes
