@@ -84,7 +84,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(result, -4321)
+        XCTAssertEqual(result, -11000)
         XCTAssertEqual(infoType, INFO_DATATYPE_UINT32)
         XCTAssertEqual(payload, 0xC0FFEE01)
         XCTAssertEqual(payloadSize, MemoryLayout<UInt32>.size)
@@ -119,7 +119,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
                 )
             }
         }
-        XCTAssertEqual(readResult, -5432)
+        XCTAssertEqual(readResult, -11004)
         XCTAssertEqual(readPayload, 0xA1B2C3D4)
         XCTAssertEqual(readSize, MemoryLayout<UInt32>.size)
 
@@ -133,11 +133,11 @@ final class GenTLNativeIntegrationTests: XCTestCase {
                 &writeSize
             )
         }
-        XCTAssertEqual(writeResult, -5434)
+        XCTAssertEqual(writeResult, -11005)
         XCTAssertEqual(writeSize, writePayload.count)
 
         let operations: [(name: String, index: UInt32, expected: GC_ERROR, invoke: () -> GC_ERROR)] = [
-            ("GCGetInfo", 0, -4321, { api.GCGetInfo(0x1234, nil, nil, nil) }),
+            ("GCGetInfo", 0, -11000, { api.GCGetInfo(0x1234, nil, nil, nil) }),
             ("GCGetLastError", 1, -6001, { api.GCGetLastError(nil, nil, nil) }),
             ("GCGetPortURL", 6, -6006, { api.GCGetPortURL(nil, nil, nil) }),
             ("GCGetPortInfo", 7, -6007, { api.GCGetPortInfo(nil, 0, nil, nil, nil) }),
