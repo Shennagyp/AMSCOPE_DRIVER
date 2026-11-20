@@ -100,6 +100,63 @@ final class GenTLNativeIntegrationTests: XCTestCase {
     }
 
 
+
+    func testNativeMockRejectsIncorrectArgumentsWithoutMutatingOutputs() throws {
+        let producerURL = try buildMockProducer()
+        let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
+        let api: any GenTLAPI = implementation
+
+        var infoType: INFO_DATATYPE = 0x2222
+        var infoPayload: UInt32 = 0xDEADBEEF
+        var infoSize = MemoryLayout<UInt32>.size
+        let infoResult = withUnsafeMutablePointer(to: &infoType) { typePointer in
+            withUnsafeMutablePointer(to: &infoPayload) { payloadPointer in
+                withUnsafeMutablePointer(to: &infoSize) { sizePointer in
+                    api.GCGetInfo(
+                        0,
+                        typePointer,
+                        UnsafeMutableRawPointer(payloadPointer),
+                        sizePointer
+                    )
+                }
+            }
+        }
+        XCTAssertEqual(infoResult, -11001)
+        XCTAssertEqual(infoType, 0x2222)
+        XCTAssertEqual(infoPayload, 0xDEADBEEF)
+        XCTAssertEqual(infoSize, MemoryLayout<UInt32>.size)
+
+        let portHandle = UnsafeMutableRawPointer(bitPattern: 0x1111)!
+        var readPayload: UInt32 = 0xDEADBEEF
+        var readSize = MemoryLayout<UInt32>.size
+        let readResult = withUnsafeMutablePointer(to: &readPayload) { payloadPointer in
+            withUnsafeMutablePointer(to: &readSize) { sizePointer in
+                api.GCReadPort(
+                    portHandle,
+                    0x1020304050607081,
+                    UnsafeMutableRawPointer(payloadPointer),
+                    sizePointer
+                )
+            }
+        }
+        XCTAssertEqual(readResult, -11041)
+        XCTAssertEqual(readPayload, 0xDEADBEEF)
+        XCTAssertEqual(readSize, MemoryLayout<UInt32>.size)
+
+        let invalidWritePayload: [UInt8] = [0x12, 0x34, 0x56, 0x79]
+        var writeSize = invalidWritePayload.count
+        let writeResult = invalidWritePayload.withUnsafeBufferPointer { buffer in
+            api.GCWritePort(
+                portHandle,
+                0x1020304050607080,
+                UnsafeRawPointer(buffer.baseAddress!),
+                &writeSize
+            )
+        }
+        XCTAssertEqual(writeResult, -11051)
+        XCTAssertEqual(writeSize, invalidWritePayload.count)
+    }
+
     func testEveryProtocolOperationDispatchesToItsMatchingNativeExport() throws {
         let producerURL = try buildMockProducer()
         let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
