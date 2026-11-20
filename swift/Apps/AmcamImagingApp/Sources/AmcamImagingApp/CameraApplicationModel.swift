@@ -387,8 +387,11 @@ final class CameraApplicationModel: ObservableObject {
                 : nil
         } catch {
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
-            _ = await closeSession(expectedGeneration: expectedGeneration)
+            let cleanupSucceeded = await closeSession(expectedGeneration: expectedGeneration)
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
+            // Do not replace a cleanup failure with the original open error:
+            // the retained session/acquisition still requires explicit recovery.
+            guard cleanupSucceeded else { return }
             status = "Unable to open camera through the AmScope camera provider"
             errorMessage = error.localizedDescription
         }
