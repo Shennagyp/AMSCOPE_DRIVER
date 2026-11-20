@@ -55,7 +55,8 @@ final class CameraFeatureContractTests: XCTestCase {
     }
     func testFeaturelessBackendUsesExplicitUnsupportedContract() async {
         let session = FeaturelessRuntimeSession()
-        XCTAssertFalse(await session.supportsAcquisition())
+        let supportsAcquisition = await session.supportsAcquisition()
+        XCTAssertFalse(supportsAcquisition)
 
         do {
             _ = try await session.featureDescriptors()
