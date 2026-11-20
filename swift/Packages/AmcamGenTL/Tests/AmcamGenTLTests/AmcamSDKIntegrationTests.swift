@@ -347,6 +347,81 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         cleanupCompleted = true
     }
 
+    func testDisconnectPublishesDataStreamErrorEventAndCanBeStopped() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+
+        let streamHandle = DS_HANDLE(rawValue: 0x301)
+        let deviceHandle = DEV_HANDLE(rawValue: 0x302)
+        let bufferHandle = BUFFER_HANDLE(rawValue: 0x303)
+        let errorEventHandle = EVENT_HANDLE(rawValue: 0x304)
+        let stream = try AmcamDataStreamRecord(
+            handle: streamHandle,
+            deviceHandle: deviceHandle,
+            session: session
+        )
+        let errorEvent = AmcamEventRecord(
+            handle: errorEventHandle,
+            eventType: GenTLEventType.error.rawValue,
+            source: .dataStream(streamHandle)
+        )
+        stream.addEvent(errorEvent)
+
+        let payloadSize = try XCTUnwrap(
+            AmcamRGB24Layout(width: 640, height: 480)
+        ).payloadSize
+        let memory = UnsafeMutableRawPointer.allocate(
+            byteCount: payloadSize,
+            alignment: 64
+        )
+        memory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
+        var cleanupCompleted = false
+        defer {
+            if !cleanupCompleted {
+                try? stream.stop()
+                try? stream.close()
+                try? session.close()
+            }
+            memory.deallocate()
+        }
+
+        try stream.announce(
+            handle: bufferHandle,
+            memory: memory,
+            size: payloadSize,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+        try stream.queue(bufferHandle)
+
+        let emitterHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(emitterHandle)
+        defer { if let emitterHandle { dlclose(emitterHandle) } }
+        guard let symbol = dlsym(emitterHandle, "MockAmcam_EmitEvent") else {
+            XCTFail("Mock SDK is missing MockAmcam_EmitEvent")
+            return
+        }
+        let emitEvent = unsafeBitCast(symbol, to: (@convention(c) (UInt32) -> Void).self)
+
+        try stream.start(numberToAcquire: GenTLConstants.infiniteCount)
+        emitEvent(0x0081)
+
+        let errorPayload = try stream.nextEventData(
+            errorEvent,
+            timeoutMilliseconds: 2_000
+        )
+        XCTAssertTrue(errorPayload.isEmpty)
+        XCTAssertEqual(try stream.eventInfo(errorEvent, command: 2), .uint64(1))
+
+        try stream.stop()
+        XCTAssertEqual(try stream.info(command: 8), .bool8(false))
+        try stream.close()
+        try session.close()
+        cleanupCompleted = true
+    }
+
     func testUndersizedBufferIsReportedWithoutMemoryOverwrite() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)
