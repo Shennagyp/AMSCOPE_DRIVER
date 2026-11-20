@@ -446,7 +446,7 @@ Added a native integration test asserting the compiled header version code is Ge
 
 The workflow was triggered by push (run 54, commit `8512306e3c8d0cbc731fe32869bae82fb0f3278a`). All four matrix jobs were marked failed within seconds. The job records show `runner_id: 0`, empty `steps` arrays, and no runner logs (the log endpoint returned BlobNotFound). Rerunning failed jobs produced the same result. Therefore the Swift build/test commands did **not** execute; this is not evidence of source compilation failure or test assertion failure.
 
-The repository's GitHub Actions/macOS runner availability must be enabled or repaired before CI can provide code evidence. In the meantime, the exact local commands remain:
+The repository's GitHub Actions hosted-runner access must be enabled or repaired before CI can provide code evidence. A later workflow run added an Ubuntu contract-test job; that job also failed with runner_id 0 and no steps, so this is not specific to the macOS label. In the meantime, the exact local commands remain:
 ```sh
 swift test --package-path swift/Packages/GenTLNative
 swift test --package-path swift/Packages/GenTLAPI
