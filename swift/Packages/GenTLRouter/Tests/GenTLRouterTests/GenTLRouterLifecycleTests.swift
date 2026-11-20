@@ -44,11 +44,11 @@ private final class RecordingGenTLAPI: GenTLBackendConvenience, @unchecked Senda
         return calls
     }
 
-    func GCInitLib() throws {
+    func swiftGCInitLib() throws {
         record { $0.gcInit += 1 }
     }
 
-    func GCCloseLib() throws {
+    func swiftGCCloseLib() throws {
         record { $0.gcClose += 1 }
         if failLibraryClose { throw GC_ERROR.resourceInUse }
     }
