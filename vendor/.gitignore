@@ -1,0 +1,5 @@
+# Proprietary vendor runtime binaries must remain local unless redistribution is licensed.
+**/*.dylib
+**/*.so
+**/*.dll
+**/*.framework/
