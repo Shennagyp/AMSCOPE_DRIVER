@@ -409,9 +409,12 @@ final class AmcamSDK: @unchecked Sendable {
         try checkControlResult("Amcam_put_ExpoAGain", setGain(handle, percent))
     }
 
-    var whiteBalanceControlAvailable: Bool {
-        (api.getTemperatureTint != nil && api.setTemperatureTint != nil) ||
-        (api.getWhiteBalanceGain != nil && api.setWhiteBalanceGain != nil)
+    var temperatureTintControlAvailable: Bool {
+        api.getTemperatureTint != nil && api.setTemperatureTint != nil
+    }
+
+    var rgbWhiteBalanceControlAvailable: Bool {
+        api.getWhiteBalanceGain != nil && api.setWhiteBalanceGain != nil
     }
 
     func readTemperatureTint(_ handle: UnsafeMutableRawPointer) throws -> (temperature: Int32, tint: Int32) {
