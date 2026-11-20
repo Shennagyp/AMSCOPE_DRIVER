@@ -159,10 +159,12 @@ int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bit
 int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV4 *info) {
     if (pull_api_failure != 0) return pull_api_failure;
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 4)) != 0) return (int32_t)UINT32_C(0x80004001);
-    if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
+    if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != 0) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
     const uint32_t height = resolution_heights[current_resolution_index];
-    memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
+    const size_t packed_row_bytes = (size_t)width * 3u;
+    const size_t default_row_bytes = (packed_row_bytes + 3u) & ~(size_t)3u;
+    memset(buffer, 0x5a, default_row_bytes * (size_t)height);
     info->v3.width = width;
     info->v3.height = height;
     info->v3.flag = mock_v4_frame_flags;
