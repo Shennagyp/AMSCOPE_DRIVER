@@ -37,16 +37,25 @@ struct AmcamDevice: Hashable, Sendable, Identifiable {
 }
 
 
+enum AmcamAutoExposureMode: Int, Codable, CaseIterable, Sendable {
+    case manual = 0
+    case continuous = 1
+    case once = 2
+
+    var isAutomatic: Bool { self != .manual }
+}
+
 struct AmcamExposureControl: Equatable, Sendable {
-    let automaticEnabled: Bool
+    let autoMode: AmcamAutoExposureMode
+    var automaticEnabled: Bool { autoMode.isAutomatic }
     let readbackMicroseconds: UInt32
     let minimumMicroseconds: UInt32
     let maximumMicroseconds: UInt32
     let defaultMicroseconds: UInt32
     let requestedMicroseconds: UInt32?
 
-    init(automaticEnabled: Bool, readbackMicroseconds: UInt32, minimumMicroseconds: UInt32, maximumMicroseconds: UInt32, defaultMicroseconds: UInt32, requestedMicroseconds: UInt32? = nil) {
-        self.automaticEnabled = automaticEnabled
+    init(autoMode: AmcamAutoExposureMode, readbackMicroseconds: UInt32, minimumMicroseconds: UInt32, maximumMicroseconds: UInt32, defaultMicroseconds: UInt32, requestedMicroseconds: UInt32? = nil) {
+        self.autoMode = autoMode
         self.readbackMicroseconds = readbackMicroseconds
         self.minimumMicroseconds = minimumMicroseconds
         self.maximumMicroseconds = maximumMicroseconds
