@@ -25,7 +25,7 @@ final class AmcamSDKLibraryLocatorTests: XCTestCase {
         let paths = AmcamSDKLibraryLocator.candidateURLs(
             bundleURL: bundle,
             homeDirectory: home
-        ).map(\\.path)
+        ).map(\.path)
 
         XCTAssertEqual(paths[1], "/Users/tester/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib")
         XCTAssertEqual(paths[2], "/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib")
