@@ -12,6 +12,8 @@ This package implements the shared `GenTLAPI` contract by loading manufacturer-s
 - Uses the pinned GenTL 1.6 C declarations and validates the consumer-side ABI layouts before loading a producer.
 - Implements GenTL 1.6 stacked buffer/part information using the standard packed structures.
 - Resolves functions introduced by later GenTL revisions opportunistically. When a producer does not export a versioned extension, the corresponding Swift API call returns `GC_ERR_NOT_IMPLEMENTED`; it does not prevent use of the producer's supported baseline.
+- Keeps the `.cti` loaded for process lifetime if the implementation is released before a successful `GCCloseLib`. This avoids unloading Producer code while native module handles or callbacks may still exist.
+- Keeps the dynamic loader and symbol resolver internal; application code works through `GenTLAPI` and `GenTLNativeImplementation`.
 
 This package is a **GenTL Consumer**. It does not implement a GenTL Producer, does not create `.cti` files, and does not include camera-vendor SDKs.
 
