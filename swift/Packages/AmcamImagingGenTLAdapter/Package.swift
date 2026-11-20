@@ -10,7 +10,9 @@ let package = Package(
     dependencies: [
         .package(path: "../AmcamImagingCore"),
         .package(path: "../AmcamImagingRuntime"),
-        .package(path: "../GenTLRouter")
+        .package(path: "../GenTLRouter"),
+        .package(path: "../GenTLAPI"),
+        .package(path: "../GenTLABI")
     ],
     targets: [
         .target(
@@ -18,7 +20,9 @@ let package = Package(
             dependencies: [
                 .product(name: "AmcamImagingCore", package: "AmcamImagingCore"),
                 .product(name: "AmcamImagingRuntime", package: "AmcamImagingRuntime"),
-                .product(name: "GenTLRouter", package: "GenTLRouter")
+                .product(name: "GenTLRouter", package: "GenTLRouter"),
+                .product(name: "GenTLAPI", package: "GenTLAPI"),
+                .product(name: "GenTLABI", package: "GenTLABI")
             ]
         ),
         .testTarget(

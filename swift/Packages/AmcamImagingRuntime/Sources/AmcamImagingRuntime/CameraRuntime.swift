@@ -25,11 +25,83 @@ public protocol CameraRuntimeDevice: Sendable {
     func open() async throws -> any CameraRuntimeSession
 }
 
-/// Backend adapter contract for one opened device session.
-/// The session owns the device; its acquisition is a child resource.
+
+public enum CameraFeatureKind: String, Codable, Equatable, Sendable {
+    case boolean, integer, integerVector, floatingPoint, string, enumeration
+}
+public enum CameraFeatureValue: Equatable, Sendable {
+    case boolean(Bool), integer(Int64), integerVector([Int64]), floatingPoint(Double), string(String), enumeration(String)
+    public var kind: CameraFeatureKind {
+        switch self {
+        case .boolean: return .boolean
+        case .integer: return .integer
+        case .integerVector: return .integerVector
+        case .floatingPoint: return .floatingPoint
+        case .string: return .string
+        case .enumeration: return .enumeration
+        }
+    }
+}
+public struct CameraFeatureNumericRange: Equatable, Sendable {
+    public let minimum: Double
+    public let maximum: Double
+    public let increment: Double?
+    public init?(minimum: Double, maximum: Double, increment: Double? = nil) {
+        guard minimum.isFinite, maximum.isFinite, minimum <= maximum else { return nil }
+        if let increment, (!increment.isFinite || increment <= 0) { return nil }
+        self.minimum = minimum
+        self.maximum = maximum
+        self.increment = increment
+    }
+}
+public struct CameraFeatureDescriptor: Equatable, Sendable, Identifiable {
+    public let name: String
+    public let displayName: String
+    public let kind: CameraFeatureKind
+    public let unit: String?
+    public let isAvailable: Bool
+    public let isReadable: Bool
+    public let isWritable: Bool
+    public let numericRange: CameraFeatureNumericRange?
+    public let elementCount: Int?
+    public let enumerationValues: [String]
+    public var id: String { name }
+    public init(name: String, displayName: String, kind: CameraFeatureKind, unit: String? = nil, isAvailable: Bool, isReadable: Bool, isWritable: Bool, numericRange: CameraFeatureNumericRange? = nil, elementCount: Int? = nil, enumerationValues: [String] = []) {
+        self.name = name
+        self.displayName = displayName
+        self.kind = kind
+        self.unit = unit
+        self.isAvailable = isAvailable
+        self.isReadable = isReadable
+        self.isWritable = isWritable
+        self.numericRange = numericRange
+        self.elementCount = elementCount
+        self.enumerationValues = enumerationValues
+    }
+}
+public enum CameraFeatureAccessError: Error, Equatable, Sendable {
+    case unsupported
+}
+/// Application-facing camera session. Transport handles remain inside adapters.
 public protocol CameraRuntimeSession: Sendable {
+    var supportsAcquisition: Bool { get }
+    func featureDescriptors() throws -> [CameraFeatureDescriptor]
+    func readFeature(_ name: String) throws -> CameraFeatureValue
+    func writeFeature(_ value: CameraFeatureValue, named name: String) throws
     func makeAcquisition() async throws -> any CameraRuntimeAcquisition
     func close() async throws
+}
+public extension CameraRuntimeSession {
+    var supportsAcquisition: Bool { false }
+    func featureDescriptors() throws -> [CameraFeatureDescriptor] {
+        throw CameraFeatureAccessError.unsupported
+    }
+    func readFeature(_ name: String) throws -> CameraFeatureValue {
+        throw CameraFeatureAccessError.unsupported
+    }
+    func writeFeature(_ value: CameraFeatureValue, named name: String) throws {
+        throw CameraFeatureAccessError.unsupported
+    }
 }
 
 /// Events emitted by the portable session lifecycle coordinator.

@@ -2,6 +2,8 @@ import AmcamImagingRuntime
 import AmcamImagingCore
 import Foundation
 import GenTLRouter
+import GenTLAPI
+import GenTLABI
 
 public enum GenTLRuntimeAdapterError: Error, Equatable, LocalizedError {
     case unexpectedSessionType
@@ -35,17 +37,23 @@ public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable 
     }
 }
 
-/// A GenTL session owned and closed by CameraSessionLifecycle. `featureSession`
-/// is a borrowed handle for typed feature access; callers must never close it.
+/// Keeps the GenTL handle private while exposing the backend-neutral runtime contract.
 public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendable {
     private let device: GenTLDeviceSession
-
-    public var featureSession: GenTLDeviceSession { device }
-
-    public init(device: GenTLDeviceSession) {
-        self.device = device
+    public init(device: GenTLDeviceSession) { self.device = device }
+    public var supportsAcquisition: Bool {
+        var count: UInt32 = 0
+        return device.api.DevGetNumDataStreams(device.deviceHandle, &count) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
     }
-
+    public func featureDescriptors() throws -> [CameraFeatureDescriptor] {
+        try device.featureDescriptors().map(Self.map)
+    }
+    public func readFeature(_ name: String) throws -> CameraFeatureValue {
+        Self.map(try device.readFeature(name))
+    }
+    public func writeFeature(_ value: CameraFeatureValue, named name: String) throws {
+        try device.writeFeature(Self.map(value), named: name)
+    }
     public func makeAcquisition() async throws -> any CameraRuntimeAcquisition {
         let device = self.device
         let acquisition = try await Task.detached(priority: .userInitiated) {
@@ -53,12 +61,56 @@ public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendabl
         }.value
         return GenTLRuntimeAcquisition(acquisition: acquisition)
     }
-
     public func close() async throws {
         let device = self.device
-        try await Task.detached(priority: .userInitiated) {
-            try device.close()
-        }.value
+        try await Task.detached(priority: .userInitiated) { try device.close() }.value
+    }
+    private static func map(_ kind: GenTLFeatureKind) -> CameraFeatureKind {
+        switch kind {
+        case .boolean: return .boolean
+        case .integer: return .integer
+        case .integerVector: return .integerVector
+        case .floatingPoint: return .floatingPoint
+        case .string: return .string
+        case .enumeration: return .enumeration
+        }
+    }
+    private static func map(_ value: GenTLFeatureValue) -> CameraFeatureValue {
+        switch value {
+        case .boolean(let v): return .boolean(v)
+        case .integer(let v): return .integer(v)
+        case .integerVector(let v): return .integerVector(v)
+        case .floatingPoint(let v): return .floatingPoint(v)
+        case .string(let v): return .string(v)
+        case .enumeration(let v): return .enumeration(v)
+        }
+    }
+    private static func map(_ value: CameraFeatureValue) -> GenTLFeatureValue {
+        switch value {
+        case .boolean(let v): return .boolean(v)
+        case .integer(let v): return .integer(v)
+        case .integerVector(let v): return .integerVector(v)
+        case .floatingPoint(let v): return .floatingPoint(v)
+        case .string(let v): return .string(v)
+        case .enumeration(let v): return .enumeration(v)
+        }
+    }
+    private static func map(_ descriptor: GenTLFeatureDescriptor) -> CameraFeatureDescriptor {
+        let range = descriptor.numericRange.flatMap {
+            CameraFeatureNumericRange(minimum: $0.minimum, maximum: $0.maximum, increment: $0.increment)
+        }
+        return CameraFeatureDescriptor(
+            name: descriptor.name,
+            displayName: descriptor.displayName,
+            kind: map(descriptor.kind),
+            unit: descriptor.unit,
+            isAvailable: descriptor.isAvailable,
+            isReadable: descriptor.isReadable,
+            isWritable: descriptor.isWritable,
+            numericRange: range,
+            elementCount: descriptor.elementCount,
+            enumerationValues: descriptor.enumerationValues
+        )
     }
 }
 

@@ -4,7 +4,6 @@ import AmcamImagingRuntime
 import AmcamImagingGenTLAdapter
 import Foundation
 import GenTLABI
-import GenTLAPI
 import GenTLRouter
 import Combine
 
@@ -24,11 +23,11 @@ final class CameraApplicationModel: ObservableObject {
     private var router = GenTLRouter()
     private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
     /// Borrowed GenTL feature-access handle; AmcamImagingRuntime owns open/close.
-    private var featureSession: GenTLDeviceSession?
+    private var featureSession: any CameraRuntimeSession?
     private let cameraLifecycle = CameraSessionLifecycle()
     private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?
-    private var featureDescriptors: [GenTLFeatureDescriptor] = []
+    private var featureDescriptors: [CameraFeatureDescriptor] = []
     private var hasInitialized = false
     private var profileRegistry = AmcamCameraProfileRegistry()
     private var frameRateEstimator = FrameRateEstimator()
@@ -244,7 +243,7 @@ final class CameraApplicationModel: ObservableObject {
         cameraCapabilities = makeCapabilities(
             for: selectedDevice,
             descriptors: featureDescriptors,
-            hasDataStream: deviceHasDataStream(featureSession)
+            hasDataStream: featureSession.supportsAcquisition
         )
         controls = makeControlSnapshot(featureSession, descriptors: featureDescriptors)
     }
@@ -320,14 +319,10 @@ final class CameraApplicationModel: ObservableObject {
             let runtimeSession = try await cameraLifecycle.open(
                 GenTLRuntimeDevice(candidate: candidate)
             )
-            guard let openedSession = (runtimeSession as? GenTLRuntimeSession)?.featureSession else {
-                throw GenTLRuntimeAdapterError.unexpectedSessionType
-            }
-            // Borrowed for feature access only. The imaging library opened and owns it.
-            featureSession = openedSession
-            featureDescriptors = (try? openedSession.featureDescriptors()) ?? []
+            featureSession = runtimeSession
+            featureDescriptors = (try? runtimeSession.featureDescriptors()) ?? []
             updateSelectedDeviceResolutions(from: featureDescriptors)
-            let hasDataStream = deviceHasDataStream(openedSession)
+            let hasDataStream = runtimeSession.supportsAcquisition
             cameraCapabilities = makeCapabilities(
                 for: device,
                 descriptors: featureDescriptors,
@@ -392,7 +387,7 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    private func writeFeature(_ value: GenTLFeatureValue, named name: String) {
+    private func writeFeature(_ value: CameraFeatureValue, named name: String) {
         guard let featureSession else {
             errorMessage = "Open a camera before changing its features."
             return
@@ -427,15 +422,9 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    private func deviceHasDataStream(_ session: GenTLDeviceSession) -> Bool {
-        var count: UInt32 = 0
-        let status = session.api.DevGetNumDataStreams(session.deviceHandle, &count)
-        return status == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
-    }
-
     private func makeCapabilities(
         for device: AmcamDevice?,
-        descriptors: [GenTLFeatureDescriptor],
+        descriptors: [CameraFeatureDescriptor],
         hasDataStream: Bool
     ) -> AmcamCameraCapabilities? {
         guard let device else { return nil }
@@ -488,8 +477,8 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func makeControlSnapshot(
-        _ session: GenTLDeviceSession,
-        descriptors: [GenTLFeatureDescriptor]
+        _ session: any CameraRuntimeSession,
+        descriptors: [CameraFeatureDescriptor]
     ) -> AmcamControlSnapshot {
         let descriptorsByName = Dictionary(
             descriptors.map { ($0.name, $0) },
@@ -596,24 +585,24 @@ final class CameraApplicationModel: ObservableObject {
         )
     }
 
-    private func readIntegerVectorFeature(_ name: String, from session: GenTLDeviceSession) -> [Int64]? {
+    private func readIntegerVectorFeature(_ name: String, from session: any CameraRuntimeSession) -> [Int64]? {
         guard case .integerVector(let values)? = try? session.readFeature(name) else { return nil }
         return values
     }
 
-    private func readEnumerationFeature(_ name: String, from session: GenTLDeviceSession) -> String? {
+    private func readEnumerationFeature(_ name: String, from session: any CameraRuntimeSession) -> String? {
         guard case .enumeration(let value)? = try? session.readFeature(name) else { return nil }
         return value
     }
 
-    private func readFloatingPointFeature(_ name: String, from session: GenTLDeviceSession) -> Double? {
+    private func readFloatingPointFeature(_ name: String, from session: any CameraRuntimeSession) -> Double? {
         guard case .floatingPoint(let value)? = try? session.readFeature(name), value.isFinite else {
             return nil
         }
         return value
     }
 
-    private func updateSelectedDeviceResolutions(from descriptors: [GenTLFeatureDescriptor]) {
+    private func updateSelectedDeviceResolutions(from descriptors: [CameraFeatureDescriptor]) {
         guard let index = devices.firstIndex(where: { $0.identifier == selectedDeviceID }) else { return }
         let device = devices[index]
         let options = descriptors.first(where: { $0.name == "AmcamResolutionIndex" })?.enumerationValues ?? []
@@ -640,7 +629,7 @@ final class CameraApplicationModel: ObservableObject {
 
     private func readIntegerFeature(
         _ name: String,
-        from session: GenTLDeviceSession
+        from session: any CameraRuntimeSession
     ) -> Int64? {
         guard case .integer(let value)? = try? session.readFeature(name) else {
             return nil
