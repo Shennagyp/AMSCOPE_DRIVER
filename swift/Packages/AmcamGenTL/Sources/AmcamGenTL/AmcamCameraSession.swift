@@ -331,12 +331,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
             requestedFrameRate: requestedFrameRate,
             requestedSpeedLevel: requestedSpeedLevel
         )
-        guard snapshot.exposure.autoMode == mode else {
-            throw AmcamCameraError.controlReadbackMismatch(
-                control: "auto exposure mode",
-                requested: String(mode.rawValue),
-                actual: String(snapshot.exposure.autoMode.rawValue)
-            )
+        guard let exposure = snapshot.exposure, exposure.autoMode == mode else {
+            throw AmcamCameraError.unsupportedControl("This camera does not expose a usable auto-exposure mode control.")
         }
         requestedExposureMicroseconds = candidateRequestedExposure
         return snapshot
@@ -361,11 +357,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
             requestedFrameRate: requestedFrameRate,
             requestedSpeedLevel: requestedSpeedLevel
         )
-        guard snapshot.exposure.readbackMicroseconds == microseconds else {
+        guard let exposure = snapshot.exposure,
+              exposure.readbackMicroseconds == microseconds else {
             throw AmcamCameraError.controlReadbackMismatch(
                 control: "exposure time",
                 requested: "\(microseconds) µs",
-                actual: "\(snapshot.exposure.readbackMicroseconds) µs"
+                actual: snapshot.exposure.map { "\($0.readbackMicroseconds) µs" } ?? "unavailable"
             )
         }
         requestedExposureMicroseconds = microseconds
@@ -499,16 +496,20 @@ public final class AmcamCameraSession: @unchecked Sendable {
         requestedFrameRate: Double?,
         requestedSpeedLevel: Int?
     ) throws -> AmcamControlSnapshot {
-        let autoMode = try sdk.readAutoExposureMode(handle)
-        let exposureReadback = try sdk.readExposureTime(handle)
-        let exposure = AmcamExposureControl(
-            autoMode: autoMode,
-            readbackMicroseconds: exposureReadback.current,
-            minimumMicroseconds: exposureReadback.minimum,
-            maximumMicroseconds: exposureReadback.maximum,
-            defaultMicroseconds: exposureReadback.defaultValue,
-            requestedMicroseconds: requestedExposure
-        )
+        let exposure: AmcamExposureControl?
+        if let autoMode = try? sdk.readAutoExposureMode(handle),
+           let exposureReadback = try? sdk.readExposureTime(handle) {
+            exposure = AmcamExposureControl(
+                autoMode: autoMode,
+                readbackMicroseconds: exposureReadback.current,
+                minimumMicroseconds: exposureReadback.minimum,
+                maximumMicroseconds: exposureReadback.maximum,
+                defaultMicroseconds: exposureReadback.defaultValue,
+                requestedMicroseconds: requestedExposure
+            )
+        } else {
+            exposure = nil
+        }
         let gainReadback = try? sdk.readExposureGain(handle)
         let gain = gainReadback.map {
             AmcamGainControl(
