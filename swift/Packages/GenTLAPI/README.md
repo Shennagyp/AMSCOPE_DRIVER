@@ -31,11 +31,11 @@ The application uses GenTLAPI. It does not call Amcam SDK types directly or main
 
 ## Typed feature access
 
-`GenTLFeatureAccess` is an optional Swift capability contract alongside the unchanged 64-operation GenTLAPI protocol. It provides feature descriptors, typed values, units, numeric ranges, enumeration symbols, availability and read/write access. A routed `GenTLDeviceSession` forwards these calls to the exact backend instance that opened the device.
+`GenTLFeatureAccess` is an optional Swift capability contract alongside the unchanged 64-operation GenTLAPI protocol. It provides feature descriptors, typed scalar and integer-vector values, units, numeric ranges, vector element counts, enumeration symbols, availability and read/write access. Integer vectors are for SDK-backed multi-channel controls and do not alter the GenTL 1.6 ABI. A routed `GenTLDeviceSession` forwards these calls to the exact backend instance that opened the device.
 
 A backend may implement this contract through GenApi over its GenTL port, or through a documented vendor SDK interface where no GenApi XML/register map is supplied. These paths must not be conflated:
 
-- The Amcam backend currently maps `ExposureAuto`, `ExposureTime` and the vendor-specific `AmcamAnalogGainPercent` feature to existing SDK operations and readback.
+- The Amcam backend maps `ExposureAuto`, `ExposureTime`, `AmcamAnalogGainPercent`, `AmcamColorMatrixEnabled`, `AmcamPixelFormat`, white-balance temperature/tint/RGB-vector, fixed frame rate, frame-speed level and discrete resolution to existing SDK operations and verified readback. Each descriptor is evaluated against the opened camera's model flags and non-mutating runtime probes.
 - Amcam analog gain is reported in percent, not dB; it is intentionally not mislabeled as the SFNC `Gain` feature.
 - The native CTI backend does not yet conform to `GenTLFeatureAccess`. Its future feature path must use the Producer's GenApi XML/port contract; the router reports feature access as unavailable until that is implemented.
 - No Amcam register addresses or synthetic GenApi XML are created.

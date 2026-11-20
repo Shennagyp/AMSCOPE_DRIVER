@@ -145,12 +145,15 @@ The routed application currently provides:
 - live image acquisition through GenTLAcquisitionSession and the GenTL New Buffer event;
 - a bounded announced-buffer pool, copy-before-requeue semantics, and ordered stop/flush/revoke/close cleanup;
 - RGB8 (PFNC format 0x02180014, namespace 4) display with row-padding and payload-size validation;
-- ExposureAuto (Off, Once, Continuous), ExposureTime (microseconds), and AmcamAnalogGainPercent (percentage) through GenTLFeatureAccess;
-- Amcam SDK-backed range validation and readback through the existing backend session implementation;
-- model-profile allow/deny policy applied to the descriptors reported by the routed feature provider;
-- camera selection, refresh, start/stop, SDK selection and full-screen UI.
+- ExposureAuto (Off, Once, Continuous), ExposureTime (microseconds), and AmcamAnalogGainPercent (percentage);
+- AmcamColorMatrixEnabled (boolean) and AmcamPixelFormat (enumeration from the camera's SDK-reported supported-format list);
+- AmcamWhiteBalanceTemperature (K), AmcamWhiteBalanceTint, and AmcamWhiteBalanceRGBGain (three-element integer vector);
+- AmcamFixedFrameRate (floating-point FPS with 0.1 FPS increments) and AmcamFrameSpeedLevel (integer discrete level);
+- AmcamResolutionIndex, whose enumeration values preserve the SDK's exact resolution index and dimensions;
+- model-specific availability and dynamic access state derived from model flags, non-mutating SDK probes and the selected model profile;
+- SDK setter range checks and readback verification for writable controls, with writes denied when the active model profile disallows the feature.
 
-The following controls are intentionally not editable in the routed app yet: discrete resolution, pixel format, color matrix, white balance, fixed frame rate and frame-speed level. Some have SDK-level support, but the application will not call those SDK methods directly. Each control must first gain a typed feature descriptor, model-specific availability, validated units/ranges and readback tests.
+Feature descriptors are generated for the opened camera. A feature is not considered usable merely because the SDK exports a function: model capability, runtime probe, implementation coverage and model-profile policy must all agree. Features that are unsupported by the specific camera are reported unavailable. Pixel format and resolution are writable only while acquisition is stopped. RGB white-balance uses a fixed three-element vector; the SDK wrapper verifies the complete vector by readback, but the SDK does not provide a numeric range for those three channel values, so no invented range is advertised.
 
 The display decoder currently accepts RGB8 only. Mono, Bayer, packed RAW, YUV and other PFNC formats require format-specific decoders. The app currently registers the Amcam backend; native CTI Producer selection in the UI is not yet implemented. Native CTI feature access still requires a verified GenApi XML/port path. No synthetic register map or fake GenApi XML is used.
 
@@ -174,30 +177,33 @@ Swift package tests use a deterministic native C fixture. They verify ABI calls,
 
 ## CI build and current runnable artifact
 
-Latest successful hosted macOS validation: [workflow run 44700221429](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44700221429), built from commit `628972c0da4c055df0eae1fae7d4693ef2c7e10d`.
+Latest successful hosted macOS validation: [workflow run 44703255740](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44703255740), built from commit `043b9f3448e529a1ed647963124d83c07bae7e2e`.
 
-- GenTLAPI tests: passed.
-- GenTLNative tests: passed.
-- GenTLRouter tests: passed, including the GenTL acquisition lifecycle and fake-Producer frame-delivery coverage.
-- AmcamCameraModel tests: passed independently after extracting camera models and capability/profile policy from the backend.
-- AmcamGenTL tests: passed with the source-compatibility re-export of AmcamCameraModel.
-- Camera probe release build and artifact upload: passed.
-- Routed application dependency guard: passed; app source contains no AmcamGenTL import or Amcam driver/session construction.
-- Imaging application release build, app-bundle signing verification and arm64 Mach-O verification: passed.
+- All five package test jobs passed: GenTLAPI, GenTLNative, GenTLRouter, AmcamCameraModel and AmcamGenTL.
+- The new integer-vector feature contract and Amcam RGB white-balance integration tests passed.
+- The routed application dependency guard passed.
+- Camera probe release build and artifact upload passed.
+- Imaging application release build, app-bundle signature verification and arm64 Mach-O verification passed.
+- The app build emitted no compiler warnings in the captured job log.
 
 Current application artifact:
 - Artifact: `amcam-imaging-macos-arm64`
-- Artifact ID: `14612188825`
-- Expiry: 2026-12-04 08:10 UTC.
+- Artifact ID: `14613319868`
+- Expiry: 2026-12-04 08:33 UTC.
 - The artifact is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK.
 
 CI proves package tests, compilation and packaging. It does not prove camera discovery or physical acquisition. Physical MU503 acceptance remains outstanding.
 
 ## TDD assessment
 
-The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close. Typed feature access has value/descriptor tests, router forwarding tests and Amcam mock-SDK integration tests for exposure/gain range validation and readback.
+The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close.
 
-Camera model/capability policy now has its own test target and hosted test job. The full package matrix passed on the hosted macOS runner after extraction. This does not make the entire historical codebase strictly TDD: several earlier SDK controls predate their tests. New feature work must continue with failing tests first, then implementation, full regression and refactoring.
+Typed feature access is tested at three layers:
+- GenTLAPI value kinds, numeric ranges, descriptor access state and integer-vector metadata;
+- GenTLRouter backend-bound feature forwarding and closed-session behavior;
+- Amcam mock-SDK integration for per-camera availability, exposure/gain, color matrix, pixel format, white-balance temperature/tint/RGB vector, fixed frame rate, resolution enumeration, validation and readback.
+
+Camera model/capability policy has its own test target. The complete five-package hosted macOS matrix and standalone app build passed. Historical development was not uniformly test-first: some earlier SDK controls predate their tests. New feature work must continue with failing tests first, implementation, full regression and refactoring.
 
 ## Package dependency boundary (2026-11-20)
 

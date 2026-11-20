@@ -361,3 +361,17 @@ Hosted macOS workflow [44700221429](https://github.com/Shennagyp/AMSCOPE_DRIVER/
 - Application artifact `amcam-imaging-macos-arm64`, artifact ID `14612188825`, expires 2026-12-04.
 
 This is hosted software validation only. No local Xcode run or physical camera acceptance occurred. MU503 discovery, stream acquisition, exposure/gain changes, restart behavior and disconnect/reconnect still require hardware validation.
+
+
+## 2026-11-20 — Routed application controls and typed integer vectors
+
+- Extended the optional typed feature contract with `integerVector` values and descriptor `elementCount`. This supports multi-channel SDK features without encoding arrays as comma-separated strings or changing the GenTL 1.6 C ABI.
+- Added Amcam SDK-backed descriptors and read/write mapping for color matrix, enumerated pixel formats, white-balance temperature/tint, three-channel RGB white-balance gain, fixed frame rate, discrete frame-speed level and discrete resolution.
+- Resolution options preserve the exact SDK index and dimensions in the enumeration symbol. Resolution and pixel-format descriptors become non-writable while the camera session is streaming.
+- The app now reads these controls only through GenTLDeviceSession and writes through the routed feature contract. Model-profile allow/deny policy is enforced at the app boundary as well as reflected in capability availability.
+- SDK-specific validation remains in AmcamCameraSession: pixel formats must be in the camera-reported list; resolution must be a reported index; white-balance temperature/tint and fixed FPS use SDK wrapper ranges; RGB gain requires exactly three Int32 values and exact readback; frame-speed requires a valid model range.
+- RGB white-balance exposes a vector length of three but no invented numeric range, because the SDK does not report one.
+- Added test-first API and mock-SDK integration coverage for vector kinds, descriptor element count, RGB gain reads/writes, feature metadata and existing control readback.
+- Hosted run [44703255740](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44703255740) passed all five package suites and the app build. App artifact ID: `14613319868`.
+- Cleaned Swift concurrency and best-effort rollback warnings; the successful app build log contained no compiler warnings.
+- No physical camera acceptance was performed. RGB8 remains the only app display decoder. Other PFNC formats, physical MU503 behavior and native CTI GenApi access remain separate acceptance items.
