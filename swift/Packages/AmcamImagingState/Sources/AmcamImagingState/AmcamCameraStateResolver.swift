@@ -80,8 +80,10 @@ public struct AmcamCameraStateResolver: Sendable {
                 )
             }
         case .enumeration(let symbol):
-            if !descriptor.enumerationValues.isEmpty,
-               !descriptor.enumerationValues.contains(symbol) {
+            guard !descriptor.enumerationValues.isEmpty else {
+                return .invalidValue("\(name) does not advertise any enumeration values.")
+            }
+            guard descriptor.enumerationValues.contains(symbol) else {
                 return .invalidValue(
                     "\(symbol) is not an advertised value for \(name)."
                 )
