@@ -20,7 +20,7 @@ gh auth login
 make run
 ```
 
-`make run` downloads and launches the latest hosted macOS imaging-app artifact. It does not compile locally and does not require Xcode. It requires the GitHub CLI (`gh`) and an authenticated GitHub session. The vendor `libamcam.dylib` is still required for camera access and is not bundled.
+`make run` downloads and launches the latest hosted macOS imaging-app artifact. It does not compile locally and does not require Xcode. It downloads the public workflow artifact through GitHub’s REST API using `curl` and Python 3; no GitHub CLI, GitHub login, token or Xcode installation is required. GitHub’s anonymous API rate limit applies. The vendor `libamcam.dylib` is still required for camera access and is not bundled.
 
 Other targets:
 
