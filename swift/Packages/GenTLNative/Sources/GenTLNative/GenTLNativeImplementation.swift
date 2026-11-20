@@ -1276,7 +1276,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 let value = try readInfo { type, buffer, size in
                     functions.eventGetInfo(
                         registeredPointer,
-                        GenTLABI.EVENT_SIZE_MAX,
+                        GenTLABI.EVENT_SIZE_MAX.rawValue,
                         type,
                         buffer,
                         size
@@ -1578,7 +1578,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     }
 
     private func rawError(_ error: Error) -> GenTLABI.GC_ERROR {
-        if let code = error as? GenTLABI.GC_ERROR {
+        if let code = error as? GenTLAPI.GC_ERROR {
             return code.rawValue
         }
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_ERROR)
@@ -1586,9 +1586,8 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     private func rawEventHandle(
         _ event: GenTLABI.EVENT_HANDLE
-    ) -> GenTLABI.EVENT_HANDLE? {
-        guard let event else { return nil }
-        return GenTLABI.EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+    ) -> GenTLAPI.EVENT_HANDLE {
+        GenTLAPI.EVENT_HANDLE(rawValue: UInt(bitPattern: event))
     }
 
     // MARK: Library
@@ -1679,12 +1678,12 @@ extension GenTLNativeImplementation: GenTLAPI {
                 guard !registeredEventsByHandle.values.contains(where: {
                     $0.sourcePointer == hEventSrc && $0.eventType == iEventID
                 }) else {
-                    throw GenTLABI.GC_ERROR.resourceInUse
+                    throw GenTLAPI.GC_ERROR.resourceInUse
                 }
 
                 var event: UnsafeMutableRawPointer?
                 try check(functions.gcRegisterEvent(hEventSrc, iEventID, &event))
-                guard let event else { throw GenTLABI.GC_ERROR.invalidHandle }
+                guard let event else { throw GenTLAPI.GC_ERROR.invalidHandle }
                 let key = UInt(bitPattern: event)
                 guard registeredEventsByHandle[key] == nil else {
                     try? functions.gcUnregisterEvent(hEventSrc, iEventID)
@@ -1721,9 +1720,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ piSize: UnsafeMutablePointer<Int>?,
         _ iTimeout: UInt64
     ) -> GenTLABI.GC_ERROR {
-        guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
-        }
+        let event = rawEventHandle(hEvent)
         let eventPointer: UnsafeMutableRawPointer
         do {
             eventPointer = try beginEventDataRead(event)
