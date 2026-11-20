@@ -398,6 +398,14 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "Open a camera before changing its features."
             return
         }
+        if let validationError = stateResolver.validateWrite(
+            value,
+            named: name,
+            descriptors: featureDescriptors
+        ) {
+            errorMessage = validationError.localizedDescription
+            return
+        }
         if let feature = stateResolver.capabilityFeature(for: name),
            cameraCapabilities?.availability(of: feature).isUsable != true {
             errorMessage = "\(name) is not available under the selected camera's capability and model-profile policy."
