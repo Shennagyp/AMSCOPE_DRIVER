@@ -186,6 +186,7 @@ public enum GenTLInfoValue: Equatable, Sendable {
     case pointerDifference(Int)
     case pointer(UInt)
     case raw(Data)
+    case opaque(dataType: Int32, data: Data)
 }
 
 @_spi(BackendConvenience)
