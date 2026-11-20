@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-import GenTLAPI
+@_spi(BackendConvenience) import GenTLAPI
 @testable import GenTLRouter
 
 private struct CallCounts {
@@ -15,7 +15,7 @@ private struct CallCounts {
     var deviceClose = 0
 }
 
-private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
+private final class RecordingGenTLAPI: GenTLBackendConvenience, @unchecked Sendable {
     private let lock = NSLock()
     private var calls = CallCounts()
     private let failSystemOpen: Bool
