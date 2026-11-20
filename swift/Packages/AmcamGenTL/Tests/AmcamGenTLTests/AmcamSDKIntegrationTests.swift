@@ -119,7 +119,17 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(controls.exposure.readbackMicroseconds, 10_000)
         XCTAssertEqual(controls.exposure.minimumMicroseconds, 100)
         XCTAssertEqual(controls.exposure.maximumMicroseconds, 1_000_000)
-        XCTAssertFalse(controls.frameRate.supported)
+        XCTAssertTrue(controls.frameRate.supported)
+        XCTAssertEqual(controls.frameRate.minimumFramesPerSecond, 0.1)
+        XCTAssertEqual(controls.frameRate.maximumFramesPerSecond, 30.0)
+        XCTAssertEqual(controls.frameRate.readbackFramesPerSecond, 15.0)
+
+        controls = try session.setFixedFrameRate(framesPerSecond: 12.3)
+        XCTAssertEqual(controls.frameRate.readbackFramesPerSecond, 12.3)
+        XCTAssertEqual(controls.frameRate.requestedFramesPerSecond, 12.3)
+        XCTAssertThrowsError(try session.setFixedFrameRate(framesPerSecond: 30.1))
+        XCTAssertThrowsError(try session.setFixedFrameRate(framesPerSecond: 12.34))
+        XCTAssertThrowsError(try session.setFrameRateSpeedLevel(2))
 
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 20_000))
         controls = try session.setAutomaticExposure(enabled: false)
