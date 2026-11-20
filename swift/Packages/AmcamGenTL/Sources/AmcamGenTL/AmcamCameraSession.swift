@@ -6,7 +6,7 @@ private final class AmcamCallbackContext {
     init(session: AmcamCameraSession) { self.session = session }
 }
 
-public final class AmcamCameraSession: @unchecked Sendable {
+final class AmcamCameraSession: @unchecked Sendable {
     private static let callback: AmcamEventCallback = { event, context in
         guard let context else { return }
         Unmanaged<AmcamCallbackContext>.fromOpaque(context).takeUnretainedValue().session?.handle(event: event)
@@ -53,14 +53,14 @@ public final class AmcamCameraSession: @unchecked Sendable {
         self.currentResolutionIndex = currentResolutionIndex
     }
 
-    public func currentResolution() -> AmcamResolution? {
+    func currentResolution() -> AmcamResolution? {
         controlLock.lock()
         defer { controlLock.unlock() }
         guard let currentResolutionIndex else { return nil }
         return resolutions.first { $0.index == currentResolutionIndex }
     }
 
-    public func currentDimensions() -> (width: Int, height: Int) {
+    func currentDimensions() -> (width: Int, height: Int) {
         controlLock.lock()
         defer { controlLock.unlock() }
         lock.lock()
@@ -68,12 +68,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return (width, height)
     }
 
-    public func supportsResolutionChange() -> Bool {
+    func supportsResolutionChange() -> Bool {
         sdk.resolutionChangeAvailable
     }
 
     /// Resolution changes are only valid while the stream is stopped.
-    public func setResolution(index: Int) throws -> AmcamResolution {
+    func setResolution(index: Int) throws -> AmcamResolution {
         controlLock.lock()
         defer { controlLock.unlock() }
 
@@ -102,7 +102,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return resolution
     }
 
-    public func start(onFrame: @escaping @Sendable (Result<AmcamFrame, AmcamCameraError>) -> Void) throws {
+    func start(onFrame: @escaping @Sendable (Result<AmcamFrame, AmcamCameraError>) -> Void) throws {
         controlLock.lock()
         defer { controlLock.unlock() }
         lock.lock()
@@ -211,7 +211,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         }
     }
 
-    public func stop() throws {
+    func stop() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
 
@@ -222,7 +222,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         try stopIfNeeded()
     }
 
-    public func close() throws {
+    func close() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
         try stopIfNeeded()
@@ -245,7 +245,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
     }
 
 
-    public func readControls() throws -> AmcamControlSnapshot {
+    func readControls() throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -257,7 +257,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         )
     }
 
-    public func setAutomaticExposure(enabled: Bool) throws -> AmcamControlSnapshot {
+    func setAutomaticExposure(enabled: Bool) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -276,7 +276,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return snapshot
     }
 
-    public func setExposureTime(microseconds: UInt32) throws -> AmcamControlSnapshot {
+    func setExposureTime(microseconds: UInt32) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -299,7 +299,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return snapshot
     }
 
-    public func setFixedFrameRate(framesPerSecond: Double) throws -> AmcamControlSnapshot {
+    func setFixedFrameRate(framesPerSecond: Double) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -353,7 +353,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         return snapshot
     }
 
-    public func setFrameRateSpeedLevel(_ level: Int) throws -> AmcamControlSnapshot {
+    func setFrameRateSpeedLevel(_ level: Int) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
