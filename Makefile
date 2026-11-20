@@ -13,10 +13,10 @@ help:
 	  'make test-local  Run every Swift package test suite locally (Xcode required)'
 
 run:
-	@./scripts/run-macos-artifact.sh app
+	@bash scripts/run-macos-artifact.sh app
 
 run-probe:
-	@./scripts/run-macos-artifact.sh probe
+	@bash scripts/run-macos-artifact.sh probe
 
 build-local:
 	swift build --package-path swift/Apps/AmcamImagingApp --product amcam-imaging
