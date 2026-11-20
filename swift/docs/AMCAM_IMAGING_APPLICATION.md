@@ -210,10 +210,6 @@ Camera model/capability policy has its own test target. The complete five-packag
 Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.
 
 
-## Package dependency boundary
-
-Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.
-
 
 ## Resource cleanup and retry semantics
 
@@ -243,9 +239,9 @@ For the current RGB24 acquisition path, V3/V4 and row-pitch V2 are called with `
 
 V3/V4 metadata is now retained in the public `AmcamFrame.metadata` payload. It records the API generation and raw validity flags, and only exposes individual values when the corresponding `AMCAM_FRAMEINFO_FLAG` bit marks them valid. V3 fields include shutter sequence, exposure time (microseconds), exposure gain and black level. V4 adds luminance, focus value, counters and GPS. GPS values preserve the vendor units explicitly: Unix nanoseconds, microdegrees and millimetres. No conversion or inference is applied to invalid fields.
 
-The V4 ABI layout follows the checked-in Python ctypes definition exactly: `uFV` and `timecount` are signed 64-bit fields; the structure is 104 bytes on the supported 64-bit ABI and GPS begins at offset 72. C compile-time assertions verify these sizes and offsets. The mock SDK deliberately uses values larger than 32 bits for focus and time counters so truncation is detectable.
+The V4 ABI layout follows the checked-in Python ctypes definition exactly: `reserved` is at offset 40, `uLum` at 44, `uFV` and `timecount` are signed 64-bit fields at offsets 48 and 56, and GPS begins at offset 72. The structure is 104 bytes on the supported 64-bit ABI. C compile-time assertions verify the individual member offsets as well as structure sizes. The mock SDK deliberately uses values larger than 32 bits for focus and time counters so truncation is detectable.
 
 Row layout is now tied to the function that actually succeeds for the connected camera, not merely the newest exported symbol. V3/V4 and row-pitch V2 request `rowPitch = -1` and use tightly packed rows; plain V2 uses the SDK's default DWORD-aligned RGB24 rows. This distinction matters for widths where `width * 3` is not divisible by four. The frame's `bytesPerRow` and payload length follow the selected API's actual row contract.
 
-Hosted tests cover V4 preference and metadata, V3 fallback when V4 is absent, row-pitch V2 fallback when V3/V4 are absent, and plain V2 fallback when no row-pitch-aware function exists. ABI layout assertions cover V2, V3, GPS and V4. These tests validate the mock ABI and dispatch behavior; real-camera compatibility remains a separate hardware acceptance item. The current UI still requests 24-bit RGB; this work does not claim RAW10/RAW12 or RGB48 decoding support.
+Hosted tests cover V4 preference and every metadata field, invalid-field suppression when validity flags are absent, V3 fallback when V4 is absent, row-pitch V2 fallback when V3/V4 are absent, plain V2 fallback when no row-pitch-aware function exists, camera-specific `E_NOTIMPL` fallback, and preservation of non-`E_NOTIMPL` hardware errors. ABI layout assertions cover V2, V3, GPS and V4. These tests validate the mock ABI and dispatch behavior; real-camera compatibility remains a separate hardware acceptance item. The current UI still requests 24-bit RGB; this work does not claim RAW10/RAW12 or RGB48 decoding support.
 

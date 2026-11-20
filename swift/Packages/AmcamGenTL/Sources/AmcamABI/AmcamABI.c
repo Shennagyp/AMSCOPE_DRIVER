@@ -17,8 +17,13 @@ _Static_assert(sizeof(AmcamFrameInfoV3) == 40, "AmcamFrameInfoV3 ABI mismatch");
 _Static_assert(offsetof(AmcamFrameInfoV3, shutterseq) == 24, "AmcamFrameInfoV3.shutterseq offset mismatch");
 _Static_assert(sizeof(AmcamGps) == 32, "AmcamGps ABI mismatch");
 _Static_assert(sizeof(AmcamFrameInfoV4) == 104, "AmcamFrameInfoV4 ABI mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV4, v3) == 0, "AmcamFrameInfoV4.v3 offset mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV4, reserved) == 40, "AmcamFrameInfoV4.reserved offset mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV4, uLum) == 44, "AmcamFrameInfoV4.uLum offset mismatch");
 _Static_assert(offsetof(AmcamFrameInfoV4, uFV) == 48, "AmcamFrameInfoV4.uFV offset mismatch");
 _Static_assert(offsetof(AmcamFrameInfoV4, timecount) == 56, "AmcamFrameInfoV4.timecount offset mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV4, framecount) == 64, "AmcamFrameInfoV4.framecount offset mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV4, tricount) == 68, "AmcamFrameInfoV4.tricount offset mismatch");
 _Static_assert(offsetof(AmcamFrameInfoV4, gps) == 72, "AmcamFrameInfoV4.gps offset mismatch");
 
 int amcam_abi_layout_valid(void) {

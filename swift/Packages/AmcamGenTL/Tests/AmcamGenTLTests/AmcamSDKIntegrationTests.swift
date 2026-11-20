@@ -120,7 +120,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
     }
 
 
-    func testAcquisitionPrefersV4AndUsesItsTightRowPitchContract() throws {
+    func testAcquisitionPrefersV4AndPreservesAllValidFrameMetadata() throws {
         let libraryURL = try buildMockSDK()
         let sdk = try AmcamSDK(libraryURL: libraryURL)
         let device = try XCTUnwrap(sdk.enumerate().first)
@@ -135,14 +135,47 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         XCTAssertEqual(sdk.pullImageOperationName, "Amcam_PullImageV4")
         var frameInfo = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata?
+        var operationName: String?
+        var tightlyPackedRows = false
         XCTAssertGreaterThanOrEqual(
-            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &frameInfo),
+            sdk.pullImage(
+                opened.handle,
+                buffer: buffer,
+                frameInfo: &frameInfo,
+                metadata: &metadata,
+                operationName: &operationName,
+                tightlyPackedRows: &tightlyPackedRows
+            ),
             0
         )
+        XCTAssertEqual(operationName, "Amcam_PullImageV4")
+        XCTAssertTrue(tightlyPackedRows)
         XCTAssertEqual(frameInfo.width, 640)
         XCTAssertEqual(frameInfo.height, 480)
         XCTAssertEqual(frameInfo.seq, 1)
         XCTAssertEqual(buffer.load(as: UInt8.self), 0x5a)
+
+        let frame = try XCTUnwrap(metadata)
+        XCTAssertEqual(frame.apiVersion, .v4)
+        XCTAssertEqual(frame.validityFlags, 0x0001_03ff)
+        XCTAssertEqual(frame.shutterSequence, 7)
+        XCTAssertEqual(frame.exposureTimeMicroseconds, 10_000)
+        XCTAssertEqual(frame.exposureGain, 125)
+        XCTAssertEqual(frame.blackLevel, 16)
+        XCTAssertEqual(frame.luminance, 123)
+        XCTAssertEqual(frame.focusValue, 0x1_0000_0001)
+        XCTAssertEqual(frame.timeCount, 0x2_0000_0002)
+        XCTAssertEqual(frame.frameCount, 12)
+        XCTAssertEqual(frame.triggerCount, 13)
+        XCTAssertEqual(frame.mechanicalShutterClosed, true)
+        XCTAssertEqual(frame.conversionGainHigh, true)
+        XCTAssertEqual(frame.gps?.exposureStartUnixNanoseconds, 1_700_000_000_000_000_000)
+        XCTAssertEqual(frame.gps?.exposureEndUnixNanoseconds, 1_700_000_000_001_000_000)
+        XCTAssertEqual(frame.gps?.longitudeMicrodegrees, 31_200_000)
+        XCTAssertEqual(frame.gps?.latitudeMicrodegrees, 30_000_000)
+        XCTAssertEqual(frame.gps?.altitudeMillimetres, 45_600)
+        XCTAssertEqual(frame.gps?.satelliteCount, 8)
 
         let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
         XCTAssertNotNil(mockLibrary)
@@ -155,7 +188,46 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(reportedVersion(), 4, "The SDK must actually dispatch through PullImageV4.")
     }
 
+    func testV4MetadataDoesNotExposeValuesWithoutValidityFlags() throws {
+        let libraryURL = try buildMockSDK()
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        defer { sdk.close(opened.handle) }
 
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let setterSymbol = dlsym(mockLibrary, "MockAmcam_SetV4FrameFlags") else {
+            XCTFail("Mock SDK is missing MockAmcam_SetV4FrameFlags")
+            return
+        }
+        let setFlags = unsafeBitCast(setterSymbol, to: (@convention(c) (UInt32) -> Void).self)
+        setFlags(0x0000_0003)
+
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: 640 * 480 * 3, alignment: 64)
+        defer { buffer.deallocate() }
+        var info = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata?
+        XCTAssertGreaterThanOrEqual(
+            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata),
+            0
+        )
+        let frame = try XCTUnwrap(metadata)
+        XCTAssertEqual(frame.validityFlags, 0x0000_0003)
+        XCTAssertNil(frame.shutterSequence)
+        XCTAssertNil(frame.exposureTimeMicroseconds)
+        XCTAssertNil(frame.exposureGain)
+        XCTAssertNil(frame.blackLevel)
+        XCTAssertNil(frame.luminance)
+        XCTAssertNil(frame.focusValue)
+        XCTAssertNil(frame.timeCount)
+        XCTAssertNil(frame.frameCount)
+        XCTAssertNil(frame.triggerCount)
+        XCTAssertNil(frame.gps)
+        XCTAssertNil(frame.mechanicalShutterClosed)
+        XCTAssertNil(frame.conversionGainHigh)
+    }
 
     func testAcquisitionFallsBackPerCameraWhenV4ReturnsNotImplemented() throws {
         let libraryURL = try buildMockSDK()

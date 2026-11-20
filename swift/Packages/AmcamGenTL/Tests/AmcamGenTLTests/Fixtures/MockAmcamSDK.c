@@ -28,6 +28,7 @@ static uint32_t pull_count;
 static uint32_t pull_api_version;
 static uint32_t unsupported_pull_api_mask;
 static int32_t pull_api_failure;
+static uint32_t mock_v4_frame_flags = UINT32_C(0x000103ff);
 static int32_t auto_exposure = 1;
 static int exposure_unavailable = 0;
 static int exposure_range_unavailable = 0;
@@ -156,7 +157,7 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
     info->v3.width = width;
     info->v3.height = height;
-    info->v3.flag = 0x01ff;
+    info->v3.flag = mock_v4_frame_flags;
     info->v3.seq = ++pull_count;
     info->v3.timestamp = (int64_t)(123456789u + pull_count);
     info->v3.shutterseq = 7;
@@ -183,6 +184,7 @@ uint32_t MockAmcam_PullAPIVersion(void) { return pull_api_version; }
 void MockAmcam_SetUnsupportedPullAPIVersion(uint32_t version) { unsupported_pull_api_mask = version <= 4 ? (UINT32_C(1) << version) : 0; }
 void MockAmcam_SetUnsupportedPullAPIMask(uint32_t mask) { unsupported_pull_api_mask = mask; }
 void MockAmcam_SetPullFailure(int32_t result) { pull_api_failure = result; }
+void MockAmcam_SetV4FrameFlags(uint32_t flags) { mock_v4_frame_flags = flags; }
 
 int32_t Amcam_Stop(void *handle) {
     if (!handle) return -1;
@@ -316,6 +318,7 @@ void MockAmcam_Reset(void) {
     pull_api_version = 0;
     unsupported_pull_api_mask = 0;
     pull_api_failure = 0;
+    mock_v4_frame_flags = UINT32_C(0x000103ff);
     current_resolution_index = 2;
     active_callback = 0;
     active_context = 0;
