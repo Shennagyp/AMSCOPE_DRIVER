@@ -1432,10 +1432,11 @@ extension AmcamGenTLImplementation: GenTLAPI {
         guard let pEntries, let piNumEntries, piNumEntries.pointee >= 0 else {
             return GenTLABI.GC_ERR_INVALID_PARAMETER
         }
+        let requestedCount = piNumEntries.pointee
+        piNumEntries.pointee = 0
         do {
             let port = try typedHandle(hPort, as: PORTModule.self)
-            let count = piNumEntries.pointee
-            for index in 0..<count {
+            for index in 0..<requestedCount {
                 let entry = pEntries[index]
                 guard entry.Size >= 0, let buffer = entry.pBuffer else {
                     return GenTLABI.GC_ERR_INVALID_PARAMETER
@@ -1447,6 +1448,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
                         buffer.copyMemory(from: base, byteCount: source.count)
                     }
                 }
+                piNumEntries.pointee += 1
             }
             return GenTLABI.GC_ERR_SUCCESS
         } catch {
@@ -1462,14 +1464,17 @@ extension AmcamGenTLImplementation: GenTLAPI {
         guard let pEntries, let piNumEntries, piNumEntries.pointee >= 0 else {
             return GenTLABI.GC_ERR_INVALID_PARAMETER
         }
+        let requestedCount = piNumEntries.pointee
+        piNumEntries.pointee = 0
         do {
             let port = try typedHandle(hPort, as: PORTModule.self)
-            for index in 0..<piNumEntries.pointee {
+            for index in 0..<requestedCount {
                 let entry = pEntries[index]
                 guard entry.Size >= 0, let buffer = entry.pBuffer else {
                     return GenTLABI.GC_ERR_INVALID_PARAMETER
                 }
                 try GCWritePort(port, address: entry.Address, data: Data(bytes: buffer, count: entry.Size))
+                piNumEntries.pointee += 1
             }
             return GenTLABI.GC_ERR_SUCCESS
         } catch {
@@ -1554,9 +1559,9 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ pbChanged: UnsafeMutablePointer<GenTLABI.bool8_t>?,
         _ iTimeout: UInt64
     ) -> GenTLABI.GC_ERROR {
+        guard let pbChanged else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         do {
             let changed = try TLUpdateInterfaceList(typedHandle(hTL, as: TLModule.self), timeout: iTimeout)
-            guard let pbChanged else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
             pbChanged.pointee = changed ? 1 : 0
             return GenTLABI.GC_ERR_SUCCESS
         } catch { return rawError(error) }
@@ -1601,9 +1606,9 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ hIface: GenTLABI.IF_HANDLE, _ pbChanged: UnsafeMutablePointer<GenTLABI.bool8_t>?,
         _ iTimeout: UInt64
     ) -> GenTLABI.GC_ERROR {
+        guard let pbChanged else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         do {
             let changed = try IFUpdateDeviceList(typedHandle(hIface, as: IFModule.self), timeout: iTimeout)
-            guard let pbChanged else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
             pbChanged.pointee = changed ? 1 : 0
             return GenTLABI.GC_ERR_SUCCESS
         } catch { return rawError(error) }
@@ -1888,7 +1893,21 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ ppSegments: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ piSizes: UnsafeMutablePointer<Int>?,
         _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
     ) -> GenTLABI.GC_ERROR {
-        GenTLABI.GC_ERR_NOT_IMPLEMENTED
+        guard iNumSegments > 0, let ppSegments, let piSizes, phBuffer != nil else {
+            return GenTLABI.GC_ERR_INVALID_PARAMETER
+        }
+        do {
+            _ = try streamRecord(typedHandle(hDataStream, as: DSModule.self))
+            for index in 0..<iNumSegments {
+                guard ppSegments[index] != nil, piSizes[index] > 0 else {
+                    return GenTLABI.GC_ERR_INVALID_PARAMETER
+                }
+            }
+            // The Amcam pull API only exposes contiguous image buffers.
+            return GenTLABI.GC_ERR_NOT_IMPLEMENTED
+        } catch {
+            return rawError(error)
+        }
     }
 
     public func DSGetBufferInfoStacked(
