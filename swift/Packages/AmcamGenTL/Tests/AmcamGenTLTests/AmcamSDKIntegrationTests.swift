@@ -665,6 +665,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(exposure.numericRange?.minimum, 100)
         XCTAssertEqual(exposure.numericRange?.maximum, 1_000_000)
         XCTAssertTrue(exposure.isAvailable)
+        XCTAssertFalse(exposure.isWritable, "Manual exposure must remain read-only while auto exposure is active.")
 
         XCTAssertEqual(gain.kind, .integer)
         XCTAssertEqual(gain.unit, "%")
@@ -677,6 +678,29 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             .enumeration("Continuous")
         )
         try implementation.writeFeature(.enumeration("Off"), named: "ExposureAuto", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
+        let manualExposure = try XCTUnwrap(
+            try implementation.featureDescriptors(for: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
+                .first { $0.name == "ExposureTime" }
+        )
+        XCTAssertTrue(manualExposure.isWritable)
+
+        XCTAssertThrowsError(
+            try implementation.writeFeature(.floatingPoint(12_000), named: "ExposureTime", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
+        ) { error in
+            XCTAssertEqual(
+                error as? GenTLFeatureAccessError,
+                .valueTypeMismatch(feature: "ExposureTime", expected: .integer, actual: .floatingPoint)
+            )
+        }
+        XCTAssertThrowsError(
+            try implementation.writeFeature(.enumeration("Automatic"), named: "ExposureAuto", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
+        ) { error in
+            XCTAssertEqual(
+                error as? GenTLFeatureAccessError,
+                .invalidValue("ExposureAuto accepts Off, Once, or Continuous.")
+            )
+        }
+
         try implementation.writeFeature(.integer(12_000), named: "ExposureTime", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
         try implementation.writeFeature(.integer(200), named: "AmcamAnalogGainPercent", to: GenTLFeatureDeviceHandle(rawValue: device.rawValue))
 
