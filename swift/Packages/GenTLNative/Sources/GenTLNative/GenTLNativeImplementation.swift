@@ -1,6 +1,5 @@
 import Darwin
 import Foundation
-import GenTLABI
 @_spi(BackendConvenience) import GenTLAPI
 
 // MARK: GenTL C ABI function pointer types
