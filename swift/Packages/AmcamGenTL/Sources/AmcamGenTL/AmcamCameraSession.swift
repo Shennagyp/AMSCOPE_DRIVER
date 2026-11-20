@@ -763,7 +763,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             }
             let frameWidth = Int(info.width)
             let frameHeight = Int(info.height)
-            guard let layout = AmcamRGB24Layout(width: frameWidth, height: frameHeight),
+            guard let layout = AmcamRGB24Layout(width: frameWidth, height: frameHeight, tightlyPackedRows: sdk.pullImageUsesTightlyPackedRows),
                   frameWidth == width,
                   frameHeight == height,
                   layout.payloadSize <= bufferCapacity else {
