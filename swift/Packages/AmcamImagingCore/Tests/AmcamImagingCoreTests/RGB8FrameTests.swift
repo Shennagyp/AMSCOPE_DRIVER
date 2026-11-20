@@ -96,8 +96,8 @@ final class RGB8FrameTests: XCTestCase {
         }
     }
 
-    func testRejectsTruncatedPayloadAndInsufficientSizeFilled() {
-        let base: (Int, Int, Data) -> Void = { sizeFilled, dataSize, bytes in
+    func testRejectsTruncatedPayloadAndInsufficientSizeFilled() throws {
+        let base: (Int, Int, Data) throws -> Void = { sizeFilled, dataSize, bytes in
             XCTAssertThrowsError(try RGB8Frame.decode(
                 width: 2,
                 height: 2,
@@ -112,8 +112,8 @@ final class RGB8FrameTests: XCTestCase {
                 XCTAssertEqual(error as? RGB8FrameError, .inconsistentPayloadMetadata)
             }
         }
-        base(11, 12, Data(repeating: 0, count: 12))
-        base(12, 11, Data(repeating: 0, count: 12))
-        base(12, 12, Data(repeating: 0, count: 11))
+        try base(11, 12, Data(repeating: 0, count: 12))
+        try base(12, 11, Data(repeating: 0, count: 12))
+        try base(12, 12, Data(repeating: 0, count: 11))
     }
 }
