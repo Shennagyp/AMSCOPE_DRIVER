@@ -335,15 +335,20 @@ public final class AmcamCameraSession: @unchecked Sendable {
         let activeHandle = try controlHandle()
         try sdk.setAutoExposureMode(activeHandle, mode: mode)
         let candidateRequestedExposure = mode == .manual ? requestedExposureMicroseconds : nil
+        let actualMode = try sdk.readAutoExposureMode(activeHandle)
+        guard actualMode == mode else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "auto exposure mode",
+                requested: String(mode.rawValue),
+                actual: String(actualMode.rawValue)
+            )
+        }
         let snapshot = try readControls(
             using: activeHandle,
             requestedExposure: candidateRequestedExposure,
             requestedFrameRate: requestedFrameRate,
             requestedSpeedLevel: requestedSpeedLevel
         )
-        guard let exposure = snapshot.exposure, exposure.autoMode == mode else {
-            throw AmcamCameraError.unsupportedControl("This camera does not expose a usable auto-exposure mode control.")
-        }
         requestedExposureMicroseconds = candidateRequestedExposure
         return snapshot
     }
@@ -612,15 +617,16 @@ public final class AmcamCameraSession: @unchecked Sendable {
         requestedFrameRate: Double?,
         requestedSpeedLevel: Int?
     ) throws -> AmcamControlSnapshot {
+        let autoMode = try? sdk.readAutoExposureMode(handle)
+        let exposureReadback = try? sdk.readExposureTime(handle)
         let exposure: AmcamExposureControl?
-        if let autoMode = try? sdk.readAutoExposureMode(handle),
-           let exposureReadback = try? sdk.readExposureTime(handle) {
+        if autoMode != nil || exposureReadback != nil {
             exposure = AmcamExposureControl(
                 autoMode: autoMode,
-                readbackMicroseconds: exposureReadback.current,
-                minimumMicroseconds: exposureReadback.minimum,
-                maximumMicroseconds: exposureReadback.maximum,
-                defaultMicroseconds: exposureReadback.defaultValue,
+                readbackMicroseconds: exposureReadback?.current,
+                minimumMicroseconds: exposureReadback?.minimum,
+                maximumMicroseconds: exposureReadback?.maximum,
+                defaultMicroseconds: exposureReadback?.defaultValue,
                 requestedMicroseconds: requestedExposure
             )
         } else {
