@@ -90,15 +90,26 @@ public enum GenTLFeatureAccessError: Error, Equatable, Sendable {
     case invalidValue(String)
 }
 
+/// Stable opaque identity for a device handle passed to an optional feature
+/// provider. It preserves the GenTL handle identity without exposing the
+/// backend's internal typed-handle wrappers to applications.
+public struct GenTLFeatureDeviceHandle: Hashable, Sendable {
+    public let rawValue: UInt
+
+    public init(rawValue: UInt) {
+        self.rawValue = rawValue
+    }
+}
+
 /// Optional typed feature access layered beside the exact GenTL 1.6 operation
 /// contract. A provider may implement this using GenApi over GenTL ports or a
 /// documented vendor SDK API. Callers must inspect descriptors before access.
 public protocol GenTLFeatureAccess: Sendable {
-    func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor]
-    func readFeature(_ name: String, from device: DEV_HANDLE) throws -> GenTLFeatureValue
+    func featureDescriptors(for device: GenTLFeatureDeviceHandle) throws -> [GenTLFeatureDescriptor]
+    func readFeature(_ name: String, from device: GenTLFeatureDeviceHandle) throws -> GenTLFeatureValue
     func writeFeature(
         _ value: GenTLFeatureValue,
         named name: String,
-        to device: DEV_HANDLE
+        to device: GenTLFeatureDeviceHandle
     ) throws
 }
