@@ -11,21 +11,22 @@ The application uses one GenTL API contract with two interchangeable implementat
 
 **GenTLRouter** selects and manages the backend. The imaging app uses GenTLAPI through GenTLRouter for discovery, device lifecycle, typed feature access and GenTL acquisition. Camera presentation models are isolated in AmcamCameraModel; the app package has no dependency on the Amcam backend implementation.
 
-## Run
+## Run from source
 
-From the repository root on an Apple Silicon Mac running macOS 13 or later:
+From the repository root on a Mac running macOS 13 or later with Apple's Swift toolchain available:
 
 ```sh
 make run
 ```
 
-`make run` downloads and launches the latest hosted macOS imaging-app artifact. It does not compile locally and does not require Xcode. It downloads the app ZIP from a public GitHub Release asset using `curl` and Python 3; no GitHub CLI, GitHub login, token or Xcode installation is required. GitHub’s anonymous API rate limit applies. Successful pushes to `macos-version-optimization` publish a new prerelease after the macOS build succeeds. The vendor `libamcam.dylib` is still required for camera access and is not bundled.
+`make run` builds every Swift library package in this repository, then builds the app executable through Swift Package Manager, assembles a local `Amcam Imaging.app` bundle, ad-hoc signs it and launches it. It does not download binaries, use GitHub Releases, require GitHub CLI authentication, or depend on a hosted Actions artifact.
+
+The full Xcode application is not required for this command. The Swift compiler and macOS SDK must be installed. If `swift` is unavailable, install Apple's Command Line Tools with `xcode-select --install`, then verify with `swift --version`. The vendor `libamcam.dylib` is still required for camera access and is not bundled.
 
 Other targets:
 
-- `make run-probe` — download and run the hosted camera diagnostic.
-- `make build-local` — build locally (requires a compatible Xcode/Swift toolchain).
-- `make run-local` — build and launch locally.
+- `make build-local` — build all libraries and the app executable without launching the UI.
+- `make run-probe` — compile and run the camera diagnostic from source; pass optional arguments with `PROBE_ARGS='--help'`.
 - `make test-local` — run all Swift package test suites locally.
 
 See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for package boundaries, acceptance criteria and the implementation sequence.
