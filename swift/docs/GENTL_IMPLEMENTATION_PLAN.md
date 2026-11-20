@@ -1,7 +1,7 @@
 # GenTL Swift API and backend implementation plan
 
 **Branch:** swift-gentl-api  
-**Plan status:** Architecture correction in progress  
+**Plan status:** Phases 1–5 implemented at source level; build, runtime and conformance verification remain pending  
 **Standards baseline:** EMVA GenICam GenTL 1.6, with versioned functions identified by the pinned header
 
 ## 1. Objective
@@ -126,6 +126,8 @@ An absent later-revision function is reported as not implemented when invoked. T
 
 ### Phase 2 — Correct the GenTLAPI contract
 
+**Status: implemented at source level.** GenTLAPI now declares the 64 functions from the pinned header using imported GenTL ABI types, raw pointers, output parameters and GC_ERROR return values. A source-level comparison against the 64 C prototypes found exact parameter and return-type matches. The former Swift convenience protocols and types remain behind BackendConvenience SPI for internal migration only.
+
 - Audit every public type and operation against the imported header.
 - Replace hand-maintained duplicates with imported C declarations.
 - Align function operations with the standard names, signatures, module boundaries and error semantics.
@@ -137,7 +139,7 @@ An absent later-revision function is reported as not implemented when invoked. T
 
 ### Phase 3 — Bind the native CTI implementation
 
-**Status: partially completed.** Native function-pointer aliases now reference the PGC/P* typedefs imported from the pinned header. Runtime symbol loading and native lifecycle safeguards remain in place; the complete ABI/API audit and mock-CTI verification remain outstanding.
+**Status: implemented at source level.** All 64 native GenTLAPI methods are present and their signatures match the common protocol. The dynamic function table uses the 64 PGC/P* typedefs imported from the pinned header. Optional later-revision symbols still return GC_ERR_NOT_IMPLEMENTED when absent. Mock-CTI and real-Producer runtime verification remain outstanding.
 
 - Bind the native loader to imported function-pointer typedefs.
 - Verify every required symbol against the GenTL 1.0 inventory.
@@ -150,6 +152,8 @@ An absent later-revision function is reported as not implemented when invoked. T
 
 ### Phase 4 — Map the Amcam implementation
 
+**Status: implemented at source level.** AmcamGenTL provides all 64 GenTLAPI operations. It translates supported calls to the Amcam SDK, uses opaque pointer tokens for GenTL handles, preserves event payloads for buffer-too-small retries, and reports unsupported capabilities explicitly. Hardware/SDK runtime verification remains outstanding.
+
 - Make AmcamGenTL implement the corrected common contract.
 - Translate only operations with verified SDK equivalents.
 - Preserve GenTL ownership, queue, acquisition, timeout and event semantics as far as the SDK permits.
@@ -161,6 +165,8 @@ An absent later-revision function is reported as not implemented when invoked. T
 
 ### Phase 5 — Integrate the router
 
+**Status: implemented at source level.** Public candidates and sessions now expose the raw GenTLAPI contract and C-style handles. The router retains backend-bound lifecycle ownership internally; its BackendConvenience SPI is not the application-facing API.
+
 - Keep one initialized context per registered backend.
 - Preserve context and handle ownership across discovery refreshes and open sessions.
 - Retain the existing duplicate-registration, rollback, quarantine and failed-close protections.
@@ -170,6 +176,8 @@ An absent later-revision function is reported as not implemented when invoked. T
 **Exit condition:** repeated discovery, concurrent lifecycle operations and failed cleanup cannot cause use-after-close, duplicate initialization or backend confusion.
 
 ### Phase 6 — Verify conformance and remove duplication
+
+**Status: pending verification and cleanup.** A raw-contract default test has been added, but no Swift build or tests have been run. Mock CTI coverage, real Producer checks, Amcam SDK/hardware verification and removal of the transitional SPI convenience layer remain outstanding.
 
 - Run the same contract tests against both implementations wherever the operation is applicable.
 - Add ABI layout and imported-type checks against the pinned header.
@@ -198,16 +206,19 @@ These components must be adapted to the corrected API contract where required; t
 
 The current branch contains:
 
-- A standalone GenTLABI Swift package with the unchanged GenTL 1.6 header and C layout-check source. The header remains at one repository path; its Git blob object ID is 140c340dbf240c3c95ba13266d9965964b961517.
-- GenTLAPI, GenTLNative and AmcamGenTL package manifests wired to the shared GenTLABI product.
-- A native CTI loader and a substantial native implementation.
-- Native function-pointer aliases that now refer to the 64 distinct PGC/P* function-pointer typedefs declared by the pinned GenTL header. The native alias block no longer restates those C signatures with handwritten @convention(c) declarations.
-- An Amcam-backed implementation and a backend router.
-- Existing lifecycle, buffer, queue and event safeguards.
+- One standalone GenTLABI package and one unchanged pinned GenTL 1.6 header.
+- GenTLAPI, GenTLNative, AmcamGenTL and GenTLRouter wired to the shared ABI package.
+- A public Swift GenTLAPI protocol with all 64 function names declared by the header, using imported ABI types, pointer arguments, output parameters and GC_ERROR return values.
+- A source-level signature comparison of all 64 C prototypes against GenTLAPI. All function names, argument types and return types matched.
+- GenTLNative implementations for all 64 operations. Its dynamic function table uses all 64 PGC/P* function-pointer typedefs imported from the header.
+- AmcamGenTL implementations for all 64 operations, translating supported operations to the Amcam SDK and returning explicit GenTL errors for unsupported capabilities.
+- Opaque pointer-token handles for the Amcam backend, including retired-token handling to prevent handle-address reuse during the backend lifetime.
+- Router candidates and sessions exposing the raw GenTLAPI contract and C-style module handles. Backend lifecycle orchestration remains internal to the router.
+- A raw GenTLAPI default test for unsupported operations, in addition to the existing lifecycle, native catalog and Amcam frame-layout tests.
 
-The main architectural gap remains: GenTLAPI still contains a manually authored Swift protocol, custom handle wrappers, error wrapper, information-value model and handwritten enum/command definitions. It has a dependency on GenTLABI, but its public function contract and ABI-relevant types have not yet been converted to use the imported GenTL declarations as their source of truth. Its Swift convenience method signatures also differ from the C prototypes in parameters, return shape and output-buffer handling.
+A transitional BackendConvenience SPI still exists for the earlier Swift-facing methods and custom typed handles used internally by backend and router lifecycle code. It is not the application-facing API and requires explicit SPI import. Removing that internal migration layer is still cleanup work; it must not be re-exported as another application camera abstraction.
 
-The ABI package extraction is complete; the native function-pointer typedef binding has begun. The common GenTLAPI conversion is the next major phase. Documentation status is not evidence that those code changes or tests have completed.
+No Swift build, unit test, mock CTI run, real Producer run or Amcam hardware run has been performed in this continuation. The source-level signature comparison is not a substitute for compiler, ABI-runtime or device conformance verification.
 
 ## 9. Definition of done
 
