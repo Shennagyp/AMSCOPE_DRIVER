@@ -410,3 +410,13 @@ Results: 64 header operations, 64 protocol requirements, 64 mock exports, zero m
 ### Current blocker and next gate
 
 The C fixture and Swift tests have not yet been compiled or executed. The immediate next task is to run the macOS CI workflow or the package commands locally, fix every compile/runtime failure, and record evidence. Only after that gate should the mock grow into a simulated Producer/System/Interface/Device topology and acquisition pipeline.
+
+
+### Argument and pointer-forwarding sentinels
+
+The latest fixture revision adds three operation-specific ABI probes:
+- `GCGetInfo` validates a distinctive command value and writes a known datatype, payload marker, and output size.
+- `GCReadPort` validates a non-null opaque handle, a distinctive 64-bit register address, the output pointer, and its input capacity; it writes a known 32-bit payload.
+- `GCWritePort` validates the same opaque handle/address and compares the exact input bytes and byte count.
+
+The dispatch matrix now uses 58 unique per-operation return-code assertions, two explicit port sentinel tests, and four lifecycle operations. The call-counter checks account for all 64 protocol operations. This provides stronger evidence than neutral-argument dispatch alone, but it is not yet exhaustive argument permutation coverage for every function. The next testing increment should expand argument/output sentinel cases by signature family and then per operation, especially info buffers, event payloads, stream buffers, and composite/stacked structures.
