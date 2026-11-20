@@ -135,6 +135,29 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertFalse(snapshot.frameRate.supported)
     }
 
+    func testAutoExposureSnapshotExistsWithoutManualExposureSupport() async {
+        let resolver = AmcamCameraStateResolver()
+        let descriptors = [
+            CameraFeatureDescriptor(
+                name: "ExposureAuto", displayName: "Auto exposure", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: true,
+                enumerationValues: ["Off", "Once", "Continuous"]
+            )
+        ]
+
+        let snapshot = await resolver.controlSnapshot(descriptors: descriptors) { name in
+            guard name == "ExposureAuto" else {
+                throw CameraFeatureAccessError.featureNotFound(name)
+            }
+            return .enumeration("Continuous")
+        }
+
+        XCTAssertEqual(snapshot.exposure?.autoMode, .continuous)
+        XCTAssertNil(snapshot.exposure?.readbackMicroseconds)
+        XCTAssertNil(snapshot.exposure?.minimumMicroseconds)
+        XCTAssertNil(snapshot.exposure?.maximumMicroseconds)
+    }
+
     func testCurrentResolutionDoesNotReadUnavailableFeature() async {
         let resolver = AmcamCameraStateResolver()
         let device = AmcamDevice(
