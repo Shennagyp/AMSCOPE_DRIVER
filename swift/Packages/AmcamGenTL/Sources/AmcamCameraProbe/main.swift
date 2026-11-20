@@ -97,6 +97,7 @@ private enum ProbeError: Error, LocalizedError {
     case noDataStream
     case invalidInfo(String)
     case invalidEventPayload
+    case cameraErrorEvent
     case unknownBuffer(UInt)
     case unexpectedUserPointer(UInt)
     case incompleteFrame
@@ -115,6 +116,7 @@ private enum ProbeError: Error, LocalizedError {
         case .noDataStream: return "The opened camera exposes no data stream."
         case .invalidInfo(let message): return "Unexpected GenTL information value: \(message)"
         case .invalidEventPayload: return "The New Buffer event payload does not match the backend's two-word buffer-handle/user-pointer layout."
+        case .cameraErrorEvent: return "The Amcam SDK reported a camera error or disconnection during acquisition."
         case .unknownBuffer(let actual):
             return "The New Buffer event returned an unannounced buffer handle: \(actual)."
         case .unexpectedUserPointer(let actual):
@@ -154,6 +156,7 @@ struct AmcamCameraProbe {
         var device: DEV_HANDLE?
         var stream: DS_HANDLE?
         var eventRegistered = false
+        var errorEventRegistered = false
         var acquisitionStarted = false
         var bufferHandlesByRawValue: [UInt: BUFFER_HANDLE] = [:]
 
@@ -176,8 +179,16 @@ struct AmcamCameraProbe {
                         )
                     }
                 }
+                if errorEventRegistered {
+                    attemptCleanup("GCUnregisterEvent(error)") {
+                        try backend.GCUnregisterEvent(
+                            .dataStream(stream),
+                            eventType: GenTLEventType.error.rawValue
+                        )
+                    }
+                }
                 if eventRegistered {
-                    attemptCleanup("GCUnregisterEvent") {
+                    attemptCleanup("GCUnregisterEvent(new-buffer)") {
                         try backend.GCUnregisterEvent(
                             .dataStream(stream),
                             eventType: GenTLEventType.newBuffer.rawValue
@@ -286,6 +297,11 @@ struct AmcamCameraProbe {
             eventType: GenTLEventType.newBuffer.rawValue
         )
         eventRegistered = true
+        let errorEventHandle = try backend.GCRegisterEvent(
+            .dataStream(streamHandle),
+            eventType: GenTLEventType.error.rawValue
+        )
+        errorEventRegistered = true
 
         let allocationLimit = 512 * 1024 * 1024
         let bufferCount = min(4, max(1, allocationLimit / payloadSize))
@@ -321,10 +337,22 @@ struct AmcamCameraProbe {
         var lastPPM: Data?
 
         for frameIndex in 0..<options.frameCount {
-            let eventData = try backend.EventGetData(
-                eventHandle,
-                timeout: options.timeoutMilliseconds
-            )
+            if (try? backend.EventGetData(errorEventHandle, timeout: 0)) != nil {
+                throw ProbeError.cameraErrorEvent
+            }
+
+            let eventData: Data
+            do {
+                eventData = try backend.EventGetData(
+                    eventHandle,
+                    timeout: options.timeoutMilliseconds
+                )
+            } catch {
+                if (try? backend.EventGetData(errorEventHandle, timeout: 0)) != nil {
+                    throw ProbeError.cameraErrorEvent
+                }
+                throw error
+            }
             guard eventData.count == 2 * MemoryLayout<UInt>.size else {
                 throw ProbeError.invalidEventPayload
             }
