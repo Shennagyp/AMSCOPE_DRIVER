@@ -1,6 +1,6 @@
 # Amcam macOS camera probe
 
-This is a hardware smoke-test executable for the Amcam SDK backend. It is built for Apple Silicon macOS by GitHub Actions, so a local Xcode installation is not required to run the downloaded executable.
+This is a hardware smoke-test executable for the Amcam SDK backend. Build it from the repository root with `make run-probe`. The full Xcode application is not required; Apple's Swift compiler and macOS SDK are required.
 
 The probe uses the actual \`AmcamGenTLImplementation\` and GenTL-style acquisition path. It does not substitute a mock SDK at runtime. It does not modify exposure, gain, or frame-rate settings.
 
@@ -33,37 +33,17 @@ Do not download or use an arbitrary third-party SDK binary. Use the SDK supplied
 
 Close the official AmScope application and any other microscope application first. The probe requests exclusive camera access.
 
-From Terminal, in the extracted artifact directory:
+From the repository root:
 
-\`\`\`sh
-chmod +x ./amcam-camera-probe
-./amcam-camera-probe \\
-  --sdk "/absolute/path/to/libamcam.dylib" \\
-  --frames 10 \\
-  --output "$HOME/Desktop/mu503-test.ppm"
-\`\`\`
-
-The tool reports:
-
-- SDK version and discovered device identifiers;
-- selected camera model and display name;
-- data-stream payload size;
-- each frame's dimensions, filled bytes, row stride, sequence number, device timestamp, and SHA-256;
-- host-loop rate and camera timestamp-derived rate when timestamps are available;
-- the last complete frame as a PPM image if \`--output\` is supplied.
+```sh
+make run-probe PROBE_ARGS='--sdk "/absolute/path/to/libamcam.dylib" --frames 10 --output "$HOME/Desktop/mu503-test.ppm"'
+```
 
 For a longer stability sample:
 
-\`\`\`sh
-./amcam-camera-probe \\
-  --sdk "/absolute/path/to/libamcam.dylib" \\
-  --frames 300 \\
-  --timeout-ms 5000 \\
-  --output "$HOME/Desktop/mu503-stability.ppm"
-\`\`\`
-
-The executable announces up to four buffers, subject to a 512 MiB aggregate allocation limit, and requeues each delivered buffer while acquisition continues. This reduces probe-induced starvation compared with a single-buffer loop. It reports incomplete frames and camera Error events as failures. It does not change camera settings.
-
+```sh
+make run-probe PROBE_ARGS='--sdk "/absolute/path/to/libamcam.dylib" --frames 300 --timeout-ms 5000 --output "$HOME/Desktop/mu503-stability.ppm"'
+```
 ## Interpretation
 
 A successful run proves that this SDK binary can load on the Mac, enumerate and open the camera, deliver image callbacks, and pass frames through the AmcamGenTL data-stream buffer/event path. It does not by itself prove long-duration stability, color correctness, sensor timing accuracy, or maximum supported FPS.
@@ -81,4 +61,4 @@ The previous MU503 hardware record identified VID:PID \`0547:4511\` and a Mac co
 - It currently tests one selected device and the first data stream.
 - It writes only the last complete frame, not a recording.
 - The executable is an Apple Silicon macOS build. It is not a Windows or Linux binary.
-- The proprietary SDK is not embedded in the artifact.
+- The proprietary SDK is not embedded in the probe executable.
