@@ -56,15 +56,21 @@ AmcamGenTL maps supported GenTL function behavior to the Amcam SDK. It does not 
 | Flow table | No flows exposed |
 | Buffer segments | One contiguous memory segment |
 
-Unsupported operations return a GenTL error rather than fabricated register or feature behavior.
+Unsupported GenTL operations return a GenTL error rather than fabricated register behavior. SDK-backed feature access is provided only through the separate typed feature contract described below.
 
 ## Important GenApi boundary
 
 GenTL provides transport discovery, module lifecycle, register-port access and streaming. GenApi interprets a camera's XML feature description and maps features to the GenTL port.
 
-The current Amcam SDK integration exposes feature getters and setters, but this implementation has not established a documented Amcam remote register map or GenApi XML port. Therefore, the current Amcam backend supports acquisition and its implemented module operations, but it does **not** yet expose exposure/gain/etc. through the standard GenApi feature-node path.
+The Amcam SDK exposes feature getters and setters, but this implementation has not established a documented Amcam remote register map or GenApi XML port. Physical port access and the standard GenApi XML feature-node path therefore remain unavailable.
 
-That is a separate integration milestone. It must be implemented using a verified feature description and SDK mapping; it must not pretend that arbitrary Amcam registers exist.
+A separate `GenTLFeatureAccess` Swift contract now exposes the SDK-backed controls without claiming they are GenApi nodes:
+
+- `ExposureAuto`: Off, Once, Continuous.
+- `ExposureTime`: integer microseconds with the SDK-reported range; writable only when auto exposure is Off.
+- `AmcamAnalogGainPercent`: vendor-namespaced integer percentage with the SDK-reported range. It is not SFNC `Gain`, whose unit semantics are dB.
+
+The descriptors are resolved from the opened camera's runtime probes and model capability policy. Writes delegate to the existing Amcam session setters, which validate ranges and verify SDK readback. Native CTI devices do not yet conform to this optional feature contract; their feature access remains the responsibility of a verified GenApi implementation over the Producer's XML and port.
 
 ## Semantic constraints
 
