@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
-@_spi(BackendConvenience) import GenTLAPI
+import GenTLABI
+import GenTLAPI
 @testable import GenTLRouter
 
 private struct CallCounts {
@@ -15,12 +16,16 @@ private struct CallCounts {
     var deviceClose = 0
 }
 
-private final class RecordingGenTLAPI: GenTLBackendConvenience, GenTLAPI, @unchecked Sendable {
+private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private let lock = NSLock()
     private var calls = CallCounts()
     private let failSystemOpen: Bool
     private let failLibraryClose: Bool
     private let failDeviceClose: Bool
+
+    private let systemToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+    private let interfaceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+    let deviceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
 
     init(
         failSystemOpen: Bool = false,
@@ -30,6 +35,12 @@ private final class RecordingGenTLAPI: GenTLBackendConvenience, GenTLAPI, @unche
         self.failSystemOpen = failSystemOpen
         self.failLibraryClose = failLibraryClose
         self.failDeviceClose = failDeviceClose
+    }
+
+    deinit {
+        systemToken.deallocate()
+        interfaceToken.deallocate()
+        deviceToken.deallocate()
     }
 
     private func record(_ update: (inout CallCounts) -> Void) {
@@ -44,78 +55,147 @@ private final class RecordingGenTLAPI: GenTLBackendConvenience, GenTLAPI, @unche
         return calls
     }
 
-    func swiftGCInitLib() throws {
+    private func writeCString(
+        _ value: String,
+        output: UnsafeMutablePointer<CChar>?,
+        size: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let size else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        let bytes = value.utf8CString
+        let capacity = size.pointee
+        size.pointee = bytes.count
+        guard let output else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
+        guard capacity >= bytes.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
+        for (index, byte) in bytes.enumerated() {
+            output[index] = byte
+        }
+        return GenTLABI.GC_ERR_SUCCESS
+    }
+
+    func GCInitLib() -> GenTLABI.GC_ERROR {
         record { $0.gcInit += 1 }
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func swiftGCCloseLib() throws {
+    func GCCloseLib() -> GenTLABI.GC_ERROR {
         record { $0.gcClose += 1 }
-        if failLibraryClose { throw GC_ERROR.resourceInUse }
+        return failLibraryClose ? GenTLABI.GC_ERR_RESOURCE_IN_USE : GenTLABI.GC_ERR_SUCCESS
     }
 
-    func TLOpen() throws -> TL_HANDLE {
+    func TLOpen(_ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?) -> GenTLABI.GC_ERROR {
         record { $0.tlOpen += 1 }
-        if failSystemOpen { throw GC_ERROR.error }
-        return TL_HANDLE(rawValue: 1)
+        guard let phTL else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        if failSystemOpen {
+            phTL.pointee = nil
+            return GenTLABI.GC_ERR_ERROR
+        }
+        phTL.pointee = systemToken
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func TLClose(_ hTL: TL_HANDLE) throws {
+    func TLClose(_ hTL: GenTLABI.TL_HANDLE) -> GenTLABI.GC_ERROR {
         record { $0.tlClose += 1 }
+        return hTL == systemToken ? GenTLABI.GC_ERR_SUCCESS : GenTLABI.GC_ERR_INVALID_HANDLE
     }
 
-    func TLUpdateInterfaceList(_ hTL: TL_HANDLE, timeout: UInt64) throws -> Bool {
+    func TLUpdateInterfaceList(
+        _ hTL: GenTLABI.TL_HANDLE,
+        _ pbChanged: UnsafeMutablePointer<GenTLABI.bool8_t>?,
+        _ iTimeout: UInt64
+    ) -> GenTLABI.GC_ERROR {
         record { $0.tlUpdateInterfaces += 1 }
-        return false
+        guard hTL == systemToken else { return GenTLABI.GC_ERR_INVALID_HANDLE }
+        pbChanged?.pointee = 0
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func TLGetNumInterfaces(_ hTL: TL_HANDLE) throws -> UInt32 {
-        return 1
+    func TLGetNumInterfaces(
+        _ hTL: GenTLABI.TL_HANDLE,
+        _ piNumIfaces: UnsafeMutablePointer<UInt32>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hTL == systemToken, let piNumIfaces else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        piNumIfaces.pointee = 1
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func TLGetInterfaceID(_ hTL: TL_HANDLE, index: UInt32) throws -> String {
-        guard index == 0 else { throw GC_ERROR.invalidIndex }
-        return "interface-0"
+    func TLGetInterfaceID(
+        _ hTL: GenTLABI.TL_HANDLE,
+        _ iIndex: UInt32,
+        _ sID: UnsafeMutablePointer<CChar>?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hTL == systemToken, iIndex == 0 else { return GenTLABI.GC_ERR_INVALID_INDEX }
+        return writeCString("interface-0", output: sID, size: piSize)
     }
 
-    func TLOpenInterface(_ hTL: TL_HANDLE, interfaceID: String) throws -> IF_HANDLE {
-        guard interfaceID == "interface-0" else { throw GC_ERROR.invalidID }
+    func TLOpenInterface(
+        _ hTL: GenTLABI.TL_HANDLE,
+        _ sIfaceID: UnsafePointer<CChar>?,
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hTL == systemToken, let sIfaceID, let phIface,
+              String(cString: sIfaceID) == "interface-0" else {
+            return GenTLABI.GC_ERR_INVALID_ID
+        }
         record { $0.interfaceOpen += 1 }
-        return IF_HANDLE(rawValue: 2)
+        phIface.pointee = interfaceToken
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func IFClose(_ hIF: IF_HANDLE) throws {
+    func IFClose(_ hIface: GenTLABI.IF_HANDLE) -> GenTLABI.GC_ERROR {
         record { $0.interfaceClose += 1 }
+        return hIface == interfaceToken ? GenTLABI.GC_ERR_SUCCESS : GenTLABI.GC_ERR_INVALID_HANDLE
     }
 
-    func IFUpdateDeviceList(_ hIF: IF_HANDLE, timeout: UInt64) throws -> Bool {
+    func IFUpdateDeviceList(
+        _ hIface: GenTLABI.IF_HANDLE,
+        _ pbChanged: UnsafeMutablePointer<GenTLABI.bool8_t>?,
+        _ iTimeout: UInt64
+    ) -> GenTLABI.GC_ERROR {
         record { $0.interfaceUpdateDevices += 1 }
-        return false
+        guard hIface == interfaceToken else { return GenTLABI.GC_ERR_INVALID_HANDLE }
+        pbChanged?.pointee = 0
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func IFGetNumDevices(_ hIF: IF_HANDLE) throws -> UInt32 {
-        return 1
+    func IFGetNumDevices(
+        _ hIface: GenTLABI.IF_HANDLE,
+        _ piNumDevices: UnsafeMutablePointer<UInt32>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hIface == interfaceToken, let piNumDevices else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        piNumDevices.pointee = 1
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func IFGetDeviceID(_ hIF: IF_HANDLE, index: UInt32) throws -> String {
-        guard index == 0 else { throw GC_ERROR.invalidIndex }
-        return "camera-0"
+    func IFGetDeviceID(
+        _ hIface: GenTLABI.IF_HANDLE,
+        _ iIndex: UInt32,
+        _ sDeviceID: UnsafeMutablePointer<CChar>?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hIface == interfaceToken, iIndex == 0 else { return GenTLABI.GC_ERR_INVALID_INDEX }
+        return writeCString("camera-0", output: sDeviceID, size: piSize)
     }
 
     func IFOpenDevice(
-        _ hIF: IF_HANDLE,
-        deviceID: String,
-        accessFlags: Int32
-    ) throws -> DEV_HANDLE {
-        guard deviceID == "camera-0" else { throw GC_ERROR.invalidID }
-        guard accessFlags == GenTLDeviceAccess.exclusive.rawValue else {
-            throw GC_ERROR.accessDenied
+        _ hIface: GenTLABI.IF_HANDLE,
+        _ sDeviceID: UnsafePointer<CChar>?,
+        _ iOpenFlag: GenTLABI.DEVICE_ACCESS_FLAGS,
+        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hIface == interfaceToken, let sDeviceID, let phDevice,
+              String(cString: sDeviceID) == "camera-0" else {
+            return GenTLABI.GC_ERR_INVALID_ID
         }
-        return DEV_HANDLE(rawValue: 3)
+        guard iOpenFlag == 4 else { return GenTLABI.GC_ERR_ACCESS_DENIED }
+        phDevice.pointee = deviceToken
+        return GenTLABI.GC_ERR_SUCCESS
     }
 
-    func DevClose(_ hDevice: DEV_HANDLE) throws {
+    func DevClose(_ hDevice: GenTLABI.DEV_HANDLE) -> GenTLABI.GC_ERROR {
         record { $0.deviceClose += 1 }
-        if failDeviceClose { throw GC_ERROR.resourceInUse }
+        guard hDevice == deviceToken else { return GenTLABI.GC_ERR_INVALID_HANDLE }
+        return failDeviceClose ? GenTLABI.GC_ERR_RESOURCE_IN_USE : GenTLABI.GC_ERR_SUCCESS
     }
 }
 
@@ -240,7 +320,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
             let session = try firstCandidate.open(
                 accessFlags: GenTLDeviceAccess.exclusive.rawValue
             )
-            XCTAssertEqual(session.deviceHandle, DEV_HANDLE(rawValue: 3))
+            XCTAssertEqual(session.deviceHandle, api.deviceToken)
             try session.close()
 
             let activeCounts = api.snapshot()
