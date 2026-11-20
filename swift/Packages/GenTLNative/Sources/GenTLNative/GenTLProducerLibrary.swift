@@ -3,7 +3,7 @@ import Foundation
 import GenTLABI
 import GenTLAPI
 
-public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
+enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
     case fileNotFound(String)
     case notRegularFile(String)
     case loadFailed(path: String, reason: String)
@@ -33,10 +33,10 @@ public enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
 ///
 /// This class only loads and resolves the Producer's GenTL C ABI. Module
 /// operations are implemented by the GenTLNative API adapter, not by this loader.
-public final class GenTLProducerLibrary: @unchecked Sendable {
+final class GenTLProducerLibrary: @unchecked Sendable {
     /// Functions required by the GenTL 1.0 base API. Symbols introduced by
     /// later revisions are resolved optionally by GenTLNativeImplementation.
-    public static let requiredEntryPoints = [
+    static let requiredEntryPoints = [
         "GCGetInfo",
         "GCGetLastError",
         "GCInitLib",
@@ -86,14 +86,14 @@ public final class GenTLProducerLibrary: @unchecked Sendable {
         "DSGetBufferInfo"
     ]
 
-    public let url: URL
-    public let genTLHeaderVersion = GenTLVersion.v1_6
-    public static let abiHeaderVersionCode: UInt32 = GenTLABI_HeaderVersion()
+    let url: URL
+    let genTLHeaderVersion = GenTLVersion.v1_6
+    static let abiHeaderVersionCode: UInt32 = GenTLABI_HeaderVersion()
 
     private let libraryHandle: UnsafeMutableRawPointer
     private let lock = NSLock()
 
-    public init(url: URL) throws {
+    init(url: URL) throws {
         guard GenTLABI_LayoutValid() == 1 else {
             throw GenTLProducerLibraryError.unsupportedABI
         }
@@ -140,7 +140,7 @@ public final class GenTLProducerLibrary: @unchecked Sendable {
 
     /// Resolves a GenTL function exported by this Producer.
     /// The returned address is valid only while this library instance is alive.
-    public func resolveSymbol(_ name: String) throws -> UnsafeMutableRawPointer {
+    func resolveSymbol(_ name: String) throws -> UnsafeMutableRawPointer {
         lock.lock()
         defer { lock.unlock() }
 
