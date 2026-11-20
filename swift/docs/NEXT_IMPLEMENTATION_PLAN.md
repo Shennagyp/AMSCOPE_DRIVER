@@ -13,13 +13,15 @@ The library packages are not standalone applications and must not acquire artifi
 
 The repository-level Makefile is the supported command interface:
 
-- `make run`: download and launch the latest hosted Apple Silicon imaging-app artifact for `macos-version-optimization`.
-- `make run-probe`: download and execute the latest hosted camera-probe artifact.
-- `make build-local`: build the app with the local Swift toolchain.
-- `make run-local`: build and launch the app locally.
+- `make run`: build every Swift library package, build the imaging app, assemble and ad-hoc sign its `.app` bundle, then launch it locally.
+- `make run-probe`: build and run the Amcam camera diagnostic locally.
+- `make build-local`: build every Swift library and the imaging app without launching it.
+- `make run-local`: alias for `make run`.
 - `make test-local`: run all six Swift package test suites locally.
 
-The default `make run` path deliberately uses the hosted macOS build. It requires macOS 13+, Apple Silicon, `curl` and Python 3. It resolves and downloads a ZIP from a public GitHub Release asset; it does not use the Actions artifact-download endpoint and does not require GitHub CLI, a GitHub token, authentication or a local Xcode installation. GitHub anonymous API rate limits apply. Successful pushes to `macos-version-optimization` publish prereleases tagged `macos-build-<run>-<attempt>`. Local build/test targets require a compatible local Swift toolchain and Apple SDK; they are optional and are not prerequisites for `make run`.
+The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. The vendor `libamcam.dylib` remains a separate runtime requirement for camera access.
+
+Hosted macOS GitHub Actions remain responsible for package tests and app compilation validation. CI does not supply the local app binary and does not establish physical camera compatibility.
 
 ## 2. Package and executable boundaries
 

@@ -2,7 +2,7 @@
 
 ## Objective
 
-A native macOS camera application built on the Amcam SDK backend in this repository. The main window is a full-screen-capable live image surface. A hardware dock provides camera selection, refresh, start, stop, settings, SDK selection, and full-screen controls. Camera settings are presented in a popup sheet.
+A native macOS camera application built on the Amcam SDK backend in this repository. The main window is a full-screen-capable live image surface. A hardware dock provides camera selection, refresh, start, stop, settings, SDK selection, and full-screen controls. Camera settings are presented in a separate native window.
 
 The target application is a GenTLAPI consumer. GenTLRouter owns backend selection and device-session creation; the selected backend may be a native CTI Producer or the Amcam SDK-backed GenTL implementation. The app must not instantiate AmcamCameraDriver or AmcamCameraSession directly.
 
@@ -14,7 +14,7 @@ The target application is a GenTLAPI consumer. GenTLRouter owns backend selectio
 - **GenTLRouter** registers native CTI and Amcam backends, discovers devices and returns backend-bound device sessions.
 - **GenTLFeatureAccess** exposes typed controls alongside the unchanged GenTL 1.6 operation surface. Amcam maps supported controls to SDK methods; native CTI feature access requires a real GenApi XML/port path.
 - **AmcamGenTL** owns SDK loading, camera enumeration, session lifecycle, frame acquisition, control readback and model capability discovery.
-- **AmcamImagingApp** owns the macOS SwiftUI interface and translates backend-neutral frames to display images.
+- **AmcamImagingApp** owns the native macOS AppKit interface and translates backend-neutral frames to display images.
 - **amcam-camera-probe** remains a diagnostic executable; **amcam-imaging** is the user-facing application.
 
 Camera identity is deliberately separated:
@@ -159,53 +159,24 @@ The display decoder currently accepts RGB8 only. Mono, Bayer, packed RAW, YUV an
 
 ## Build and run
 
-The app is built and packaged by hosted macOS GitHub Actions. A local Xcode installation is not required.
+Run from the repository root on macOS 13 or later:
 
-1. Confirm the Mac is Apple Silicon and runs macOS 13 or later:
+```sh
+git pull
+make run
+```
 
-   ```sh
-   uname -m
-   sw_vers -productVersion
-   ```
+The command builds all six Swift library packages from source, builds the imaging executable, assembles and ad-hoc signs `Amcam Imaging.app`, and launches it. It does not download a release asset or depend on GitHub Actions artifacts.
 
-2. Open [workflow run 44711499416](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44711499416) and download the `amcam-imaging-macos-arm64` artifact.
-3. Save the downloaded artifact archive as `~/Downloads/amcam-imaging-macos-arm64.zip`, then run:
+The application UI uses AppKit, not SwiftUI. This avoids the `SwiftUIMacros.StateMacro` plugin dependency that caused the Command Line Tools build failure. The full Xcode application is not required; Apple's Swift compiler, macOS SDK and AppKit SDK must be available. If Swift is missing, install Command Line Tools with `xcode-select --install`.
 
-   ```sh
-   set -e
-   test "$(uname -m)" = "arm64" || { echo "This build requires Apple Silicon (arm64)."; exit 1; }
-   major="$(sw_vers -productVersion | cut -d. -f1)"
-   test "$major" -ge 13 || { echo "This build requires macOS 13 or later."; exit 1; }
-   mkdir -p "$HOME/Downloads/amcam-imaging-artifact" "$HOME/Downloads/amcam-imaging-test"
-   ditto -x -k "$HOME/Downloads/amcam-imaging-macos-arm64.zip" "$HOME/Downloads/amcam-imaging-artifact"
-   ditto -x -k "$HOME/Downloads/amcam-imaging-artifact/Amcam-Imaging-macos-arm64.zip" "$HOME/Downloads/amcam-imaging-test"
-   xattr -dr com.apple.quarantine "$HOME/Downloads/amcam-imaging-test/Amcam Imaging.app" 2>/dev/null || true
-   open "$HOME/Downloads/amcam-imaging-test/Amcam Imaging.app"
-   ```
+Other commands:
 
-4. If the app does not find the SDK automatically, use SDK… to select the vendor `libamcam.dylib`.
-5. Select the camera from the hardware dock, then start live acquisition.
+- `make build-local` — build all packages and assemble the app without launching it.
+- `make run-probe` — build and run the camera diagnostic from source.
+- `make test-local` — run all six Swift package test suites.
 
-The vendor SDK is proprietary and is not bundled. The app requires a compatible arm64 `libamcam.dylib` version 58.28273.20250415. The app is ad-hoc signed for local testing, not notarized. CI does not establish physical camera compatibility; MU503 acceptance remains a separate hardware test.
-
-## Verification boundary
-
-Swift package tests use a deterministic native C fixture. They verify ABI calls, state transitions, callbacks, feature range logic, and memory safety; they do not establish physical camera compatibility. The app's CI build proves compilation and packaging only. Physical MU503 acceptance remains a separate test.
-
-
-## CI build and current runnable artifact
-
-Current app artifact: [workflow run 44711499416](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44711499416).
-
-- Artifact: `amcam-imaging-macos-arm64`
-- Artifact ID: `14617182885`
-- SHA-256: `c647d6d11ea8ab4df686b6f804f13d5b95aff9e039c14ec4b449fd49410ab5b9`
-- Expires: 2026-12-04 09:34 UTC.
-- The app build, ad-hoc code-signature verification, arm64 Mach-O verification, routed application dependency guard, and artifact upload all succeeded.
-
-The same run passed the AmcamGenTL and AmcamCameraModel test jobs. The GenTLAPI, GenTLNative and GenTLRouter jobs were still queued when this artifact was produced; the full five-package matrix is therefore not yet confirmed green. The app artifact itself is available for the first physical-camera smoke test.
-
-The app is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK. It requires Apple Silicon (arm64), macOS 13 or later, and a compatible arm64 `libamcam.dylib` version 58.28273.20250415. The artifact is a build/package result, not proof of physical camera compatibility.
+The vendor SDK is proprietary and is not bundled. The app requires a compatible arm64 `libamcam.dylib` version 58.28273.20250415. If automatic discovery fails, use SDK… to select the library. The app is ad-hoc signed for local testing, not notarized.
 
 ### First physical-camera test
 
@@ -220,13 +191,8 @@ Use the app first without changing the camera pixel format:
 
 The application display path currently decodes RGB8 only. Do not use RAW, Bayer, YUV or other pixel formats as an acceptance test yet. Keep the default format for the first test. Record any error text and whether it occurred during discovery, open, start, streaming, stop or close.
 
-The camera probe artifact from the same run is:
-- Artifact: `amcam-camera-probe-macos-arm64`
-- Artifact ID: `14617607266`
-- SHA-256: `b59e0add3313556ab751d29bb6b9da91862062fc1f5e08233d174fb663600d82`
-- Expires: 2026-12-04 09:33 UTC.
+The camera probe can exercise the backend without the GUI if the app reports discovery or acquisition errors.
 
-The probe exercises the backend without the GUI and is useful if the app reports discovery or acquisition errors.
 ## TDD assessment
 
 The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close.
