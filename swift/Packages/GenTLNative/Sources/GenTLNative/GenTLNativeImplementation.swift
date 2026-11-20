@@ -1189,7 +1189,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 // A Producer returning an already-live event handle violates
                 // handle uniqueness. Undo the just-issued registration before
                 // reporting the invalid Producer behavior.
-                try? functions.gcUnregisterEvent(sourcePointer, eventType)
+                _ = functions.gcUnregisterEvent(sourcePointer, eventType)
                 throw GC_ERROR.resourceInUse
             }
             registeredEventsByHandle[handle.rawValue] = RegisteredEvent(
@@ -1686,7 +1686,7 @@ extension GenTLNativeImplementation: GenTLAPI {
                 guard let event else { throw GC_ERROR.invalidHandle }
                 let key = UInt(bitPattern: event)
                 guard registeredEventsByHandle[key] == nil else {
-                    try? functions.gcUnregisterEvent(hEventSrc, iEventID)
+                    _ = functions.gcUnregisterEvent(hEventSrc, iEventID)
                     throw GC_ERROR.resourceInUse
                 }
                 registeredEventsByHandle[key] = RegisteredEvent(

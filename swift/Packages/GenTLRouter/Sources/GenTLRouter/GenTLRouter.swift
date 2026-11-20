@@ -84,7 +84,11 @@ public struct GenTLProducerRegistrationReport: Sendable {
 }
 
 /// A discovered device remains bound to the exact GenTL implementation and
-/// interface handle that discovered it. The application receives the raw GenTL API.
+/// interface handle that discovered it. The opaque C handles are immutable;
+/// their lifetime is retained by the provider context, and provider lifecycle
+/// transitions are serialized by that context. The API contract is Sendable.
+/// This audited boundary is therefore explicitly unchecked rather than
+/// pretending UnsafeMutableRawPointer itself is Sendable.
 
 /// Public GenTL device access modes for routed device opening.
 public enum GenTLDeviceAccessMode: Int32, Sendable {
@@ -93,7 +97,7 @@ public enum GenTLDeviceAccessMode: Int32, Sendable {
     case exclusive = 4
 }
 
-public struct GenTLDeviceCandidate: Sendable, Identifiable {
+public struct GenTLDeviceCandidate: @unchecked Sendable, Identifiable {
     public let backendID: String
     public let interfaceID: String
     public let deviceID: String

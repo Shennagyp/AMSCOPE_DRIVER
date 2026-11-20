@@ -11,7 +11,8 @@ public enum GenTLFeatureKind: String, Codable, Equatable, Sendable {
 }
 
 /// A typed feature value. Enumeration values use their symbolic names, not
-/// transport-specific integer encodings.
+/// transport-specific integer encodings. Integer vectors represent SDK-backed
+/// multi-channel controls; their expected length is declared by the descriptor.
 public enum GenTLFeatureValue: Equatable, Sendable {
     case boolean(Bool)
     case integer(Int64)
@@ -48,6 +49,8 @@ public struct GenTLFeatureNumericRange: Equatable, Sendable {
     }
 }
 
+/// Describes one scalar or vector feature. `elementCount` is meaningful for
+/// vector kinds and remains nil for scalar values.
 public struct GenTLFeatureDescriptor: Equatable, Sendable, Identifiable {
     public let name: String
     public let displayName: String

@@ -189,16 +189,12 @@ final class CameraApplicationModel: ObservableObject {
                     do {
                         let frame = try newAcquisition.nextFrame(timeoutMilliseconds: 5_000)
                         guard !frame.isIncomplete else { continue }
-                        await MainActor.run {
-                            self?.accept(frame)
-                        }
+                        await self?.accept(frame)
                     } catch let error as GenTLAcquisitionError {
                         if case .acquisitionStopped = error {
                             break
                         }
-                        await MainActor.run {
-                            self?.handleCaptureFailure(error)
-                        }
+                        await self?.handleCaptureFailure(error)
                         break
                     } catch {
                         await MainActor.run {
