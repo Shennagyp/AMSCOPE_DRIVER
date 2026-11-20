@@ -32,10 +32,10 @@ on:
 permissions:
   contents: read
 
-# Keep only the newest pending validation run for this branch. A currently
-# running run is allowed to finish; superseded queued runs are replaced.
+# Keep validation runs isolated by branch. v6 bypasses the stale v5 queue,
+# whose runtime test run is blocked by the superseded fail-fast close test.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v5
+  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v6
   cancel-in-progress: false
 
 jobs:
