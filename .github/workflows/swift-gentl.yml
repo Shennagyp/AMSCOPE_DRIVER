@@ -23,6 +23,9 @@ on:
       - "swift/Packages/**"
       - "swift/Apps/**"
       - "swift/docs/**"
+      - "scripts/**"
+      - "vendor/**"
+      - "README.md"
       - ".github/workflows/swift-gentl.yml"
   workflow_dispatch:
 
