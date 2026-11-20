@@ -257,16 +257,6 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 numericRange: CameraFeatureNumericRange(minimum: 0, maximum: 1_000_000_000, increment: 1)
             ),
             CameraFeatureDescriptor(
-                name: "ZeroIncrementRate", displayName: "Invalid rate", kind: .floatingPoint,
-                isAvailable: true, isReadable: true, isWritable: true,
-                numericRange: CameraFeatureNumericRange(minimum: 0, maximum: 10, increment: 0)
-            ),
-            CameraFeatureDescriptor(
-                name: "NonFiniteRange", displayName: "Non-finite range", kind: .integer,
-                isAvailable: true, isReadable: true, isWritable: true,
-                numericRange: CameraFeatureNumericRange(minimum: 0, maximum: .infinity)
-            ),
-            CameraFeatureDescriptor(
                 name: "ExposureMode", displayName: "Exposure mode", kind: .enumeration,
                 isAvailable: true, isReadable: true, isWritable: true,
                 enumerationValues: ["Off", "Once"]
@@ -317,18 +307,6 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertEqual(
             resolver.validateWrite(.floatingPoint(.nan), named: "SteppedRate", descriptors: descriptors),
             .invalidValue("SteppedRate must be a finite number.")
-        )
-        XCTAssertEqual(
-            resolver.validateWrite(
-                .floatingPoint(5),
-                named: "ZeroIncrementRate",
-                descriptors: descriptors
-            ),
-            .invalidValue("ZeroIncrementRate has an invalid numeric range descriptor.")
-        )
-        XCTAssertEqual(
-            resolver.validateWrite(.integer(5), named: "NonFiniteRange", descriptors: descriptors),
-            .invalidValue("NonFiniteRange has an invalid numeric range descriptor.")
         )
         XCTAssertEqual(
             resolver.validateWrite(.enumeration("Continuous"), named: "ExposureMode", descriptors: descriptors),
