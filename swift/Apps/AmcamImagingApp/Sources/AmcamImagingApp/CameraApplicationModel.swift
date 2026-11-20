@@ -259,7 +259,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func shutdown() async -> Bool {
-        let operation = cameraSelectionGeneration
+        let operation = beginCameraSelectionOperation()
         return await closeSession(expectedGeneration: operation)
     }
 
