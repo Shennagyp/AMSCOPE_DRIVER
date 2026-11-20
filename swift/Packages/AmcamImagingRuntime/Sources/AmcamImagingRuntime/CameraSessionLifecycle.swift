@@ -64,7 +64,7 @@ public actor CameraSessionLifecycle {
     /// Opens and adopts a device as one atomic library-owned lifecycle operation.
     /// The returned session is a borrowed backend handle for feature access; the
     /// lifecycle actor remains its sole owner and is responsible for closing it.
-    public func open(_ device: any CameraRuntimeDevice) async throws -> any CameraRuntimeSession {
+    public func open(_ device: any CameraRuntimeDevice) async throws {
         guard !lifecycleOperationInProgress else {
             throw CameraSessionLifecycleError.operationInProgress
         }
@@ -78,7 +78,39 @@ public actor CameraSessionLifecycle {
         let openedSession = try await device.open()
         session = openedSession
         lastDeliveredFrameSequence = nil
-        return openedSession
+    }
+
+    /// Feature I/O is serialized with lifecycle transitions. The backend session
+    /// never escapes this actor, so close cannot race a borrowed feature handle.
+    public func supportsAcquisition() async -> Bool {
+        guard !lifecycleOperationInProgress, let session else { return false }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+        return await session.supportsAcquisition()
+    }
+
+    public func featureDescriptors() async throws -> [CameraFeatureDescriptor] {
+        guard !lifecycleOperationInProgress else { throw CameraSessionLifecycleError.operationInProgress }
+        guard let session else { throw CameraSessionLifecycleError.sessionNotAttached }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+        return try await session.featureDescriptors()
+    }
+
+    public func readFeature(_ name: String) async throws -> CameraFeatureValue {
+        guard !lifecycleOperationInProgress else { throw CameraSessionLifecycleError.operationInProgress }
+        guard let session else { throw CameraSessionLifecycleError.sessionNotAttached }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+        return try await session.readFeature(name)
+    }
+
+    public func writeFeature(_ value: CameraFeatureValue, named name: String) async throws {
+        guard !lifecycleOperationInProgress else { throw CameraSessionLifecycleError.operationInProgress }
+        guard let session else { throw CameraSessionLifecycleError.sessionNotAttached }
+        lifecycleOperationInProgress = true
+        defer { lifecycleOperationInProgress = false }
+        try await session.writeFeature(value, named: name)
     }
 
     public func start() async throws {
