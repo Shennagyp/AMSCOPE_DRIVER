@@ -113,7 +113,7 @@ private enum ProbeError: Error, LocalizedError {
             return "Device index \(index) is outside the enumerated device range (0..<\(count))."
         case .noDataStream: return "The opened camera exposes no data stream."
         case .invalidInfo(let message): return "Unexpected GenTL information value: \(message)"
-        case .invalidEventPayload: return "The New Buffer event payload is shorter than an opaque handle."
+        case .invalidEventPayload: return "The New Buffer event payload does not match the backend's two-word buffer-handle/user-pointer layout."
         case .unexpectedBuffer(let actual, let expected):
             return "The New Buffer event returned handle \(actual), expected \(expected)."
         case .incompleteFrame: return "The camera delivered an incomplete or undersized frame."
@@ -242,8 +242,10 @@ struct AmcamCameraProbe {
             buffer: nil,
             command: GenTLInfoCommand.Stream.payloadSize.rawValue
         )
-        guard payloadSize > 0 else {
-            throw ProbeError.invalidInfo("stream payload size \(payloadSize)")
+        guard payloadSize > 0, payloadSize <= 512 * 1024 * 1024 else {
+            throw ProbeError.invalidInfo(
+                "stream payload size \(payloadSize) is outside the supported range (1...536870912)"
+            )
         }
 
         let eventHandle = try backend.GCRegisterEvent(
