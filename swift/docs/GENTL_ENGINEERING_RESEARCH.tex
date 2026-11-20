@@ -569,4 +569,8 @@ The integration suite now deliberately sends invalid sentinel inputs to the thre
 \section{Invalid dynamic-library loading}
 The loader unit suite now distinguishes three filesystem/load boundaries: missing path, non-regular path, and an existing regular file whose contents are not a valid Mach-O dynamic library. The third case must report \texttt{loadFailed}, not \texttt{fileNotFound} or \texttt{notRegularFile}. This validates error classification before symbol resolution begins.
 
+
+
+The latest test workflow attempt is run \texttt{44674821941} for commit \texttt{4c108885fb95c4bf7912da5997d0e42db2d33f43}. All five jobs (four macOS package jobs and one Ubuntu ABI/API job) again terminated with runner ID zero and no executed steps. The latest source additions therefore remain uncompiled and unexecuted.
+
 \end{document}
