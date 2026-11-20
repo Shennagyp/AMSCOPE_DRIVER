@@ -586,11 +586,14 @@ final class AmcamSDK: @unchecked Sendable {
         if let pullV4 = api.pullImageV4 {
             operationName?.pointee = "Amcam_PullImageV4"
             var info = AmcamFrameInfoV4()
-            let result = pullV4(handle, buffer, 0, Self.requestedPullBits, -1, &info)
+            // Match the vendor's Amcam Python sample: PullImageV4(..., still: 0,
+            // bits: 24, rowPitch: 0, ...). A zero row pitch requests the SDK's
+            // default DWORD-aligned DIB rows, matching TDIBWIDTHBYTES(width * 24).
+            let result = pullV4(handle, buffer, 0, Self.requestedPullBits, 0, &info)
             if result != Self.notImplementedHRESULT {
                 guard result >= 0 else { return result }
                 copy(info.v3, to: frameInfo)
-                tightlyPackedRows?.pointee = true
+                tightlyPackedRows?.pointee = false
                 metadata?.pointee = Self.metadata(from: info)
                 return result
             }
