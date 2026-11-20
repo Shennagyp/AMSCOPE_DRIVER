@@ -135,7 +135,8 @@ public struct AmcamCameraStateResolver: Sendable {
 
     public func resolutions(from descriptors: [CameraFeatureDescriptor]) -> [AmcamResolution] {
         let resolutionDescriptor = descriptors.last(where: { $0.name == "AmcamResolutionIndex" })
-        guard resolutionDescriptor?.isAvailable == true else { return [] }
+        guard resolutionDescriptor?.isAvailable == true,
+              resolutionDescriptor?.kind == .enumeration else { return [] }
         let options = resolutionDescriptor?.enumerationValues ?? []
         return options.compactMap { symbol -> AmcamResolution? in
             guard let separator = symbol.firstIndex(of: ":"),
@@ -159,6 +160,7 @@ public struct AmcamCameraStateResolver: Sendable {
               let descriptor = descriptors.last(where: { $0.name == "AmcamResolutionIndex" }),
               descriptor.isAvailable,
               descriptor.isReadable,
+              descriptor.kind == .enumeration,
               case .enumeration(let symbol)? = try? await readFeature("AmcamResolutionIndex"),
               let separator = symbol.firstIndex(of: ":"),
               let index = Int(symbol[..<separator]) else {
