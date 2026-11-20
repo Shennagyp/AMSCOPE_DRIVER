@@ -75,7 +75,10 @@ public struct AmcamCameraStateResolver: Sendable {
                 )
             }
         case .integerVector(let values):
-            if let expectedCount = descriptor.elementCount, values.count != expectedCount {
+            guard let expectedCount = descriptor.elementCount else {
+                return .invalidValue("\(name) does not declare its vector element count.")
+            }
+            if values.count != expectedCount {
                 return .invalidValue(
                     "\(name) requires exactly \(expectedCount) vector elements."
                 )
