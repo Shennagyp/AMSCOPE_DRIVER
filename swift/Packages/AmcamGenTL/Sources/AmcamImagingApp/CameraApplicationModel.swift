@@ -164,6 +164,14 @@ final class CameraApplicationModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
+        guard let session else { return }
+        do {
+            controls = try session.setWhiteBalanceTemperatureTint(temperature: temperature, tint: tint)
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func setExposureGain(_ percent: UInt16) {
         guard let session else { return }
         do {
