@@ -33,26 +33,63 @@ The feature flag values below are taken from the supplied amcam.py version 58.28
 
 | Feature | Model flag |
 |---|---:|
+| CMOS sensor | 0x00000001 |
+| Progressive CCD | 0x00000002 |
+| Interlaced CCD | 0x00000004 |
 | Hardware ROI | 0x00000008 |
-| Monochrome sensor | 0x00000010 |
+| Monochrome | 0x00000010 |
 | Binning / skipping | 0x00000020 |
+| USB 3 | 0x00000040 |
 | TEC present | 0x00000080 |
+| USB 3 camera connected through USB 2 | 0x00000100 |
+| ST4 port | 0x00000200 |
 | Sensor temperature | 0x00000400 |
+| High full-well capacity | 0x00000800 |
+| RAW 10 | 0x00001000 |
+| RAW 12 | 0x00002000 |
+| RAW 14 | 0x00004000 |
+| RAW 16 | 0x00008000 |
 | Cooling fan | 0x00010000 |
 | TEC on/off and target control | 0x00020000 |
+| ISP chip | 0x00040000 |
 | Software trigger | 0x00080000 |
 | External trigger | 0x00100000 |
+| Single-trigger mode | 0x00200000 |
 | Black level | 0x00400000 |
 | Auto focus | 0x00800000 |
-| Conversion gain | 0x04000000 |
+| Frame buffer | 0x01000000 |
+| DDR frame buffer | 0x02000000 |
+| Conversion gain (HCG/LCG) | 0x04000000 |
+| YUV 411 | 0x08000000 |
+| VUYY | 0x10000000 |
+| YUV 444 | 0x20000000 |
+| RGB 888 | 0x40000000 |
+| RAW 8 | 0x80000000 |
+| GMCY 8 | 0x0000000100000000 |
+| GMCY 12 | 0x0000000200000000 |
+| UYVY | 0x0000000400000000 |
+| Conversion gain HDR | 0x0000000800000000 |
+| Global shutter | 0x0000001000000000 |
 | Focus motor | 0x0000002000000000 |
 | Precise frame rate | 0x0000004000000000 |
 | Anti-fog heat | 0x0000008000000000 |
 | Low-noise mode | 0x0000010000000000 |
 | Hardware level range | 0x0000020000000000 |
+| Hardware events | 0x0000040000000000 |
 | Embedded light source | 0x0000080000000000 |
 | Filter wheel | 0x0000100000000000 |
+| GigE | 0x0000200000000000 |
+| 10 GigE | 0x0000400000000000 |
+| 5 GigE | 0x0000800000000000 |
+| 2.5 GigE | 0x0001000000000000 |
+| Astro auto-focuser | 0x0002000000000000 |
+| Standalone light source | 0x0004000000000000 |
+| Camera Link | 0x0008000000000000 |
+| CoaXPress | 0x0010000000000000 |
+| RAW 12 packed | 0x0020000000000000 |
 | Self trigger | 0x0040000000000000 |
+| RAW 11 | 0x0080000000000000 |
+| GHOPTO sensor | 0x0100000000000000 |
 
 Exposure, analog gain, white balance, and some image controls do not have a dedicated model flag in this descriptor. They must be confirmed by successful SDK probes or feature-specific range queries. The app must not infer their support from the camera family name.
 
