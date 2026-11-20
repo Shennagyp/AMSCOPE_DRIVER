@@ -2,7 +2,8 @@ import Darwin
 import Foundation
 import XCTest
 @_spi(BackendConvenience) import GenTLAPI
-@_spi(BackendFactory) @testable import AmcamGenTL
+@testable import AmcamGenTL
+@_spi(BackendFactory) import AmcamGenTL
 
 private final class FrameCapture: @unchecked Sendable {
     private let lock = NSLock()
