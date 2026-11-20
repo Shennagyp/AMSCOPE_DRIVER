@@ -134,10 +134,13 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             alignment: 64
         )
         memory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
+        var cleanupCompleted = false
         defer {
-            try? stream.stop()
-            try? stream.close()
-            try? session.close()
+            if !cleanupCompleted {
+                try? stream.stop()
+                try? stream.close()
+                try? session.close()
+            }
             memory.deallocate()
         }
 
@@ -168,6 +171,10 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         // A finite acquisition auto-stops the SDK. DSStop must still complete
         // the GenTL acquisition lifecycle and release its outstanding state.
+        try stream.stop()
+        try stream.close()
+        try session.close()
+        cleanupCompleted = true
     }
 
     private func buildMockSDK() throws -> URL {
