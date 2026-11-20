@@ -6,11 +6,15 @@ The probe uses the actual \`AmcamGenTLImplementation\` and GenTL-style acquisiti
 
 ## Obtain the executable
 
-Open the latest workflow run where the **AmcamGenTL tests** job completed successfully. The overall workflow may still be marked failed because unrelated GenTLNative or GenTLRouter jobs are failing:
+The current source revision was verified in [workflow run 44683070601](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44683070601). Its **AmcamGenTL tests**, **Build macOS camera probe**, and **Upload macOS camera probe** steps all succeeded. Download `amcam-camera-probe-macos-arm64` from that run's **Artifacts** section.
 
-<https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/workflows/swift-gentl.yml>
+- Artifact ID: `14605760059`
+- SHA-256: `b23ee03db32c19c8def9f7c341e882f70f6741d04b453edf29dbd67e3e8adb13`
+- Expiration: December 4, 2026
 
-Open the run's **Artifacts** section and download \`amcam-camera-probe-macos-arm64\`. The artifact contains the executable and this instruction file. The vendor SDK is proprietary and is not included.
+The artifact is an Apple Silicon arm64 executable, matching the Mac's architecture. The overall workflow remains marked failed because the separate GenTLNative and GenTLRouter jobs fail; those failures do not affect the successful Amcam package, probe build, or artifact upload. The artifact contains the executable and this instruction file. The vendor SDK is proprietary and is not included.
+
+The original vendor Amcam SDK had already streamed successfully on this Mac. This probe is the next verification layer: it exercises the new Swift AmcamGenTL backend against the actual vendor dylib and physical camera, rather than retesting only the SDK itself.
 
 ## Find the vendor SDK
 
