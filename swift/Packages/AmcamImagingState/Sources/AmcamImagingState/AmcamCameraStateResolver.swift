@@ -232,7 +232,7 @@ public struct AmcamCameraStateResolver: Sendable {
                 readbackPercent: current,
                 minimumPercent: minimum,
                 maximumPercent: maximum,
-                defaultPercent: minimum
+                defaultPercent: nil
             )
         } else {
             gain = nil
