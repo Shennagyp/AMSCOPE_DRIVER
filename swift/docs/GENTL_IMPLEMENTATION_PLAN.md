@@ -298,3 +298,8 @@ The optional-export variant now omits all 17 later-revision symbols and invokes 
 ### Required symbol omission matrix (2026-11-20)
 
 The test fixture can now omit any one of the 47 required GenTL 1.0 symbols by compile-time flag. The integration suite iterates the loader's required-symbol list, builds each negative variant, and verifies the exact missing symbol is reported. This test source is committed but not yet executed.
+
+
+### ABI header/layout assertions (2026-11-20)
+
+Added a test for the compiled GenTL 1.6.0 header version code and the runtime ABI layout validator. The C ABI target's compile-time structure layout assertions remain the authoritative compile gate. Execution is pending.
