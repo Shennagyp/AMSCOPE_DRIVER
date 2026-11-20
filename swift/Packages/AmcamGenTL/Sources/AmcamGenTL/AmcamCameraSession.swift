@@ -258,19 +258,27 @@ final class AmcamCameraSession: @unchecked Sendable {
     }
 
     func setAutomaticExposure(enabled: Bool) throws -> AmcamControlSnapshot {
+        try setAutoExposureMode(enabled ? .continuous : .manual)
+    }
+
+    func setAutoExposureMode(_ mode: AmcamAutoExposureMode) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
-        try sdk.setAutoExposure(activeHandle, enabled: enabled)
-        let candidateRequestedExposure = enabled ? nil : requestedExposureMicroseconds
+        try sdk.setAutoExposureMode(activeHandle, mode: mode)
+        let candidateRequestedExposure = mode == .manual ? requestedExposureMicroseconds : nil
         let snapshot = try readControls(
             using: activeHandle,
             requestedExposure: candidateRequestedExposure,
             requestedFrameRate: requestedFrameRate,
             requestedSpeedLevel: requestedSpeedLevel
         )
-        guard snapshot.exposure.automaticEnabled == enabled else {
-            throw AmcamCameraError.controlReadbackMismatch(control: "automatic exposure", requested: enabled ? "on" : "off", actual: snapshot.exposure.automaticEnabled ? "on" : "off")
+        guard snapshot.exposure.autoMode == mode else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "auto exposure mode",
+                requested: String(mode.rawValue),
+                actual: String(snapshot.exposure.autoMode.rawValue)
+            )
         }
         requestedExposureMicroseconds = candidateRequestedExposure
         return snapshot
@@ -406,10 +414,10 @@ final class AmcamCameraSession: @unchecked Sendable {
         requestedFrameRate: Double?,
         requestedSpeedLevel: Int?
     ) throws -> AmcamControlSnapshot {
-        let automatic = try sdk.readAutoExposure(handle)
+        let autoMode = try sdk.readAutoExposureMode(handle)
         let exposureReadback = try sdk.readExposureTime(handle)
         let exposure = AmcamExposureControl(
-            automaticEnabled: automatic,
+            autoMode: autoMode,
             readbackMicroseconds: exposureReadback.current,
             minimumMicroseconds: exposureReadback.minimum,
             maximumMicroseconds: exposureReadback.maximum,
