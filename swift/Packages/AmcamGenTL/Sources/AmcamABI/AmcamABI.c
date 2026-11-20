@@ -19,24 +19,57 @@ int amcam_abi_layout_valid(void) {
            sizeof(AmcamDeviceV2) == 136 && sizeof(AmcamFrameInfoV2) == 24 &&
            offsetof(AmcamDeviceV2, model) == 128 && offsetof(AmcamFrameInfoV2, timestamp) == 16;
 }
-static int copy_fixed_string(const char *source, size_t source_capacity, char *destination, size_t destination_capacity) {
+
+static int copy_fixed_string(
+    const char *source,
+    size_t source_capacity,
+    char *destination,
+    size_t destination_capacity
+) {
     if (!source || !destination || destination_capacity == 0) return 0;
-    const char *terminator = (const char *)memchr(source, '\\0', source_capacity);
+    const char *terminator = (const char *)memchr(source, '\0', source_capacity);
     if (!terminator) return 0;
+
     const size_t length = (size_t)(terminator - source);
     if (length >= destination_capacity) return 0;
+
     memcpy(destination, source, length);
-    destination[length] = '\\0';
+    destination[length] = '\0';
     return 1;
 }
-int amcam_device_copy_display_name(const AmcamDeviceV2 *device, char *destination, size_t capacity) {
-    return device ? copy_fixed_string(device->displayname, sizeof(device->displayname), destination, capacity) : 0;
+
+int amcam_device_copy_display_name(
+    const AmcamDeviceV2 *device,
+    char *destination,
+    size_t capacity
+) {
+    return device
+        ? copy_fixed_string(device->displayname, sizeof(device->displayname), destination, capacity)
+        : 0;
 }
-int amcam_device_copy_identifier(const AmcamDeviceV2 *device, char *destination, size_t capacity) {
-    return device ? copy_fixed_string(device->id, sizeof(device->id), destination, capacity) : 0;
+
+int amcam_device_copy_identifier(
+    const AmcamDeviceV2 *device,
+    char *destination,
+    size_t capacity
+) {
+    return device
+        ? copy_fixed_string(device->id, sizeof(device->id), destination, capacity)
+        : 0;
 }
-int amcam_model_resolution(const AmcamModelV2 *model, uint32_t index, uint32_t *width, uint32_t *height) {
-    if (!model || !width || !height || index >= model->preview || index >= AMCAM_ABI_PREVIEW_RESOLUTION_COUNT) return 0;
+
+int amcam_model_resolution(
+    const AmcamModelV2 *model,
+    uint32_t index,
+    uint32_t *width,
+    uint32_t *height
+) {
+    if (!model || !width || !height ||
+        index >= model->preview ||
+        index >= AMCAM_ABI_PREVIEW_RESOLUTION_COUNT) {
+        return 0;
+    }
+
     *width = model->res[index].width;
     *height = model->res[index].height;
     return 1;
