@@ -390,7 +390,7 @@ Added `testEveryProtocolOperationDispatchesToItsMatchingNativeExport`. It:
 2. stores the implementation as `any GenTLAPI`;
 3. initializes the Producer;
 4. registers an event and validates the returned native handle;
-5. invokes the other 60 protocol operations with type-correct neutral arguments;
+5. invokes 58 other operations with type-correct neutral arguments and uses separate sentinel probes for GCReadPort and GCWritePort;
 6. asserts each operation's unique native return code;
 7. unregisters the event and closes the Producer;
 8. reads the test-only C counters and asserts the expected native invocation count for every operation, including the internal `EventKill` call performed by unregister.
@@ -405,7 +405,7 @@ A script compared:
 - all 64 exports in the mock fixture;
 - all 60 non-lifecycle calls in the dispatch test, plus explicit init/register/unregister/close calls.
 
-Results: 64 header operations, 64 protocol requirements, 64 mock exports, zero missing or extra exports, 60 per-operation unique-return assertions, and four explicit lifecycle assertions. This is static source inspection only.
+Results: 64 header operations, 64 protocol requirements, 64 mock exports, zero missing or extra exports, 58 per-operation unique-return assertions, two port sentinel assertions, and four explicit lifecycle assertions. This is static source inspection only.
 
 ### Current blocker and next gate
 
