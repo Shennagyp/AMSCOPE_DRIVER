@@ -211,27 +211,45 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             privateData: nil,
             allocatedByProvider: false
         )
-        try stream.queue(bufferHandle)
-        try stream.start(numberToAcquire: 1)
-
-        let eventData = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
-        XCTAssertEqual(eventData.count, 2 * MemoryLayout<UInt>.size)
-        let deliveredHandle = eventData.withUnsafeBytes {
-            $0.loadUnaligned(as: UInt.self)
+        let emitterHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(emitterHandle)
+        defer { if let emitterHandle { dlclose(emitterHandle) } }
+        guard let symbol = dlsym(emitterHandle, "MockAmcam_EmitEvent") else {
+            XCTFail("Mock SDK is missing MockAmcam_EmitEvent")
+            return
         }
-        XCTAssertEqual(deliveredHandle, bufferHandle.rawValue)
+        let emitEvent = unsafeBitCast(symbol, to: (@convention(c) (UInt32) -> Void).self)
 
-        XCTAssertEqual(memory.load(as: UInt8.self), 0x5a)
-        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 9), .size(payloadSize))
-        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 10), .size(640))
-        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 11), .size(480))
-        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 16), .uint64(1))
-        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 4), .bool8(true))
-        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 5), .bool8(false))
+        try stream.queue(bufferHandle)
+        try stream.start(numberToAcquire: 3)
 
-        // A finite acquisition auto-stops the SDK. DSStop must still complete
-        // the GenTL acquisition lifecycle and release its outstanding state.
+        for expectedSequence in UInt64(1)...UInt64(3) {
+            let eventData = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
+            XCTAssertEqual(eventData.count, 2 * MemoryLayout<UInt>.size)
+            let deliveredHandle = eventData.withUnsafeBytes {
+                $0.loadUnaligned(as: UInt.self)
+            }
+            XCTAssertEqual(deliveredHandle, bufferHandle.rawValue)
+
+            XCTAssertEqual(memory.load(as: UInt8.self), 0x5a)
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 1), .size(payloadSize))
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 9), .size(payloadSize))
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 10), .size(640))
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 11), .size(480))
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 16), .uint64(expectedSequence))
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 4), .bool8(true))
+            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 5), .bool8(false))
+
+            if expectedSequence < 3 {
+                try stream.queue(bufferHandle)
+                emitEvent(0x0004)
+            }
+        }
+
+        // The final delivery schedules an asynchronous SDK stop. DSStop waits
+        // for it and must still complete the GenTL acquisition lifecycle.
         try stream.stop()
+        XCTAssertEqual(try stream.info(command: 8), .bool8(false))
         try stream.close()
         try session.close()
         cleanupCompleted = true
