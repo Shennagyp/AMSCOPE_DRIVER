@@ -106,21 +106,21 @@ public enum CameraFeatureAccessError: Error, Equatable, Sendable, LocalizedError
 /// Application-facing camera session. Transport handles remain inside adapters.
 public protocol CameraRuntimeSession: Sendable {
     var supportsAcquisition: Bool { get }
-    func featureDescriptors() throws -> [CameraFeatureDescriptor]
-    func readFeature(_ name: String) throws -> CameraFeatureValue
-    func writeFeature(_ value: CameraFeatureValue, named name: String) throws
+    func featureDescriptors() async throws -> [CameraFeatureDescriptor]
+    func readFeature(_ name: String) async throws -> CameraFeatureValue
+    func writeFeature(_ value: CameraFeatureValue, named name: String) async throws
     func makeAcquisition() async throws -> any CameraRuntimeAcquisition
     func close() async throws
 }
 public extension CameraRuntimeSession {
     var supportsAcquisition: Bool { false }
-    func featureDescriptors() throws -> [CameraFeatureDescriptor] {
+    func featureDescriptors() async throws -> [CameraFeatureDescriptor] {
         throw CameraFeatureAccessError.unsupported
     }
-    func readFeature(_ name: String) throws -> CameraFeatureValue {
+    func readFeature(_ name: String) async throws -> CameraFeatureValue {
         throw CameraFeatureAccessError.unsupported
     }
-    func writeFeature(_ value: CameraFeatureValue, named name: String) throws {
+    func writeFeature(_ value: CameraFeatureValue, named name: String) async throws {
         throw CameraFeatureAccessError.unsupported
     }
 }

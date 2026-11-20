@@ -48,15 +48,7 @@ final class CameraApplicationModel: ObservableObject {
         devices.first { $0.identifier == selectedDeviceID }
     }
 
-    var currentResolution: AmcamResolution? {
-        guard let featureSession,
-              case .enumeration(let symbol)? = try? featureSession.readFeature("AmcamResolutionIndex"),
-              let separator = symbol.firstIndex(of: ":"),
-              let index = Int(symbol[..<separator]) else {
-            return nil
-        }
-        return selectedDevice?.previewResolutions.first { $0.index == index }
-    }
+    @Published private(set) var currentResolution: AmcamResolution?
 
     func initialize() {
         guard !hasInitialized else { return }
@@ -237,15 +229,20 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshControls() {
+        Task { await refreshControlsOwned() }
+    }
+
+    private func refreshControlsOwned() async {
         guard let featureSession else { return }
-        featureDescriptors = (try? featureSession.featureDescriptors()) ?? []
+        featureDescriptors = (try? await featureSession.featureDescriptors()) ?? []
         updateSelectedDeviceResolutions(from: featureDescriptors)
+        await updateCurrentResolution(from: featureSession)
         cameraCapabilities = makeCapabilities(
             for: selectedDevice,
             descriptors: featureDescriptors,
             hasDataStream: featureSession.supportsAcquisition
         )
-        controls = makeControlSnapshot(featureSession, descriptors: featureDescriptors)
+        controls = await makeControlSnapshot(featureSession, descriptors: featureDescriptors)
     }
 
     func setAutoExposureMode(_ mode: AmcamAutoExposureMode) {
@@ -255,26 +252,23 @@ final class CameraApplicationModel: ObservableObject {
         case .once: symbol = "Once"
         case .continuous: symbol = "Continuous"
         }
-        writeFeature(.enumeration(symbol), named: "ExposureAuto")
+        Task { await writeFeature(.enumeration(symbol), named: "ExposureAuto") }
     }
 
     func setExposureTime(_ microseconds: UInt32) {
-        writeFeature(.integer(Int64(microseconds)), named: "ExposureTime")
+        Task { await writeFeature(.integer(Int64(microseconds)), named: "ExposureTime") }
     }
 
     func setExposureGain(_ percent: UInt16) {
-        writeFeature(.integer(Int64(percent)), named: "AmcamAnalogGainPercent")
+        Task { await writeFeature(.integer(Int64(percent)), named: "AmcamAnalogGainPercent") }
     }
 
-    // These controls remain hidden unless the selected backend advertises a
-    // corresponding typed feature descriptor. They never fall back to direct
-    // Amcam SDK calls from the application.
     func setColorMatrixEnabled(_ enabled: Bool) {
-        writeFeature(.boolean(enabled), named: "AmcamColorMatrixEnabled")
+        Task { await writeFeature(.boolean(enabled), named: "AmcamColorMatrixEnabled") }
     }
 
     func setPixelFormat(_ code: Int32) {
-        writeFeature(.enumeration(String(code)), named: "AmcamPixelFormat")
+        Task { await writeFeature(.enumeration(String(code)), named: "AmcamPixelFormat") }
     }
 
     func setWhiteBalanceRGBGain(_ values: [Int32]) {
@@ -282,21 +276,23 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "White-balance RGB gain requires exactly three channel values."
             return
         }
-        writeFeature(.integerVector(values.map(Int64.init)), named: "AmcamWhiteBalanceRGBGain")
+        Task { await writeFeature(.integerVector(values.map(Int64.init)), named: "AmcamWhiteBalanceRGBGain") }
     }
 
     func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
-        writeFeature(.integer(Int64(temperature)), named: "AmcamWhiteBalanceTemperature")
-        guard errorMessage == nil else { return }
-        writeFeature(.integer(Int64(tint)), named: "AmcamWhiteBalanceTint")
+        Task {
+            await writeFeature(.integer(Int64(temperature)), named: "AmcamWhiteBalanceTemperature")
+            guard errorMessage == nil else { return }
+            await writeFeature(.integer(Int64(tint)), named: "AmcamWhiteBalanceTint")
+        }
     }
 
     func setFixedFrameRate(_ framesPerSecond: Double) {
-        writeFeature(.floatingPoint(framesPerSecond), named: "AmcamFixedFrameRate")
+        Task { await writeFeature(.floatingPoint(framesPerSecond), named: "AmcamFixedFrameRate") }
     }
 
     func setFrameSpeedLevel(_ level: Int) {
-        writeFeature(.integer(Int64(level)), named: "AmcamFrameSpeedLevel")
+        Task { await writeFeature(.integer(Int64(level)), named: "AmcamFrameSpeedLevel") }
     }
 
     func setResolution(_ index: Int) {
@@ -307,103 +303,7 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "The selected resolution is not advertised by this camera."
             return
         }
-        writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex")
-    }
-
-    private func prepareSelectedCamera() async {
-        guard featureSession == nil,
-              let candidate = candidatesByID[selectedDeviceID],
-              let device = selectedDevice else { return }
-
-        do {
-            let runtimeSession = try await cameraLifecycle.open(
-                GenTLRuntimeDevice(candidate: candidate)
-            )
-            featureSession = runtimeSession
-            featureDescriptors = (try? runtimeSession.featureDescriptors()) ?? []
-            updateSelectedDeviceResolutions(from: featureDescriptors)
-            let hasDataStream = runtimeSession.supportsAcquisition
-            cameraCapabilities = makeCapabilities(
-                for: device,
-                descriptors: featureDescriptors,
-                hasDataStream: hasDataStream
-            )
-            controls = makeControlSnapshot(openedSession, descriptors: featureDescriptors)
-            status = "Ready — \(device.displayName)"
-            if featureDescriptors.isEmpty {
-                errorMessage = "The backend opened the device but did not expose typed feature access."
-            } else {
-                errorMessage = nil
-            }
-        } catch {
-            _ = await closeSession()
-            status = "Unable to open camera through GenTLRouter"
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func configureSDK() {
-        Task { await configureSDKOwned() }
-    }
-
-    private func configureSDKOwned() async {
-        guard await closeSession() else { return }
-        router = GenTLRouter()
-        candidatesByID.removeAll()
-        devices.removeAll()
-        selectedDeviceID = ""
-
-        do {
-            try router.registerAmcam(backendID: "amcam-sdk")
-            await refreshDevicesOwned()
-        } catch {
-            status = "AmScope camera provider is unavailable"
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// The library performs ordered acquisition/device cleanup and retains
-    /// failed resources for retry. The UI drops its borrowed feature handle only
-    /// after the library confirms that the entire close sequence succeeded.
-    @discardableResult
-    private func closeSession() async -> Bool {
-        do {
-            try await cameraLifecycle.close()
-            frameConsumerTask?.cancel()
-            frameConsumerTask = nil
-            lifecycleEventTask?.cancel()
-            lifecycleEventTask = nil
-            featureSession = nil
-            isStreaming = false
-            cameraCapabilities = nil
-            controls = nil
-            featureDescriptors = []
-            return true
-        } catch {
-            isStreaming = false
-            status = "Camera resource cleanup failed"
-            errorMessage = error.localizedDescription
-            return false
-        }
-    }
-
-    private func writeFeature(_ value: CameraFeatureValue, named name: String) {
-        guard let featureSession else {
-            errorMessage = "Open a camera before changing its features."
-            return
-        }
-        if let feature = capabilityFeature(for: name),
-           cameraCapabilities?.availability(of: feature).isUsable != true {
-            errorMessage = "\(name) is not available under the selected camera's capability and model-profile policy."
-            return
-        }
-        do {
-            try featureSession.writeFeature(value, named: name)
-            refreshControls()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        Task { await writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex") }
     }
 
     private func capabilityFeature(for name: String) -> AmcamCameraFeature? {
@@ -479,14 +379,14 @@ final class CameraApplicationModel: ObservableObject {
     private func makeControlSnapshot(
         _ session: any CameraRuntimeSession,
         descriptors: [CameraFeatureDescriptor]
-    ) -> AmcamControlSnapshot {
+    ) async -> AmcamControlSnapshot {
         let descriptorsByName = Dictionary(
             descriptors.map { ($0.name, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
 
         let autoMode: AmcamAutoExposureMode?
-        if case .enumeration(let symbol)? = try? session.readFeature("ExposureAuto") {
+        if case .enumeration(let symbol)? = try? await session.readFeature("ExposureAuto") {
             switch symbol {
             case "Off": autoMode = .manual
             case "Once": autoMode = .once
@@ -498,7 +398,7 @@ final class CameraApplicationModel: ObservableObject {
         }
 
         let exposureDescriptor = descriptorsByName["ExposureTime"]
-        let exposureValue = readIntegerFeature("ExposureTime", from: session)
+        let exposureValue = await readIntegerFeature("ExposureTime", from: session)
         let exposure = exposureDescriptor.map { descriptor in
             AmcamExposureControl(
                 autoMode: autoMode,
@@ -510,7 +410,7 @@ final class CameraApplicationModel: ObservableObject {
         }
 
         let gainDescriptor = descriptorsByName["AmcamAnalogGainPercent"]
-        let gainValue = readIntegerFeature("AmcamAnalogGainPercent", from: session)
+        let gainValue = await readIntegerFeature("AmcamAnalogGainPercent", from: session)
         let gain: AmcamGainControl?
         if let gainDescriptor,
            let current = unsigned16(gainValue),
@@ -526,11 +426,11 @@ final class CameraApplicationModel: ObservableObject {
             gain = nil
         }
 
-        let whiteTemperature = readIntegerFeature("AmcamWhiteBalanceTemperature", from: session)
+        let whiteTemperature = await readIntegerFeature("AmcamWhiteBalanceTemperature", from: session)
             .flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
-        let whiteTint = readIntegerFeature("AmcamWhiteBalanceTint", from: session)
+        let whiteTint = await readIntegerFeature("AmcamWhiteBalanceTint", from: session)
             .flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
-        let whiteRGB = readIntegerVectorFeature("AmcamWhiteBalanceRGBGain", from: session).flatMap { values -> [Int32]? in
+        let whiteRGB = await readIntegerVectorFeature("AmcamWhiteBalanceRGBGain", from: session).flatMap { values -> [Int32]? in
             guard values.count == 3 else { return nil }
             let converted = values.compactMap { Int32(exactly: $0) }
             return converted.count == 3 ? converted : nil
@@ -544,12 +444,12 @@ final class CameraApplicationModel: ObservableObject {
             : nil
 
         let colorMatrix: Bool?
-        if case .boolean(let value)? = try? session.readFeature("AmcamColorMatrixEnabled") {
+        if case .boolean(let value)? = try? await session.readFeature("AmcamColorMatrixEnabled") {
             colorMatrix = value
         } else {
             colorMatrix = nil
         }
-        let pixelFormat = readEnumerationFeature("AmcamPixelFormat", from: session).flatMap(Int32.init)
+        let pixelFormat = await readEnumerationFeature("AmcamPixelFormat", from: session).flatMap(Int32.init)
         let supportedPixelFormats = descriptorsByName["AmcamPixelFormat"]?.enumerationValues.compactMap(Int32.init) ?? []
         let image = (colorMatrix != nil || pixelFormat != nil || !supportedPixelFormats.isEmpty)
             ? AmcamCameraImageControls(
@@ -561,8 +461,8 @@ final class CameraApplicationModel: ObservableObject {
 
         let fixedRateDescriptor = descriptorsByName["AmcamFixedFrameRate"]
         let speedDescriptor = descriptorsByName["AmcamFrameSpeedLevel"]
-        let fixedRateReadback = readFloatingPointFeature("AmcamFixedFrameRate", from: session)
-        let currentSpeed = readIntegerFeature("AmcamFrameSpeedLevel", from: session).flatMap(Int.init(exactly:))
+        let fixedRateReadback = await readFloatingPointFeature("AmcamFixedFrameRate", from: session)
+        let currentSpeed = await readIntegerFeature("AmcamFrameSpeedLevel", from: session).flatMap(Int.init(exactly:))
         let frameRate = AmcamFrameRateControl(
             supported: fixedRateDescriptor?.isAvailable == true,
             minimumFramesPerSecond: fixedRateDescriptor?.numericRange?.minimum,
@@ -585,21 +485,31 @@ final class CameraApplicationModel: ObservableObject {
         )
     }
 
-    private func readIntegerVectorFeature(_ name: String, from session: any CameraRuntimeSession) -> [Int64]? {
-        guard case .integerVector(let values)? = try? session.readFeature(name) else { return nil }
+    private func readIntegerVectorFeature(_ name: String, from session: any CameraRuntimeSession) async -> [Int64]? {
+        guard case .integerVector(let values)? = try? await session.readFeature(name) else { return nil }
         return values
     }
 
-    private func readEnumerationFeature(_ name: String, from session: any CameraRuntimeSession) -> String? {
-        guard case .enumeration(let value)? = try? session.readFeature(name) else { return nil }
+    private func readEnumerationFeature(_ name: String, from session: any CameraRuntimeSession) async -> String? {
+        guard case .enumeration(let value)? = try? await session.readFeature(name) else { return nil }
         return value
     }
 
-    private func readFloatingPointFeature(_ name: String, from session: any CameraRuntimeSession) -> Double? {
-        guard case .floatingPoint(let value)? = try? session.readFeature(name), value.isFinite else {
+    private func readFloatingPointFeature(_ name: String, from session: any CameraRuntimeSession) async -> Double? {
+        guard case .floatingPoint(let value)? = try? await session.readFeature(name), value.isFinite else {
             return nil
         }
         return value
+    }
+
+    private func updateCurrentResolution(from session: any CameraRuntimeSession) async {
+        guard case .enumeration(let symbol)? = try? await session.readFeature("AmcamResolutionIndex"),
+              let separator = symbol.firstIndex(of: ":"),
+              let index = Int(symbol[..<separator]) else {
+            currentResolution = nil
+            return
+        }
+        currentResolution = selectedDevice?.previewResolutions.first { $0.index == index }
     }
 
     private func updateSelectedDeviceResolutions(from descriptors: [CameraFeatureDescriptor]) {
@@ -630,8 +540,8 @@ final class CameraApplicationModel: ObservableObject {
     private func readIntegerFeature(
         _ name: String,
         from session: any CameraRuntimeSession
-    ) -> Int64? {
-        guard case .integer(let value)? = try? session.readFeature(name) else {
+    ) async -> Int64? {
+        guard case .integer(let value)? = try? await session.readFeature(name) else {
             return nil
         }
         return value

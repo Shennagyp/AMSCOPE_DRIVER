@@ -34,23 +34,32 @@ public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendabl
         var count: UInt32 = 0
         return device.api.DevGetNumDataStreams(device.deviceHandle, &count) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
     }
-    public func featureDescriptors() throws -> [CameraFeatureDescriptor] {
+    public func featureDescriptors() async throws -> [CameraFeatureDescriptor] {
+        let device = self.device
         do {
-            return try device.featureDescriptors().map(Self.map)
+            return try await Task.detached(priority: .userInitiated) {
+                try device.featureDescriptors().map(Self.map)
+            }.value
         } catch {
             throw Self.mapFeatureError(error)
         }
     }
-    public func readFeature(_ name: String) throws -> CameraFeatureValue {
+    public func readFeature(_ name: String) async throws -> CameraFeatureValue {
+        let device = self.device
         do {
-            return Self.map(try device.readFeature(name))
+            return try await Task.detached(priority: .userInitiated) {
+                Self.map(try device.readFeature(name))
+            }.value
         } catch {
             throw Self.mapFeatureError(error)
         }
     }
-    public func writeFeature(_ value: CameraFeatureValue, named name: String) throws {
+    public func writeFeature(_ value: CameraFeatureValue, named name: String) async throws {
+        let device = self.device
         do {
-            try device.writeFeature(Self.map(value), named: name)
+            try await Task.detached(priority: .userInitiated) {
+                try device.writeFeature(Self.map(value), named: name)
+            }.value
         } catch {
             throw Self.mapFeatureError(error)
         }
