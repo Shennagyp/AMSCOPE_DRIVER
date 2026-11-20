@@ -228,9 +228,10 @@ private struct CameraSettingsView: View {
             gainDraft = Double(controls?.gain?.readbackPercent ?? 100)
             temperatureDraft = Double(controls?.whiteBalance?.temperature ?? 6_503)
             tintDraft = Double(controls?.whiteBalance?.tint ?? 1_000)
-            redGainDraft = String(controls?.whiteBalance?.rgbGain?[safe: 0] ?? 100)
-            greenGainDraft = String(controls?.whiteBalance?.rgbGain?[safe: 1] ?? 100)
-            blueGainDraft = String(controls?.whiteBalance?.rgbGain?[safe: 2] ?? 100)
+            let rgb = controls?.whiteBalance?.rgbGain ?? []
+            redGainDraft = String(rgb.indices.contains(0) ? rgb[0] : 100)
+            greenGainDraft = String(rgb.indices.contains(1) ? rgb[1] : 100)
+            blueGainDraft = String(rgb.indices.contains(2) ? rgb[2] : 100)
             frameRateDraft = controls?.frameRate.readbackFramesPerSecond ?? 15
         }
         .onChange(of: controls?.exposure?.readbackMicroseconds) { value in
