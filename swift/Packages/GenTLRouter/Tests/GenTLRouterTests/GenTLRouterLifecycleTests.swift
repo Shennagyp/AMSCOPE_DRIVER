@@ -26,6 +26,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private let systemToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
     private let interfaceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
     let deviceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+    private let streamToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+    private let eventToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+    private let bufferToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+    private var bufferMemory: UnsafeMutableRawPointer?
+    private var eventDelivered = false
+    private var queuedBufferCount = 0
 
     init(
         failSystemOpen: Bool = false,
@@ -41,6 +47,10 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         systemToken.deallocate()
         interfaceToken.deallocate()
         deviceToken.deallocate()
+        streamToken.deallocate()
+        eventToken.deallocate()
+        bufferToken.deallocate()
+        bufferMemory?.deallocate()
     }
 
     private func record(_ update: (inout CallCounts) -> Void) {
@@ -192,6 +202,288 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
 
+
+    private func writeInfo<T>(
+        _ value: T,
+        dataType: Int32,
+        type: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        output: UnsafeMutableRawPointer?,
+        size: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let type, let size else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        let required = MemoryLayout<T>.size
+        let capacity = size.pointee
+        type.pointee = dataType
+        size.pointee = required
+        guard let output, capacity >= required else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_BUFFER_TOO_SMALL)
+        }
+        withUnsafeBytes(of: value) { source in
+            if let base = source.baseAddress {
+                output.copyMemory(from: base, byteCount: required)
+            }
+        }
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func queuedBuffers() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return queuedBufferCount
+    }
+
+    func DevGetNumDataStreams(
+        _ hDevice: GenTLABI.DEV_HANDLE,
+        _ piNumDataStreams: UnsafeMutablePointer<UInt32>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDevice == deviceToken, let piNumDataStreams else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        piNumDataStreams.pointee = 1
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DevGetDataStreamID(
+        _ hDevice: GenTLABI.DEV_HANDLE,
+        _ iIndex: UInt32,
+        _ sDataStreamID: UnsafeMutablePointer<CChar>?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDevice == deviceToken, iIndex == 0 else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_INDEX)
+        }
+        return writeCString("stream-0", output: sDataStreamID, size: piSize)
+    }
+
+    func DevOpenDataStream(
+        _ hDevice: GenTLABI.DEV_HANDLE,
+        _ sDataStreamID: UnsafePointer<CChar>?,
+        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE?>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDevice == deviceToken, let sDataStreamID, let phDataStream,
+              String(cString: sDataStreamID) == "stream-0" else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_ID)
+        }
+        phDataStream.pointee = streamToken
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DSGetInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ iInfoCmd: GenTLABI.STREAM_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDataStream == streamToken,
+              iInfoCmd == GenTLInfoCommand.Stream.payloadSize.rawValue else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        return writeInfo(
+            6,
+            dataType: Int32(GenTLABI.INFO_DATATYPE_SIZET.rawValue),
+            type: piType,
+            output: pBuffer,
+            size: piSize
+        )
+    }
+
+    func GCRegisterEvent(
+        _ hEventSrc: GenTLABI.EVENTSRC_HANDLE,
+        _ iEventID: GenTLABI.EVENT_TYPE,
+        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE?>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hEventSrc == streamToken, iEventID == 1, let phEvent else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        phEvent.pointee = eventToken
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func GCUnregisterEvent(
+        _ hEventSrc: GenTLABI.EVENTSRC_HANDLE,
+        _ iEventID: GenTLABI.EVENT_TYPE
+    ) -> GenTLABI.GC_ERROR {
+        guard hEventSrc == streamToken, iEventID == 1 else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DSAllocAndAnnounceBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ iSize: Int,
+        _ pPrivate: UnsafeMutableRawPointer?,
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDataStream == streamToken, iSize == 6, let phBuffer else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        let memory = UnsafeMutableRawPointer.allocate(byteCount: iSize, alignment: 8)
+        let pixels: [UInt8] = [1, 2, 3, 4, 5, 6]
+        pixels.withUnsafeBytes { source in
+            if let base = source.baseAddress {
+                memory.copyMemory(from: base, byteCount: source.count)
+            }
+        }
+        bufferMemory = memory
+        phBuffer.pointee = bufferToken
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DSQueueBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ hBuffer: GenTLABI.BUFFER_HANDLE
+    ) -> GenTLABI.GC_ERROR {
+        guard hDataStream == streamToken, hBuffer == bufferToken else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+        }
+        lock.lock()
+        queuedBufferCount += 1
+        lock.unlock()
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DSStartAcquisition(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ iStartFlags: GenTLABI.ACQ_START_FLAGS,
+        _ iNumToAcquire: UInt64
+    ) -> GenTLABI.GC_ERROR {
+        guard hDataStream == streamToken, iStartFlags == 0, iNumToAcquire > 0 else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        eventDelivered = false
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func EventGetData(
+        _ hEvent: GenTLABI.EVENT_HANDLE,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?,
+        _ iTimeout: UInt64
+    ) -> GenTLABI.GC_ERROR {
+        guard hEvent == eventToken, let pBuffer, let piSize,
+              piSize.pointee >= 2 * MemoryLayout<UInt>.size else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        guard !eventDelivered else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_TIMEOUT)
+        }
+        var words = [UInt(UInt(bitPattern: bufferToken)), 0]
+        words.withUnsafeBytes { source in
+            if let base = source.baseAddress {
+                pBuffer.copyMemory(from: base, byteCount: source.count)
+            }
+        }
+        piSize.pointee = words.count * MemoryLayout<UInt>.size
+        eventDelivered = true
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DSGetBufferInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ iInfoCmd: GenTLABI.BUFFER_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDataStream == streamToken, hBuffer == bufferToken, let memory = bufferMemory else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+        }
+        let sizeType = Int32(GenTLABI.INFO_DATATYPE_SIZET.rawValue)
+        let uint64Type = Int32(GenTLABI.INFO_DATATYPE_UINT64.rawValue)
+        let boolType = Int32(GenTLABI.INFO_DATATYPE_BOOL8.rawValue)
+        switch iInfoCmd {
+        case GenTLInfoCommand.Buffer.base.rawValue:
+            var pointer: UnsafeMutableRawPointer? = memory
+            return writeInfo(pointer, dataType: Int32(GenTLABI.INFO_DATATYPE_PTR.rawValue),
+                             type: piType, output: pBuffer, size: piSize)
+        case GenTLInfoCommand.Buffer.width.rawValue,
+             GenTLInfoCommand.Buffer.height.rawValue,
+             GenTLInfoCommand.Buffer.size.rawValue,
+             GenTLInfoCommand.Buffer.sizeFilled.rawValue,
+             GenTLInfoCommand.Buffer.dataSize.rawValue,
+             GenTLInfoCommand.Buffer.xPadding.rawValue:
+            let value: Int
+            switch iInfoCmd {
+            case GenTLInfoCommand.Buffer.width.rawValue: value = 2
+            case GenTLInfoCommand.Buffer.height.rawValue: value = 1
+            case GenTLInfoCommand.Buffer.size.rawValue: value = 6
+            case GenTLInfoCommand.Buffer.sizeFilled.rawValue: value = 6
+            case GenTLInfoCommand.Buffer.dataSize.rawValue: value = 6
+            default: value = 0
+            }
+            return writeInfo(value, dataType: sizeType, type: piType, output: pBuffer, size: piSize)
+        case GenTLInfoCommand.Buffer.pixelFormat.rawValue,
+             GenTLInfoCommand.Buffer.pixelFormatNamespace.rawValue,
+             GenTLInfoCommand.Buffer.frameID.rawValue,
+             GenTLInfoCommand.Buffer.timestamp.rawValue:
+            let value: UInt64
+            switch iInfoCmd {
+            case GenTLInfoCommand.Buffer.pixelFormat.rawValue: value = 0x02180014
+            case GenTLInfoCommand.Buffer.pixelFormatNamespace.rawValue: value = 4
+            case GenTLInfoCommand.Buffer.frameID.rawValue: value = 7
+            default: value = 99
+            }
+            return writeInfo(value, dataType: uint64Type, type: piType, output: pBuffer, size: piSize)
+        case GenTLInfoCommand.Buffer.isIncomplete.rawValue,
+             GenTLInfoCommand.Buffer.imagePresent.rawValue:
+            let value: UInt8 = iInfoCmd == GenTLInfoCommand.Buffer.isIncomplete.rawValue ? 0 : 1
+            return writeInfo(value, dataType: boolType, type: piType, output: pBuffer, size: piSize)
+        default:
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+    }
+
+    func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
+        return hEvent == eventToken
+            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+    }
+
+    func DSStopAcquisition(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ iStopFlags: GenTLABI.ACQ_STOP_FLAGS
+    ) -> GenTLABI.GC_ERROR {
+        return hDataStream == streamToken && iStopFlags == 0
+            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+    }
+
+    func DSFlushQueue(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ iOperation: GenTLABI.ACQ_QUEUE_TYPE
+    ) -> GenTLABI.GC_ERROR {
+        return hDataStream == streamToken && iOperation == 2
+            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+    }
+
+    func DSRevokeBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE,
+        _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ ppBuffer: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
+        _ ppPrivate: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+    ) -> GenTLABI.GC_ERROR {
+        guard hDataStream == streamToken, hBuffer == bufferToken else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+        }
+        if let ppBuffer { ppBuffer.pointee = bufferMemory }
+        if let ppPrivate { ppPrivate.pointee = nil }
+        bufferMemory?.deallocate()
+        bufferMemory = nil
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+    }
+
+    func DSClose(_ hDataStream: GenTLABI.DS_HANDLE) -> GenTLABI.GC_ERROR {
+        hDataStream == streamToken
+            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+    }
+
     func DevClose(_ hDevice: GenTLABI.DEV_HANDLE) -> GenTLABI.GC_ERROR {
         record { $0.deviceClose += 1 }
         guard hDevice == deviceToken else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE) }
@@ -224,6 +516,37 @@ final class GenTLRouterLifecycleTests: XCTestCase {
                 return XCTFail("Expected a closed-session error, received \(error)")
             }
         }
+    }
+
+
+    func testGenTLAcquisitionSessionCopiesNewBufferFramesAndRequeuesBuffers() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "acquisition-backend") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(accessFlags: GenTLDeviceAccess.exclusive.rawValue)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        defer {
+            try? acquisition.close()
+            try? device.close()
+        }
+
+        try acquisition.start(numberToAcquire: 1)
+        let frame = try acquisition.nextFrame(timeoutMilliseconds: 100)
+
+        XCTAssertEqual(frame.width, 2)
+        XCTAssertEqual(frame.height, 1)
+        XCTAssertEqual(frame.pixelFormat, 0x02180014)
+        XCTAssertEqual(frame.pixelFormatNamespace, 4)
+        XCTAssertEqual(frame.sequence, 7)
+        XCTAssertEqual(frame.timestamp, 99)
+        XCTAssertEqual(frame.bytes, Data([1, 2, 3, 4, 5, 6]))
+        XCTAssertFalse(frame.isIncomplete)
+        XCTAssertEqual(api.queuedBuffers(), 2)
+
+        try acquisition.stop()
+        try acquisition.close()
+        try device.close()
     }
 
     func testSuccessfulInitializationRollbackAllowsRetry() throws {
