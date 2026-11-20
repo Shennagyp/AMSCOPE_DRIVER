@@ -1,6 +1,7 @@
 import Foundation
 
 /// Library-level GenTL functions.
+@_spi(BackendConvenience)
 public protocol GenTLLibraryFunctions: Sendable {
     func GCInitLib() throws
     func GCCloseLib() throws
@@ -9,6 +10,7 @@ public protocol GenTLLibraryFunctions: Sendable {
 }
 
 /// System module functions.
+@_spi(BackendConvenience)
 public protocol GenTLSystemFunctions: Sendable {
     func TLOpen() throws -> TL_HANDLE
     func TLClose(_ hTL: TL_HANDLE) throws
@@ -21,6 +23,7 @@ public protocol GenTLSystemFunctions: Sendable {
 }
 
 /// Interface module functions.
+@_spi(BackendConvenience)
 public protocol GenTLInterfaceFunctions: Sendable {
     func IFClose(_ hIF: IF_HANDLE) throws
     func IFGetInfo(_ hIF: IF_HANDLE, command: Int32) throws -> GenTLInfoValue
@@ -33,6 +36,7 @@ public protocol GenTLInterfaceFunctions: Sendable {
 }
 
 /// Device module functions.
+@_spi(BackendConvenience)
 public protocol GenTLDeviceFunctions: Sendable {
     func DevGetPort(_ hDevice: DEV_HANDLE) throws -> PORT_HANDLE
     func DevGetNumDataStreams(_ hDevice: DEV_HANDLE) throws -> UInt32
@@ -44,6 +48,7 @@ public protocol GenTLDeviceFunctions: Sendable {
 }
 
 /// Data Stream and Buffer module functions.
+@_spi(BackendConvenience)
 public protocol GenTLDataStreamFunctions: Sendable {
     func DSAnnounceBuffer(
         _ hDS: DS_HANDLE,
@@ -70,6 +75,7 @@ public protocol GenTLDataStreamFunctions: Sendable {
 }
 
 /// Data Stream extensions introduced across GenTL 1.3 through 1.6.
+@_spi(BackendConvenience)
 public protocol GenTLDataStreamExtensionFunctions: Sendable {
     func DSGetBufferChunkData(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> [GenTLChunkData]
     func DSGetNumBufferParts(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws -> UInt32
@@ -112,6 +118,7 @@ public protocol GenTLDataStreamExtensionFunctions: Sendable {
 }
 
 /// Port functions used for register access and XML-description discovery.
+@_spi(BackendConvenience)
 public protocol GenTLPortFunctions: Sendable {
     func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data
     func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws
@@ -126,6 +133,7 @@ public protocol GenTLPortFunctions: Sendable {
 }
 
 /// Signaling and event functions.
+@_spi(BackendConvenience)
 public protocol GenTLSignalingFunctions: Sendable {
     func GCRegisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws -> EVENT_HANDLE
     func GCUnregisterEvent(_ source: EVENTSRC_HANDLE, eventType: Int32) throws
