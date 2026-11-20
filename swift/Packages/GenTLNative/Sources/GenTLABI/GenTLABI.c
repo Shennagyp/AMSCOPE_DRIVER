@@ -2,6 +2,10 @@
 
 #include <stddef.h>
 
+_Static_assert(sizeof(EVENT_NEW_BUFFER_DATA) == 16, "GenTL EVENT_NEW_BUFFER_DATA ABI mismatch");
+_Static_assert(offsetof(EVENT_NEW_BUFFER_DATA, BufferHandle) == 0, "GenTL new-buffer handle offset mismatch");
+_Static_assert(offsetof(EVENT_NEW_BUFFER_DATA, pUserPointer) == 8, "GenTL new-buffer user-pointer offset mismatch");
+
 _Static_assert(sizeof(PORT_REGISTER_STACK_ENTRY) == 24, "GenTL PORT_REGISTER_STACK_ENTRY ABI mismatch");
 _Static_assert(offsetof(PORT_REGISTER_STACK_ENTRY, Address) == 0, "GenTL stack Address offset mismatch");
 _Static_assert(offsetof(PORT_REGISTER_STACK_ENTRY, pBuffer) == 8, "GenTL stack pBuffer offset mismatch");
@@ -33,6 +37,9 @@ uint32_t GenTLABI_HeaderVersion(void) {
 
 int GenTLABI_LayoutValid(void) {
     return sizeof(void *) == 8 &&
+           sizeof(EVENT_NEW_BUFFER_DATA) == 16 &&
+           offsetof(EVENT_NEW_BUFFER_DATA, BufferHandle) == 0 &&
+           offsetof(EVENT_NEW_BUFFER_DATA, pUserPointer) == 8 &&
            sizeof(PORT_REGISTER_STACK_ENTRY) == 24 &&
            sizeof(SINGLE_CHUNK_DATA) == 24 &&
            sizeof(DS_BUFFER_INFO_STACKED) == 28 &&
