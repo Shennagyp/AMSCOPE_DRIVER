@@ -65,6 +65,12 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         return output
     }
 
+
+    func testPinnedHeaderVersionAndABIStructLayouts() {
+        XCTAssertEqual(GenTLNativeImplementation.compiledHeaderVersionCode, 0x01060000)
+        XCTAssertEqual(GenTLABI_LayoutValid(), 1)
+    }
+
     func testNativeImplementationLoadsCTIAndForwardsCFunctionOutputs() throws {
         let producerURL = try buildMockProducer()
         let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
