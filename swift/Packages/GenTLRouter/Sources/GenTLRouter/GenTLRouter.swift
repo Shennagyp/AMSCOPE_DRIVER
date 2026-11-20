@@ -543,6 +543,15 @@ public final class GenTLRouter: @unchecked Sendable {
         }
     }
 
+    /// Registers the bundled AmScope SDK. Vendor path resolution belongs to the
+    /// backend package; callers do not select native libraries from the UI.
+    public func registerAmcam(backendID: String) throws {
+        try registerAmcam(
+            backendID: backendID,
+            sdkLibraryURL: AmcamSDKLibraryLocator.locate()
+        )
+    }
+
     public func registerAmcam(backendID: String, sdkLibraryURL: URL) throws {
         let canonicalURL = sdkLibraryURL.standardizedFileURL.resolvingSymlinksInPath()
         try registerUniqueResource(
