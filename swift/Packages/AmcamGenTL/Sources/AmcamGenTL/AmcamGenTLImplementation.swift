@@ -20,7 +20,7 @@ private final class AmcamOpenDeviceRecord: @unchecked Sendable {
 /// This is not a GenTL Producer and does not create a .cti file. It maps the
 /// GenTL Consumer function model to Amcam SDK operations where corresponding
 /// behavior exists. Unsupported register/GenApi operations are not fabricated.
-@_spi(BackendConvenience)
+@_spi(BackendFactory)
 public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked Sendable {
     private let sdkLibraryURL: URL
     private let lock = NSRecursiveLock()
