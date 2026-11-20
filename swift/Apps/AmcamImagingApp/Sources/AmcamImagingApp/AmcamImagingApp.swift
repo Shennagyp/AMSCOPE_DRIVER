@@ -50,11 +50,10 @@ final class AmcamImagingAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = menu
 
         model.initialize()
-        model.enterFullScreen()
     }
 
     @objc private func refreshCameras() { model?.refreshDevices() }
-    @objc private func toggleFullScreen() { model?.toggleFullScreen() }
+    @objc private func toggleFullScreen() { window?.toggleFullScreen(nil) }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { model?.shutdown() }
