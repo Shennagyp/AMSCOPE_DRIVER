@@ -145,7 +145,7 @@ private final class GenTLProviderRetainer: @unchecked Sendable {
 }
 
 private func checkGenTLStatus(_ status: GenTLABI.GC_ERROR) throws {
-    guard status == GenTLABI.GC_ERR_SUCCESS else {
+    guard status == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
         throw GenTLRouterError.genTLCallFailed(Int32(status))
     }
 }
@@ -158,12 +158,12 @@ private func readGenTLString(
 ) throws -> String {
     var requiredSize = 0
     let queryStatus = operation(nil, &requiredSize)
-    if queryStatus != GenTLABI.GC_ERR_SUCCESS &&
-       queryStatus != GenTLABI.GC_ERR_BUFFER_TOO_SMALL {
+    if queryStatus != GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) &&
+       queryStatus != GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_BUFFER_TOO_SMALL) {
         try checkGenTLStatus(queryStatus)
     }
     guard requiredSize > 0, requiredSize <= 1_048_576 else {
-        throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_VALUE))
+        throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_VALUE))
     }
 
     var bytes = [CChar](repeating: 0, count: requiredSize)
@@ -173,11 +173,11 @@ private func readGenTLString(
     }
     try checkGenTLStatus(status)
     guard capacity > 0, capacity <= bytes.count else {
-        throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_VALUE))
+        throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_VALUE))
     }
     bytes[bytes.count - 1] = 0
     guard let terminator = bytes.firstIndex(of: 0) else {
-        throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_VALUE))
+        throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_VALUE))
     }
     return String(decoding: bytes[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self)
 }
@@ -210,7 +210,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         return closed
     }
 
-    func interfaceHandle(for id: String) -> GenTLABI.IF_HANDLE {
+    func interfaceHandle(for id: String) -> GenTLABI.IF_HANDLE? {
         lock.lock()
         defer { lock.unlock() }
         guard !closed else { return nil }
@@ -227,17 +227,13 @@ private final class GenTLProviderContext: @unchecked Sendable {
         guard !closed else {
             throw GenTLRouterError.providerContextUnavailable(backendID)
         }
-        guard let interfaceHandle else {
-            throw GenTLRouterError.interfaceHandleUnavailable(backendID)
-        }
-
-        var device: GenTLABI.DEV_HANDLE = nil
+        var device: GenTLABI.DEV_HANDLE? = nil
         let status = deviceID.withCString {
             api.IFOpenDevice(interfaceHandle, $0, accessFlags, &device)
         }
         try checkGenTLStatus(status)
         guard let device else {
-            throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_HANDLE))
+            throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE))
         }
         return device
     }
@@ -266,7 +262,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         var interfaceCount: UInt32 = 0
         try checkGenTLStatus(api.TLGetNumInterfaces(systemHandle, &interfaceCount))
         guard interfaceCount <= 4_096 else {
-            throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_RESOURCE_EXHAUSTED))
+            throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_RESOURCE_EXHAUSTED))
         }
 
         var candidates: [GenTLDeviceCandidate] = []
@@ -277,23 +273,23 @@ private final class GenTLProviderContext: @unchecked Sendable {
                 api.TLGetInterfaceID(systemHandle, interfaceIndex, buffer, size)
             }
             guard !interfaceID.isEmpty, seenInterfaceIDs.insert(interfaceID).inserted else {
-                throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_ID))
+                throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_ID))
             }
 
             let interfaceHandle: UnsafeMutableRawPointer
             if let existingHandle = interfaceHandlesByID[interfaceID] {
                 interfaceHandle = existingHandle
             } else {
-                var openedHandle: GenTLABI.IF_HANDLE = nil
+                var openedHandle: GenTLABI.IF_HANDLE? = nil
                 let status = interfaceID.withCString {
                     api.TLOpenInterface(systemHandle, $0, &openedHandle)
                 }
                 try checkGenTLStatus(status)
                 guard let openedHandle else {
-                    throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_HANDLE))
+                    throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE))
                 }
                 guard !interfaceHandles.contains(openedHandle) else {
-                    throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_RESOURCE_IN_USE))
+                    throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_RESOURCE_IN_USE))
                 }
                 interfaceHandlesByID[interfaceID] = openedHandle
                 interfaceHandles.append(openedHandle)
@@ -306,7 +302,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
             var deviceCount: UInt32 = 0
             try checkGenTLStatus(api.IFGetNumDevices(interfaceHandle, &deviceCount))
             guard deviceCount <= 65_536 else {
-                throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_RESOURCE_EXHAUSTED))
+                throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_RESOURCE_EXHAUSTED))
             }
 
             var seenDeviceIDs = Set<String>()
@@ -315,7 +311,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
                     api.IFGetDeviceID(interfaceHandle, deviceIndex, buffer, size)
                 }
                 guard !deviceID.isEmpty, seenDeviceIDs.insert(deviceID).inserted else {
-                    throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_ID))
+                    throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_ID))
                 }
                 candidates.append(try GenTLDeviceCandidate(
                     backendID: backendID,
@@ -344,7 +340,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
         for handle in interfaceHandles.reversed() {
             let status = api.IFClose(handle)
-            guard status == GenTLABI.GC_ERR_SUCCESS else {
+            guard status == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
                 closed = true
                 GenTLProviderRetainer.shared.retain(api)
                 return
@@ -353,13 +349,13 @@ private final class GenTLProviderContext: @unchecked Sendable {
         interfaceHandles.removeAll()
         interfaceHandlesByID.removeAll()
 
-        guard api.TLClose(systemHandle) == GenTLABI.GC_ERR_SUCCESS else {
+        guard api.TLClose(systemHandle) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
             return
         }
 
-        guard api.GCCloseLib() == GenTLABI.GC_ERR_SUCCESS else {
+        guard api.GCCloseLib() == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
             return
@@ -619,10 +615,10 @@ public final class GenTLRouter: @unchecked Sendable {
         try checkGenTLStatus(api.GCInitLib())
 
         do {
-            var systemHandle: GenTLABI.TL_HANDLE = nil
+            var systemHandle: GenTLABI.TL_HANDLE? = nil
             try checkGenTLStatus(api.TLOpen(&systemHandle))
             guard let systemHandle else {
-                throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_HANDLE))
+                throw GenTLRouterError.genTLCallFailed(GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE))
             }
 
             let context = GenTLProviderContext(
@@ -633,7 +629,7 @@ public final class GenTLRouter: @unchecked Sendable {
             providerContexts[registration.identifier] = context
             return context
         } catch {
-            if api.GCCloseLib() != GenTLABI.GC_ERR_SUCCESS {
+            if api.GCCloseLib() != GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) {
                 unavailableBackendIDs.insert(registration.identifier)
                 GenTLProviderRetainer.shared.retain(api)
             }
