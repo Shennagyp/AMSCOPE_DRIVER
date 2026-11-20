@@ -119,7 +119,7 @@ private enum ProbeError: Error, LocalizedError {
         case .incompleteFrame: return "The camera delivered an incomplete or undersized frame."
         case .invalidFrameLayout: return "The reported RGB24 frame layout is invalid, exceeds the announced buffer, or overflows."
         case .invalidPixelFormat(let value):
-            return "The camera returned unsupported PFNC pixel format 0x\\(String(value, radix: 16)). The probe requires RGB8 packed (0x02180014)."
+            return "The camera returned unsupported PFNC pixel format 0x\(String(value, radix: 16)). The probe requires RGB8 packed (0x02180014)."
         case .invalidFramePointer: return "The SDK returned a null frame-buffer pointer."
         }
     }
