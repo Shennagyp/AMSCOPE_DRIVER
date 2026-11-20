@@ -81,7 +81,9 @@ rm -rf "$vendor_destination"
 mkdir -p "$vendor_destination"
 
 if [[ -d "$vendor_source" ]]; then
-  cp -R "$vendor_source/." "$vendor_destination/"
+  while IFS= read -r -d '' vendor_directory; do
+    cp -R "$vendor_directory" "$vendor_destination/"
+  done < <(find "$vendor_source" -mindepth 1 -maxdepth 1 -type d -print0)
 fi
 
 # Support the established AmScope SDK deployment convention and standard
