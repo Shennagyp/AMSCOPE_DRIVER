@@ -2140,3 +2140,185 @@ extension AmcamGenTLImplementation: GenTLAPI {
         return rawStatus { try EventKill(EVENT_HANDLE(rawValue: key)) }
     }
 }
+
+// MARK: Typed feature access
+
+extension AmcamGenTLImplementation: GenTLFeatureAccess {
+    public func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor] {
+        let record = try featureDeviceRecord(device)
+        let capabilities = try record.session.cameraCapabilities()
+        let controls = try record.session.readControls()
+
+        let autoAvailability = capabilities.availability(of: .exposureAuto)
+        let exposureAvailability = capabilities.availability(of: .exposureManual)
+        let gainAvailability = capabilities.availability(of: .analogGain)
+
+        let exposureRange: GenTLFeatureNumericRange?
+        if let minimum = controls.exposure?.minimumMicroseconds,
+           let maximum = controls.exposure?.maximumMicroseconds {
+            exposureRange = GenTLFeatureNumericRange(
+                minimum: Double(minimum),
+                maximum: Double(maximum)
+            )
+        } else {
+            exposureRange = nil
+        }
+
+        let gainRange: GenTLFeatureNumericRange?
+        if let gain = controls.gain {
+            gainRange = GenTLFeatureNumericRange(
+                minimum: Double(gain.minimumPercent),
+                maximum: Double(gain.maximumPercent)
+            )
+        } else {
+            gainRange = nil
+        }
+
+        return [
+            GenTLFeatureDescriptor(
+                name: "ExposureAuto",
+                displayName: "Automatic Exposure",
+                kind: .enumeration,
+                isAvailable: autoAvailability.isUsable,
+                isReadable: controls.exposure?.autoMode != nil,
+                isWritable: autoAvailability.isUsable,
+                enumerationValues: ["Off", "Once", "Continuous"]
+            ),
+            GenTLFeatureDescriptor(
+                name: "ExposureTime",
+                displayName: "Exposure Time",
+                kind: .integer,
+                unit: "us",
+                isAvailable: exposureAvailability.isUsable,
+                isReadable: controls.exposure?.readbackMicroseconds != nil,
+                isWritable: exposureAvailability.isUsable && controls.exposure?.autoMode == .manual,
+                numericRange: exposureRange
+            ),
+            // Amcam reports analog gain as a percentage. It is deliberately
+            // vendor-namespaced rather than misrepresenting percent as SFNC Gain (dB).
+            GenTLFeatureDescriptor(
+                name: "AmcamAnalogGainPercent",
+                displayName: "Analog Gain",
+                kind: .integer,
+                unit: "%",
+                isAvailable: gainAvailability.isUsable,
+                isReadable: controls.gain != nil,
+                isWritable: gainAvailability.isUsable,
+                numericRange: gainRange
+            )
+        ]
+    }
+
+    public func readFeature(_ name: String, from device: DEV_HANDLE) throws -> GenTLFeatureValue {
+        let descriptor = try requireFeatureDescriptor(name, device: device)
+        guard descriptor.isAvailable else {
+            throw GenTLFeatureAccessError.featureUnavailable(name)
+        }
+        guard descriptor.isReadable else {
+            throw GenTLFeatureAccessError.featureNotReadable(name)
+        }
+
+        let record = try featureDeviceRecord(device)
+        let controls = try record.session.readControls()
+
+        switch name {
+        case "ExposureAuto":
+            guard let mode = controls.exposure?.autoMode else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .enumeration(Self.exposureAutoSymbol(for: mode))
+        case "ExposureTime":
+            guard let value = controls.exposure?.readbackMicroseconds else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .integer(Int64(value))
+        case "AmcamAnalogGainPercent":
+            guard let value = controls.gain?.readbackPercent else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .integer(Int64(value))
+        default:
+            throw GenTLFeatureAccessError.featureNotFound(name)
+        }
+    }
+
+    public func writeFeature(
+        _ value: GenTLFeatureValue,
+        named name: String,
+        to device: DEV_HANDLE
+    ) throws {
+        let descriptor = try requireFeatureDescriptor(name, device: device)
+        guard descriptor.isAvailable else {
+            throw GenTLFeatureAccessError.featureUnavailable(name)
+        }
+        guard descriptor.isWritable else {
+            throw GenTLFeatureAccessError.featureNotWritable(name)
+        }
+        guard value.kind == descriptor.kind else {
+            throw GenTLFeatureAccessError.valueTypeMismatch(
+                feature: name,
+                expected: descriptor.kind,
+                actual: value.kind
+            )
+        }
+
+        let record = try featureDeviceRecord(device)
+        switch (name, value) {
+        case ("ExposureAuto", .enumeration(let symbol)):
+            let mode: AmcamAutoExposureMode
+            switch symbol {
+            case "Off": mode = .manual
+            case "Once": mode = .once
+            case "Continuous": mode = .continuous
+            default: throw GenTLFeatureAccessError.invalidValue(
+                "ExposureAuto accepts Off, Once, or Continuous."
+            )
+            }
+            _ = try record.session.setAutoExposureMode(mode)
+
+        case ("ExposureTime", .integer(let microseconds)):
+            guard microseconds >= 0, microseconds <= Int64(UInt32.max) else {
+                throw GenTLFeatureAccessError.invalidValue(
+                    "ExposureTime must fit the Amcam SDK's unsigned 32-bit microsecond value."
+                )
+            }
+            _ = try record.session.setExposureTime(microseconds: UInt32(microseconds))
+
+        case ("AmcamAnalogGainPercent", .integer(let percent)):
+            guard percent >= 0, percent <= Int64(UInt16.max) else {
+                throw GenTLFeatureAccessError.invalidValue(
+                    "Amcam analog gain percent must fit the SDK's unsigned 16-bit value."
+                )
+            }
+            _ = try record.session.setExposureGain(percent: UInt16(percent))
+
+        default:
+            throw GenTLFeatureAccessError.featureNotFound(name)
+        }
+    }
+
+    private func featureDeviceRecord(_ device: DEV_HANDLE) throws -> AmcamOpenDeviceRecord {
+        lock.lock()
+        defer { lock.unlock() }
+        return try deviceRecord(device)
+    }
+
+    private func requireFeatureDescriptor(
+        _ name: String,
+        device: DEV_HANDLE
+    ) throws -> GenTLFeatureDescriptor {
+        guard let descriptor = try featureDescriptors(for: device).first(where: { $0.name == name }) else {
+            throw GenTLFeatureAccessError.featureNotFound(name)
+        }
+        return descriptor
+    }
+
+    private static func exposureAutoSymbol(for mode: AmcamAutoExposureMode) -> String {
+        switch mode {
+        case .manual: return "Off"
+        case .once: return "Once"
+        case .continuous: return "Continuous"
+        }
+    }
+}
+
