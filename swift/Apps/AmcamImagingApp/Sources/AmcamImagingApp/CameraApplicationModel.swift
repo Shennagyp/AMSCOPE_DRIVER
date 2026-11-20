@@ -24,7 +24,8 @@ final class CameraApplicationModel: ObservableObject {
 
     private var router = GenTLRouter()
     private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
-    private var deviceSession: GenTLDeviceSession?
+    /// Borrowed GenTL feature-access handle; AmcamImagingRuntime owns open/close.
+    private var featureSession: GenTLDeviceSession?
     private let cameraLifecycle = CameraSessionLifecycle()
     private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?
@@ -50,8 +51,8 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     var currentResolution: AmcamResolution? {
-        guard let deviceSession,
-              case .enumeration(let symbol)? = try? deviceSession.readFeature("AmcamResolutionIndex"),
+        guard let featureSession,
+              case .enumeration(let symbol)? = try? featureSession.readFeature("AmcamResolutionIndex"),
               let separator = symbol.firstIndex(of: ":"),
               let index = Int(symbol[..<separator]) else {
             return nil
@@ -135,7 +136,7 @@ final class CameraApplicationModel: ObservableObject {
             ? nil
             : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
 
-        if deviceSession == nil, selectedDevice != nil {
+        if featureSession == nil, selectedDevice != nil {
             await prepareSelectedCamera()
         }
     }
@@ -162,7 +163,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func startOwned() async {
-        guard deviceSession != nil, let device = selectedDevice else {
+        guard featureSession != nil, let device = selectedDevice else {
             errorMessage = "Select a camera and configure the Amcam SDK first."
             return
         }
@@ -247,15 +248,15 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshControls() {
-        guard let deviceSession else { return }
-        featureDescriptors = (try? deviceSession.featureDescriptors()) ?? []
+        guard let featureSession else { return }
+        featureDescriptors = (try? featureSession.featureDescriptors()) ?? []
         updateSelectedDeviceResolutions(from: featureDescriptors)
         cameraCapabilities = makeCapabilities(
             for: selectedDevice,
             descriptors: featureDescriptors,
-            hasDataStream: deviceHasDataStream(deviceSession)
+            hasDataStream: deviceHasDataStream(featureSession)
         )
-        controls = makeControlSnapshot(deviceSession, descriptors: featureDescriptors)
+        controls = makeControlSnapshot(featureSession, descriptors: featureDescriptors)
     }
 
     func setAutoExposureMode(_ mode: AmcamAutoExposureMode) {
@@ -321,7 +322,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func prepareSelectedCamera() async {
-        guard deviceSession == nil,
+        guard featureSession == nil,
               let candidate = candidatesByID[selectedDeviceID],
               let device = selectedDevice else { return }
 
@@ -333,7 +334,7 @@ final class CameraApplicationModel: ObservableObject {
                 throw GenTLRuntimeAdapterError.unexpectedSessionType
             }
             // Borrowed for feature access only. The imaging library opened and owns it.
-            deviceSession = openedSession
+            featureSession = openedSession
             featureDescriptors = (try? openedSession.featureDescriptors()) ?? []
             updateSelectedDeviceResolutions(from: featureDescriptors)
             let hasDataStream = deviceHasDataStream(openedSession)
@@ -389,7 +390,7 @@ final class CameraApplicationModel: ObservableObject {
             frameConsumerTask = nil
             lifecycleEventTask?.cancel()
             lifecycleEventTask = nil
-            deviceSession = nil
+            featureSession = nil
             isStreaming = false
             cameraCapabilities = nil
             controls = nil
@@ -404,7 +405,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func writeFeature(_ value: GenTLFeatureValue, named name: String) {
-        guard let deviceSession else {
+        guard let featureSession else {
             errorMessage = "Open a camera before changing its features."
             return
         }
@@ -414,7 +415,7 @@ final class CameraApplicationModel: ObservableObject {
             return
         }
         do {
-            try deviceSession.writeFeature(value, named: name)
+            try featureSession.writeFeature(value, named: name)
             refreshControls()
             errorMessage = nil
         } catch {
