@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - swift-gentl-api
+    paths:
+      - "swift/Packages/**"
+      - ".github/workflows/swift-gentl.yml"
   pull_request:
     branches:
       - swift-gentl-api
+    paths:
+      - "swift/Packages/**"
+      - ".github/workflows/swift-gentl.yml"
   workflow_dispatch:
 
 permissions:
