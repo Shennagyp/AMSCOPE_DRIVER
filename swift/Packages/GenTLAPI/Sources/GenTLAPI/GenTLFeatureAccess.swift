@@ -1,5 +1,3 @@
-import GenTLABI
-
 /// The semantic type of a feature exposed by a GenApi-compatible or
 /// SDK-backed feature provider. This is deliberately separate from GenTLAPI:
 /// GenTL 1.6 transports register access; it does not prescribe these Swift types.
@@ -96,7 +94,7 @@ public enum GenTLFeatureAccessError: Error, Equatable, Sendable {
 /// contract. A provider may implement this using GenApi over GenTL ports or a
 /// documented vendor SDK API. Callers must inspect descriptors before access.
 public protocol GenTLFeatureAccess: Sendable {
-    func featureDescriptors(for device: GenTLABI.DEV_HANDLE) throws -> [GenTLFeatureDescriptor]
+    func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor]
     func readFeature(_ name: String, from device: GenTLABI.DEV_HANDLE) throws -> GenTLFeatureValue
     func writeFeature(
         _ value: GenTLFeatureValue,
