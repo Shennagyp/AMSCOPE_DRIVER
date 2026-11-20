@@ -174,14 +174,30 @@ Swift package tests use a deterministic native C fixture. They verify ABI calls,
 
 ## CI build and current runnable artifact
 
-The last successful hosted run before the model-package extraction was [44698894492](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44698894492). It passed the GenTLAPI, GenTLRouter, AmcamGenTL and GenTLNative package suites and built the macOS camera probe and imaging app. The model-package extraction and new CI guard are being validated in the current workflow run; do not treat the earlier result as validation of the new package boundary.
+Latest successful hosted macOS validation: [workflow run 44700221429](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44700221429), built from commit `628972c0da4c055df0eae1fae7d4693ef2c7e10d`.
+
+- GenTLAPI tests: passed.
+- GenTLNative tests: passed.
+- GenTLRouter tests: passed, including the GenTL acquisition lifecycle and fake-Producer frame-delivery coverage.
+- AmcamCameraModel tests: passed independently after extracting camera models and capability/profile policy from the backend.
+- AmcamGenTL tests: passed with the source-compatibility re-export of AmcamCameraModel.
+- Camera probe release build and artifact upload: passed.
+- Routed application dependency guard: passed; app source contains no AmcamGenTL import or Amcam driver/session construction.
+- Imaging application release build, app-bundle signing verification and arm64 Mach-O verification: passed.
+
+Current application artifact:
+- Artifact: `amcam-imaging-macos-arm64`
+- Artifact ID: `14612188825`
+- Expiry: 2026-12-04 08:10 UTC.
+- The artifact is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK.
+
+CI proves package tests, compilation and packaging. It does not prove camera discovery or physical acquisition. Physical MU503 acceptance remains outstanding.
 
 ## TDD assessment
 
-The current suite has 21 tests across ABI string-bound checks, RGB24 layout, capability/profile resolution, and native C mock-SDK integration. The latest regression for auto-exposure mode remaining usable when manual exposure range queries fail was added before the implementation change and passed in CI.
+The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close. Typed feature access has value/descriptor tests, router forwarding tests and Amcam mock-SDK integration tests for exposure/gain range validation and readback.
 
-The entire development history is not strictly TDD: some earlier controls were implemented before their tests. Future feature work and the multiplatform extraction must follow the explicit failing-test → implementation → full regression → refactor sequence. A passing test alone is not proof that the entire feature was developed test-first.
-
+Camera model/capability policy now has its own test target and hosted test job. The full package matrix passed on the hosted macOS runner after extraction. This does not make the entire historical codebase strictly TDD: several earlier SDK controls predate their tests. New feature work must continue with failing tests first, then implementation, full regression and refactoring.
 
 ## Package dependency boundary (2026-11-20)
 

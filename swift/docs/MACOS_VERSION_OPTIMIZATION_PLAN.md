@@ -348,3 +348,16 @@ Extracted Amcam camera value types, capability descriptors, control snapshots an
 - Added AmcamCameraModel to the hosted macOS package test matrix and enforced the application dependency boundary in CI.
 - The new package boundary is not considered validated until the current hosted workflow succeeds.
 
+
+
+## 2026-11-20 — Hosted validation after model extraction
+
+Hosted macOS workflow [44700221429](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44700221429) completed successfully on commit `628972c0da4c055df0eae1fae7d4693ef2c7e10d`.
+
+- All five package test jobs passed: GenTLAPI, GenTLNative, GenTLRouter, AmcamCameraModel and AmcamGenTL.
+- The Amcam camera probe release build and upload passed.
+- The application dependency guard passed.
+- The standalone routed app release build, app-bundle signature verification and arm64 executable check passed.
+- Application artifact `amcam-imaging-macos-arm64`, artifact ID `14612188825`, expires 2026-12-04.
+
+This is hosted software validation only. No local Xcode run or physical camera acceptance occurred. MU503 discovery, stream acquisition, exposure/gain changes, restart behavior and disconnect/reconnect still require hardware validation.
