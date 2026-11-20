@@ -395,7 +395,7 @@ Added `testEveryProtocolOperationDispatchesToItsMatchingNativeExport`. It:
 7. unregisters the event and closes the Producer;
 8. reads the test-only C counters and asserts the expected native invocation count for every operation, including the internal `EventKill` call performed by unregister.
 
-Together with the four explicit stateful operations, this covers all 64 protocol requirements. The existing output-pointer test remains separate and checks the custom `GCGetInfo` datatype, payload marker, output size, and error result. The optional-export negative test now builds the mock with all 17 later-revision exports omitted and verifies the API returns `GC_ERR_NOT_IMPLEMENTED` without modifying the output sentinel.
+Together, the 58 unique-return operations, two port sentinel operations, and four explicit lifecycle operations cover all 64 protocol requirements. The existing output-pointer test remains separate and checks the custom `GCGetInfo` datatype, payload marker, output size, and error result. The optional-export negative test now builds the mock with all 17 later-revision exports omitted and verifies the API returns `GC_ERR_NOT_IMPLEMENTED` without modifying the output sentinel.
 
 ### Source-level consistency audit
 
