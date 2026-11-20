@@ -71,6 +71,7 @@ public enum GenTLAcquisitionError: Error, LocalizedError, Equatable, Sendable {
     case acquisitionAlreadyStarted
     case acquisitionNotStarted
     case acquisitionStopped
+    case eventTimeout
     case sessionClosed
 
     public var errorDescription: String? {
@@ -107,6 +108,8 @@ public enum GenTLAcquisitionError: Error, LocalizedError, Equatable, Sendable {
             return "Acquisition has not been started for this data stream."
         case .acquisitionStopped:
             return "Acquisition was stopped while waiting for a frame."
+        case .eventTimeout:
+            return "No new image buffer arrived before the GenTL event-read timeout."
         case .sessionClosed:
             return "The GenTL acquisition session is closed."
         }
@@ -239,6 +242,9 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
             stateLock.unlock()
             if wasStopped {
                 throw GenTLAcquisitionError.acquisitionStopped
+            }
+            if eventStatus == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_TIMEOUT) {
+                throw GenTLAcquisitionError.eventTimeout
             }
             try check(eventStatus, operation: "EventGetData(NewBuffer)")
         }
