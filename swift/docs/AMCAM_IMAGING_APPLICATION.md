@@ -227,3 +227,21 @@ The GenTLRouter acquisition tests inject a buffer-revoke failure, verify that th
 A GenTL New Buffer event timeout means only that no buffer arrived within the requested wait interval. It is not proof that the camera or acquisition has failed: a camera may be waiting for an external trigger, a software trigger, or simply a longer frame interval. GenTLAcquisitionSession reports this outcome as `eventTimeout`; the app keeps waiting and does not close the device. A stop/close request remains distinct and is reported as `acquisitionStopped`.
 
 A fake Producer test forces an event timeout, then delivers a valid frame without restarting the acquisition session. This verifies that timeout handling is recoverable rather than a fatal stream transition.
+
+## Amcam pull API selection (SDK 58.28273.20250415)
+
+The checked-in `amcam.py` identifies the vendor SDK version as `58.28273.20250415` and documents three generations of pull API:
+
+- `Amcam_PullImageV2`: basic frame metadata, no explicit row-pitch argument.
+- `Amcam_PullImageV3`: V3 metadata (exposure time/gain, shutter sequence, black level) and explicit row pitch.
+- `Amcam_PullImageV4`: V4 metadata, which embeds V3 metadata and adds luminance/focus values, counters, and GPS data; explicit row pitch.
+- `Amcam_PullImageWithRowPitchV2`: V2 metadata with explicit row pitch.
+
+The Swift binding resolves these symbols independently at runtime and selects the highest available generation in this order: V4, V3, row-pitch V2, plain V2. Missing newer symbols do not prevent loading an SDK that exposes an older supported API. At least one pull API must exist.
+
+For the current RGB24 acquisition path, V3/V4 and row-pitch V2 are called with `rowPitch = -1`, which the vendor wrapper documents as zero-padding/tightly packed rows (`width * 3` bytes for RGB24). This makes the buffer layout explicit instead of relying on platform DIB alignment. The V2 fallback retains its documented default row layout and is only used when no row-pitch-aware function exists.
+
+The common frame fields (dimensions, flags, sequence and timestamp) are normalized into the existing frame contract. V3/V4-specific metadata is not yet exposed in the public frame model; adding a typed metadata payload is a separate task and must preserve the exact validity flags and units. The current UI still requests 24-bit RGB; this change does not claim RAW10/RAW12 or RGB48 decoding support.
+
+ABI layout assertions cover V2, V3, GPS and V4 structures. The mock SDK exports V3 and V4 functions so hosted macOS tests can verify V4 preference, its row-pitch argument and returned frame data. Real-camera compatibility remains a separate hardware acceptance item; symbol presence does not prove that every camera model supports every SDK feature.
+
