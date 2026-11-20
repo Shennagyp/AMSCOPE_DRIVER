@@ -16,6 +16,7 @@ on:
       - macos-version-optimization
     paths:
       - "swift/Packages/**"
+      - "swift/docs/**"
       - ".github/workflows/swift-gentl.yml"
   workflow_dispatch:
 
