@@ -1,6 +1,6 @@
 import Foundation
 
-enum AmcamCameraError: Error, LocalizedError, Sendable {
+public enum AmcamCameraError: Error, LocalizedError, Sendable {
     case libraryNotFound(String)
     case libraryLoadFailed(String)
     case missingSymbol(String)
