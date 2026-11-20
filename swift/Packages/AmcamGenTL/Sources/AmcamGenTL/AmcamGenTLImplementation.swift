@@ -1472,7 +1472,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     // MARK: System
 
-    public func TLOpen(_ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?) -> GenTLABI.GC_ERROR {
+    public func TLOpen(_ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE?>?) -> GenTLABI.GC_ERROR {
         guard let phTL else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
             phTL.pointee = rawHandle(try TLOpen())
@@ -1530,7 +1530,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func TLOpenInterface(
         _ hTL: GenTLABI.TL_HANDLE, _ sIfaceID: UnsafePointer<CChar>?,
-        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phIface else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
@@ -1619,7 +1619,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func IFOpenDevice(
         _ hIface: GenTLABI.IF_HANDLE, _ sDeviceID: UnsafePointer<CChar>?,
-        _ iOpenFlag: GenTLABI.DEVICE_ACCESS_FLAGS, _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+        _ iOpenFlag: GenTLABI.DEVICE_ACCESS_FLAGS, _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phDevice else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
@@ -1634,7 +1634,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     // MARK: Device
 
-    public func DevGetPort(_ hDevice: GenTLABI.DEV_HANDLE, _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE>?) -> GenTLABI.GC_ERROR {
+    public func DevGetPort(_ hDevice: GenTLABI.DEV_HANDLE, _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE?>?) -> GenTLABI.GC_ERROR {
         guard let phRemoteDevice else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
             phRemoteDevice.pointee = rawHandle(try DevGetPort(typedHandle(hDevice, as: DEVModule.self)))
@@ -1665,7 +1665,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func DevOpenDataStream(
         _ hDevice: GenTLABI.DEV_HANDLE, _ sDataStreamID: UnsafePointer<CChar>?,
-        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE>?
+        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phDataStream else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
@@ -1696,7 +1696,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func DSAnnounceBuffer(
         _ hDataStream: GenTLABI.DS_HANDLE, _ pBuffer: UnsafeMutableRawPointer?, _ iSize: Int,
-        _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let pBuffer, let phBuffer, iSize > 0 else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
@@ -1712,7 +1712,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func DSAllocAndAnnounceBuffer(
         _ hDataStream: GenTLABI.DS_HANDLE, _ iSize: Int, _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phBuffer else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
@@ -1751,7 +1751,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func DSGetBufferID(
         _ hDataStream: GenTLABI.DS_HANDLE, _ iIndex: UInt32,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phBuffer else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
@@ -1826,7 +1826,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
         } catch { return rawError(error) }
     }
 
-    public func IFGetParentTL(_ hIface: GenTLABI.IF_HANDLE, _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?) -> GenTLABI.GC_ERROR {
+    public func IFGetParentTL(_ hIface: GenTLABI.IF_HANDLE, _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE?>?) -> GenTLABI.GC_ERROR {
         guard let phSystem else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
             phSystem.pointee = rawHandle(try IFGetParentTL(typedHandle(hIface, as: IFModule.self)))
@@ -1834,7 +1834,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
         } catch { return rawError(error) }
     }
 
-    public func DevGetParentIF(_ hDevice: GenTLABI.DEV_HANDLE, _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?) -> GenTLABI.GC_ERROR {
+    public func DevGetParentIF(_ hDevice: GenTLABI.DEV_HANDLE, _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE?>?) -> GenTLABI.GC_ERROR {
         guard let phIface else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
             phIface.pointee = rawHandle(try DevGetParentIF(typedHandle(hDevice, as: DEVModule.self)))
@@ -1842,7 +1842,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
         } catch { return rawError(error) }
     }
 
-    public func DSGetParentDev(_ hDataStream: GenTLABI.DS_HANDLE, _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?) -> GenTLABI.GC_ERROR {
+    public func DSGetParentDev(_ hDataStream: GenTLABI.DS_HANDLE, _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE?>?) -> GenTLABI.GC_ERROR {
         guard let phDevice else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
             phDevice.pointee = rawHandle(try DSGetParentDev(typedHandle(hDataStream, as: DSModule.self)))
@@ -1879,7 +1879,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
     public func DSAnnounceCompositeBuffer(
         _ hDataStream: GenTLABI.DS_HANDLE, _ iNumSegments: Int,
         _ ppSegments: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ piSizes: UnsafeMutablePointer<Int>?,
-        _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard iNumSegments > 0, let ppSegments, let piSizes, phBuffer != nil else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
@@ -1999,7 +1999,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func GCRegisterEvent(
         _ hEventSrc: GenTLABI.EVENTSRC_HANDLE, _ iEventID: GenTLABI.EVENT_TYPE,
-        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE>?
+        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phEvent else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         do {
