@@ -31,7 +31,7 @@ final class AmcamABITests: XCTestCase {
 
     func testRejectsUnterminatedFixedDeviceFields() {
         var device = AmcamDeviceV2()
-        withUnsafeMutableBytes(of: &device.displayname) {
+        _ = withUnsafeMutableBytes(of: &device.displayname) {
             $0.initializeMemory(as: UInt8.self, repeating: 0x41)
         }
 
