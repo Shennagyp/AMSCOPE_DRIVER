@@ -91,7 +91,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func start() {
-        guard let driver, let device = selectedDevice else {
+        guard driver != nil, let device = selectedDevice else {
             errorMessage = "Select a camera and configure the Amcam SDK first."
             return
         }
