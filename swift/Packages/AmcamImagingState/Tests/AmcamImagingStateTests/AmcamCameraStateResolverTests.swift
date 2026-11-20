@@ -206,7 +206,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             CameraFeatureDescriptor(
                 name: "SteppedRate", displayName: "Rate", kind: .floatingPoint,
                 isAvailable: true, isReadable: true, isWritable: true,
-                numericRange: CameraFeatureNumericRange(minimum: 1, maximum: 10, increment: 0.5)
+                numericRange: CameraFeatureNumericRange(minimum: 1, maximum: 11, increment: 0.5)
             ),
             CameraFeatureDescriptor(
                 name: "ExposureMode", displayName: "Exposure mode", kind: .enumeration,
@@ -235,7 +235,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         )
         XCTAssertEqual(
             resolver.validateWrite(.floatingPoint(10.25), named: "SteppedRate", descriptors: descriptors),
-            .invalidValue("SteppedRate must be between 1.0 and 10.0.")
+            .invalidValue("SteppedRate must be between 1.0 and 11.0.")
         )
         XCTAssertNil(
             resolver.validateWrite(.floatingPoint(10.5), named: "SteppedRate", descriptors: descriptors)
