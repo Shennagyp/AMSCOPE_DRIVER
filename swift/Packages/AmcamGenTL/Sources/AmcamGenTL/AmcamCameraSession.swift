@@ -6,7 +6,7 @@ private final class AmcamCallbackContext {
     init(session: AmcamCameraSession) { self.session = session }
 }
 
-final class AmcamCameraSession: @unchecked Sendable {
+public final class AmcamCameraSession: @unchecked Sendable {
     private static let callback: AmcamEventCallback = { event, context in
         guard let context else { return }
         Unmanaged<AmcamCallbackContext>.fromOpaque(context).takeUnretainedValue().session?.handle(event: event)
@@ -15,6 +15,7 @@ final class AmcamCameraSession: @unchecked Sendable {
     private let sdk: AmcamSDK
     private let lock = NSLock()
     private let controlLock = NSRecursiveLock()
+    private let modelCode: String
     private let modelFlags: UInt64?
     private let maximumSpeedLevel: Int?
     private var handle: UnsafeMutableRawPointer?
@@ -38,6 +39,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         handle: UnsafeMutableRawPointer,
         width: Int,
         height: Int,
+        modelCode: String,
         modelFlags: UInt64?,
         maximumSpeedLevel: Int?,
         resolutions: [AmcamResolution],
@@ -47,20 +49,21 @@ final class AmcamCameraSession: @unchecked Sendable {
         self.handle = handle
         self.width = width
         self.height = height
+        self.modelCode = modelCode
         self.modelFlags = modelFlags
         self.maximumSpeedLevel = maximumSpeedLevel
         self.resolutions = resolutions
         self.currentResolutionIndex = currentResolutionIndex
     }
 
-    func currentResolution() -> AmcamResolution? {
+    public func currentResolution() -> AmcamResolution? {
         controlLock.lock()
         defer { controlLock.unlock() }
         guard let currentResolutionIndex else { return nil }
         return resolutions.first { $0.index == currentResolutionIndex }
     }
 
-    func currentDimensions() -> (width: Int, height: Int) {
+    public func currentDimensions() -> (width: Int, height: Int) {
         controlLock.lock()
         defer { controlLock.unlock() }
         lock.lock()
@@ -68,12 +71,12 @@ final class AmcamCameraSession: @unchecked Sendable {
         return (width, height)
     }
 
-    func supportsResolutionChange() -> Bool {
+    public func supportsResolutionChange() -> Bool {
         sdk.resolutionChangeAvailable
     }
 
     /// Resolution changes are only valid while the stream is stopped.
-    func setResolution(index: Int) throws -> AmcamResolution {
+    public func setResolution(index: Int) throws -> AmcamResolution {
         controlLock.lock()
         defer { controlLock.unlock() }
 
@@ -102,7 +105,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         return resolution
     }
 
-    func start(onFrame: @escaping @Sendable (Result<AmcamFrame, AmcamCameraError>) -> Void) throws {
+    public func start(onFrame: @escaping @Sendable (Result<AmcamFrame, AmcamCameraError>) -> Void) throws {
         controlLock.lock()
         defer { controlLock.unlock() }
         lock.lock()
@@ -211,7 +214,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         }
     }
 
-    func stop() throws {
+    public func stop() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
 
@@ -222,7 +225,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         try stopIfNeeded()
     }
 
-    func close() throws {
+    public func close() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
         try stopIfNeeded()
@@ -245,7 +248,60 @@ final class AmcamCameraSession: @unchecked Sendable {
     }
 
 
-    func readControls() throws -> AmcamControlSnapshot {
+    /// Resolves model flags, non-mutating SDK probes, model policy, and implemented controls.
+    public func cameraCapabilities(
+        using registry: AmcamCameraProfileRegistry = AmcamCameraProfileRegistry()
+    ) throws -> AmcamCameraCapabilities {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        let activeHandle = try controlHandle()
+        var probes: AmcamCameraProfileRegistry.ProbeResults = [:]
+
+        if (try? sdk.readAutoExposureMode(activeHandle)) != nil {
+            probes[.exposureAuto] = true
+            probes[.exposureManual] = (try? sdk.readExposureTime(activeHandle)) != nil
+        } else {
+            probes[.exposureAuto] = false
+            probes[.exposureManual] = false
+        }
+
+        if let maximumSpeedLevel,
+           maximumSpeedLevel >= 0,
+           sdk.speedControlAvailable,
+           let current = try? sdk.readSpeedLevel(activeHandle),
+           current >= 0,
+           current <= maximumSpeedLevel {
+            probes[.discreteFrameSpeed] = true
+        } else {
+            probes[.discreteFrameSpeed] = false
+        }
+
+        let preciseFlag = modelFlags.map { ($0 & AmcamSDK.preciseFrameRateFlag) != 0 } == true
+        if preciseFlag,
+           let minimum = try? sdk.readOption(activeHandle, option: AmcamSDK.optionMinimumPreciseFrameRate),
+           let maximum = try? sdk.readOption(activeHandle, option: AmcamSDK.optionMaximumPreciseFrameRate),
+           let current = try? sdk.readOption(activeHandle, option: AmcamSDK.optionPreciseFrameRate),
+           minimum > 0, maximum >= minimum, current >= minimum, current <= maximum {
+            probes[.preciseFrameRate] = true
+        } else {
+            probes[.preciseFrameRate] = false
+        }
+
+        probes[.resolution] = !resolutions.isEmpty && sdk.resolutionChangeAvailable
+        let implemented: Set<AmcamCameraFeature> = [
+            .liveCapture, .resolution, .exposureAuto, .exposureManual,
+            .preciseFrameRate, .discreteFrameSpeed
+        ]
+        return registry.resolve(
+            modelCode: modelCode,
+            modelFlags: modelFlags ?? 0,
+            maximumSpeedLevel: maximumSpeedLevel,
+            probes: probes,
+            implemented: implemented
+        )
+    }
+
+    public func readControls() throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -257,11 +313,11 @@ final class AmcamCameraSession: @unchecked Sendable {
         )
     }
 
-    func setAutomaticExposure(enabled: Bool) throws -> AmcamControlSnapshot {
+    public func setAutomaticExposure(enabled: Bool) throws -> AmcamControlSnapshot {
         try setAutoExposureMode(enabled ? .continuous : .manual)
     }
 
-    func setAutoExposureMode(_ mode: AmcamAutoExposureMode) throws -> AmcamControlSnapshot {
+    public func setAutoExposureMode(_ mode: AmcamAutoExposureMode) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -284,7 +340,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         return snapshot
     }
 
-    func setExposureTime(microseconds: UInt32) throws -> AmcamControlSnapshot {
+    public func setExposureTime(microseconds: UInt32) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -292,8 +348,8 @@ final class AmcamCameraSession: @unchecked Sendable {
         guard microseconds >= current.minimum, microseconds <= current.maximum else {
             throw AmcamCameraError.exposureOutOfRange(requested: microseconds, minimum: current.minimum, maximum: current.maximum)
         }
-        let automaticExposureEnabled = try sdk.readAutoExposure(activeHandle)
-        guard !automaticExposureEnabled else {
+        let autoExposureMode = try sdk.readAutoExposureMode(activeHandle)
+        guard autoExposureMode == .manual else {
             throw AmcamCameraError.automaticExposureMustBeDisabled
         }
         try sdk.setExposureTime(activeHandle, microseconds: microseconds)
@@ -314,7 +370,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         return snapshot
     }
 
-    func setFixedFrameRate(framesPerSecond: Double) throws -> AmcamControlSnapshot {
+    public func setFixedFrameRate(framesPerSecond: Double) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
@@ -368,7 +424,7 @@ final class AmcamCameraSession: @unchecked Sendable {
         return snapshot
     }
 
-    func setFrameRateSpeedLevel(_ level: Int) throws -> AmcamControlSnapshot {
+    public func setFrameRateSpeedLevel(_ level: Int) throws -> AmcamControlSnapshot {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
