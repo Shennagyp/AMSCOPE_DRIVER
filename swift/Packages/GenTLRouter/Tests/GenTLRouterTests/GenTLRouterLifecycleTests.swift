@@ -64,7 +64,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         let bytes = value.utf8CString
         let capacity = size.pointee
         size.pointee = bytes.count
-        guard let output else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
+        guard let output else { return GenTLABI.GC_ERR_SUCCESS }
         guard capacity >= bytes.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
         for (index, byte) in bytes.enumerated() {
             output[index] = byte
