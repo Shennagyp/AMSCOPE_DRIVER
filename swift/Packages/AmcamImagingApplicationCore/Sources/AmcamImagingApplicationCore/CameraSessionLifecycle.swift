@@ -19,12 +19,15 @@ public actor CameraSessionLifecycle {
 
     public func events() -> AsyncStream<CameraSessionLifecycleEvent> {
         let identifier = UUID()
-        return AsyncStream(bufferingPolicy: .bufferingNewest(8)) { continuation in
-            continuations[identifier] = continuation
-            continuation.onTermination = { @Sendable [weak self] _ in
-                Task { await self?.removeContinuation(identifier) }
-            }
+        var registeredContinuation: AsyncStream<CameraSessionLifecycleEvent>.Continuation!
+        let stream = AsyncStream<CameraSessionLifecycleEvent>(bufferingPolicy: .bufferingNewest(8)) {
+            registeredContinuation = $0
         }
+        continuations[identifier] = registeredContinuation
+        registeredContinuation.onTermination = { @Sendable [weak self] _ in
+            Task { await self?.removeContinuation(identifier) }
+        }
+        return stream
     }
 
     public func snapshot() -> CameraSessionLifecycleSnapshot {
