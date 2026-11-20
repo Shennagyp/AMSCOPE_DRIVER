@@ -435,3 +435,8 @@ The optional-export test now builds a Producer with all 17 later-revision symbol
 ### Required-export rejection matrix expanded to all 47 base symbols
 
 The mock fixture now supports a compile-time omission flag for each required GenTL 1.0 symbol. The native integration suite iterates over the loader's authoritative `requiredEntryPoints` list, builds one fixture variant per symbol, and asserts that `GenTLNativeImplementation` rejects each variant with `missingRequiredSymbol` naming the exact omitted export. This replaces the earlier single-`GCGetInfo` negative test. It tests the full required-symbol inventory rather than relying on one representative missing symbol.
+
+
+### ABI version/layout runtime assertion
+
+Added a native integration test asserting the compiled header version code is GenTL 1.6.0 and `GenTLABI_LayoutValid()` succeeds. The ABI C target also contains compile-time `_Static_assert` checks for the packed event, register-stack, chunk, and GenTL 1.6 stacked-info structures. The runtime assertion ensures the layout-validation function is actually linked and callable.
