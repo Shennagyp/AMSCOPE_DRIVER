@@ -157,6 +157,61 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
 
 
+    func testAcquisitionFallsBackToV3WhenV4IsNotExported() throws {
+        let libraryURL = try buildMockSDK(disableV4: true)
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        defer { sdk.close(opened.handle) }
+
+        XCTAssertEqual(sdk.pullImageOperationName, "Amcam_PullImageV3")
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: 640 * 480 * 3, alignment: 64)
+        defer { buffer.deallocate() }
+        var info = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata?
+        XCTAssertEqual(sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata), 0)
+        XCTAssertEqual(metadata?.apiVersion, .v3)
+        XCTAssertEqual(metadata?.exposureTimeMicroseconds, 10_000)
+        XCTAssertEqual(metadata?.exposureGain, 100)
+        XCTAssertEqual(metadata?.blackLevel, 0)
+    }
+
+    func testAcquisitionFallsBackToRowPitchV2WhenV3AndV4AreNotExported() throws {
+        let libraryURL = try buildMockSDK(disableV4: true, disableV3: true)
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        defer { sdk.close(opened.handle) }
+
+        XCTAssertEqual(sdk.pullImageOperationName, "Amcam_PullImageWithRowPitchV2")
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: 640 * 480 * 3, alignment: 64)
+        defer { buffer.deallocate() }
+        var info = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata?
+        XCTAssertEqual(sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata), 0)
+        XCTAssertEqual(metadata?.apiVersion, .v2)
+        XCTAssertEqual(info.width, 640)
+        XCTAssertEqual(info.height, 480)
+    }
+
+    func testAcquisitionFallsBackToV2WhenNoRowPitchOrNewerPullAPIExists() throws {
+        let libraryURL = try buildMockSDK(disableV4: true, disableV3: true, disableRowPitchV2: true)
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        defer { sdk.close(opened.handle) }
+
+        XCTAssertEqual(sdk.pullImageOperationName, "Amcam_PullImageV2")
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: 640 * 480 * 3, alignment: 64)
+        defer { buffer.deallocate() }
+        var info = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata?
+        XCTAssertEqual(sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata), 0)
+        XCTAssertEqual(metadata?.apiVersion, .v2)
+        XCTAssertEqual(info.width, 640)
+        XCTAssertEqual(info.height, 480)
+    }
+
     func testExposureControlsAndResolutionReadback() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)
@@ -867,7 +922,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         )
     }
 
-    private func buildMockSDK() throws -> URL {
+    private func buildMockSDK(disableV4: Bool = false, disableV3: Bool = false, disableRowPitchV2: Bool = false) throws -> URL {
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -885,10 +940,12 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             "-Wall",
             "-Wextra",
             "-Werror",
-            "-I", includeDirectory.path,
-            source.path,
-            "-o", output.path
+            "-I", includeDirectory.path
         ]
+        if disableV4 { process.arguments.append("-DMOCK_DISABLE_V4") }
+        if disableV3 { process.arguments.append("-DMOCK_DISABLE_V3") }
+        if disableRowPitchV2 { process.arguments.append("-DMOCK_DISABLE_ROW_PITCH_V2") }
+        process.arguments += [source.path, "-o", output.path]
         let errorPipe = Pipe()
         process.standardError = errorPipe
         try process.run()
