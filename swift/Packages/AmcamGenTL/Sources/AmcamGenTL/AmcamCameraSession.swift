@@ -753,7 +753,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         if event == AmcamSDK.imageEvent {
             var info = AmcamFrameInfoV2()
-            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info)
+            var frameMetadata: AmcamFrameMetadata?\n            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info, metadata: &frameMetadata)
             guard result >= 0 else {
                 streaming = false
                 lock.unlock()
