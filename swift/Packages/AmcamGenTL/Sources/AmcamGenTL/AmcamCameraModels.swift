@@ -118,11 +118,11 @@ public struct AmcamFrameRateControl: Equatable, Sendable {
 }
 
 public struct AmcamControlSnapshot: Equatable, Sendable {
-    public let exposure: AmcamExposureControl
+    public let exposure: AmcamExposureControl?
     public let gain: AmcamGainControl?
     public let frameRate: AmcamFrameRateControl
 
-    public init(exposure: AmcamExposureControl, gain: AmcamGainControl? = nil,
+    public init(exposure: AmcamExposureControl? = nil, gain: AmcamGainControl? = nil,
                 frameRate: AmcamFrameRateControl) {
         self.exposure = exposure
         self.gain = gain
