@@ -9,6 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../AmcamImagingCore"),
+        .package(path: "../AmcamCameraModel"),
         .package(path: "../AmcamImagingRuntime"),
         .package(path: "../GenTLRouter"),
         .package(path: "../GenTLAPI"),
@@ -19,6 +20,7 @@ let package = Package(
             name: "AmcamImagingGenTLAdapter",
             dependencies: [
                 .product(name: "AmcamImagingCore", package: "AmcamImagingCore"),
+                .product(name: "AmcamCameraModel", package: "AmcamCameraModel"),
                 .product(name: "AmcamImagingRuntime", package: "AmcamImagingRuntime"),
                 .product(name: "GenTLRouter", package: "GenTLRouter"),
                 .product(name: "GenTLAPI", package: "GenTLAPI"),
