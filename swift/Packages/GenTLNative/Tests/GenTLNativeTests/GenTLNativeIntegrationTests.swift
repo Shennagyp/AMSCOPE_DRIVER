@@ -370,7 +370,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(api.DevGetParentIF(mockHandle, &interfaceHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(interfaceHandle)), 0x2222)
 
-        var deviceHandle: DEV_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x3333)
+        var deviceHandle: DEV_HANDLE? = UnsafeMutableRawPointer(bitPattern: 0x3333)
         XCTAssertEqual(api.DSGetParentDev(mockHandle, &deviceHandle), unsupported)
         XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(deviceHandle)), 0x3333)
 
@@ -387,7 +387,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(infoType, 0x1234)
         XCTAssertEqual(infoSize, 0x12345678)
 
-        var announcedBuffer: BUFFER_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x4444)
+        var announcedBuffer: BUFFER_HANDLE? = UnsafeMutableRawPointer(bitPattern: 0x4444)
         XCTAssertEqual(
             api.DSAnnounceCompositeBuffer(mockHandle, 0, nil, nil, nil, &announcedBuffer),
             unsupported
