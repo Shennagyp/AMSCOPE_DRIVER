@@ -897,7 +897,12 @@ public final class AmcamGenTLImplementation: GenTLAPI, @unchecked Sendable {
         // The Amcam SDK does not expose a non-invasive access-status query.
         // Report UNKNOWN until this backend owns the camera; do not claim it is
         // available for read/write merely because it was discoverable.
-        case 5: return .int32(isOpen ? 5 : 0) // OPEN_READWRITE / UNKNOWN
+        case 5:
+            return .int32(
+                isOpen
+                    ? GenTLDeviceAccessStatus.openReadWrite.rawValue
+                    : GenTLDeviceAccessStatus.unknown.rawValue
+            )
         case 6: try fail(.notAvailable)
         case 7: try fail(.notAvailable) // SDK ID is opaque, not a verified serial number.
         case 8: try fail(.notAvailable) // SDK does not expose a camera firmware version.
