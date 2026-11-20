@@ -382,10 +382,10 @@ final class CameraSettingsViewController: NSViewController {
             let exposureRange = model.numericRange(for: "ExposureTime")
             let canWriteExposure = capabilities.availability(of: .exposureManual).isUsable
                 && model.isFeatureWritable("ExposureTime")
-                && exposureRange != nil
+                && exposureRange.map { $0.maximum > $0.minimum } == true
             if let exposureRange, canWriteExposure {
                 exposureSlider?.minValue = exposureRange.minimum
-                exposureSlider?.maxValue = max(exposureRange.minimum + 1, exposureRange.maximum)
+                exposureSlider?.maxValue = exposureRange.maximum
                 exposureSlider?.doubleValue = Double(exposure.readbackMicroseconds ?? 10_000)
             }
             exposureSlider?.isHidden = !canWriteExposure
@@ -420,6 +420,7 @@ final class CameraSettingsViewController: NSViewController {
             gainValue.stringValue = "Current: \(gain.readbackPercent)%"
             let canWriteGain = capabilities.availability(of: .analogGain).isUsable
                 && model.isFeatureWritable("AmcamAnalogGainPercent")
+                && gain.minimumPercent < gain.maximumPercent
                 && model.numericRange(for: "AmcamAnalogGainPercent") != nil
             gainSlider?.isHidden = !canWriteGain
             gainValue.isHidden = false
@@ -430,11 +431,11 @@ final class CameraSettingsViewController: NSViewController {
                 temperatureSlider?.doubleValue = Double(temperature)
                 if let range = model.numericRange(for: "AmcamWhiteBalanceTemperature") {
                     temperatureSlider?.minValue = range.minimum
-                    temperatureSlider?.maxValue = max(range.minimum + 1, range.maximum)
+                    temperatureSlider?.maxValue = range.maximum
                 }
                 temperatureSlider?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
                     || !model.isFeatureWritable("AmcamWhiteBalanceTemperature")
-                    || model.numericRange(for: "AmcamWhiteBalanceTemperature") == nil
+                    || model.numericRange(for: "AmcamWhiteBalanceTemperature").map { $0.maximum <= $0.minimum } != false
                 temperatureValue.stringValue = "Current: \(temperature) K"
                 temperatureValue.isHidden = false
             }
@@ -442,11 +443,11 @@ final class CameraSettingsViewController: NSViewController {
                 tintSlider?.doubleValue = Double(tint)
                 if let range = model.numericRange(for: "AmcamWhiteBalanceTint") {
                     tintSlider?.minValue = range.minimum
-                    tintSlider?.maxValue = max(range.minimum + 1, range.maximum)
+                    tintSlider?.maxValue = range.maximum
                 }
                 tintSlider?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
                     || !model.isFeatureWritable("AmcamWhiteBalanceTint")
-                    || model.numericRange(for: "AmcamWhiteBalanceTint") == nil
+                    || model.numericRange(for: "AmcamWhiteBalanceTint").map { $0.maximum <= $0.minimum } != false
                 tintValue.stringValue = "Current: \(tint)"
                 tintValue.isHidden = false
             }
@@ -485,11 +486,11 @@ final class CameraSettingsViewController: NSViewController {
         let frameRateRange = model.numericRange(for: "AmcamFixedFrameRate")
         let canWriteFrameRate = capabilities.availability(of: .preciseFrameRate).isUsable
             && model.isFeatureWritable("AmcamFixedFrameRate")
-            && frameRateRange != nil
+            && frameRateRange.map { $0.maximum > $0.minimum } == true
         frameRateSlider?.isHidden = !canWriteFrameRate
         if let frameRateRange {
             frameRateSlider?.minValue = frameRateRange.minimum
-            frameRateSlider?.maxValue = Swift.max(frameRateRange.minimum + 0.1, frameRateRange.maximum)
+            frameRateSlider?.maxValue = frameRateRange.maximum
         }
     }
 
@@ -522,5 +523,10 @@ final class CameraSettingsViewController: NSViewController {
     @objc private func pixelFormatChanged() {
         if let code = pixelFormatPicker.selectedItem?.representedObject as? Int32 { model.setPixelFormat(code) }
     }
-    @objc private func frameRateChanged() { model.setFixedFrameRate(frameRateSlider?.doubleValue ?? 15) }
+    @objc private func frameRateChanged() {
+        guard let rawValue = frameRateSlider?.doubleValue,
+              let value = model.normalizedNumericValue(rawValue, for: "AmcamFixedFrameRate") else { return }
+        frameRateSlider?.doubleValue = value
+        model.setFixedFrameRate(value)
+    }
 }
