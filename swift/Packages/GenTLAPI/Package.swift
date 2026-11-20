@@ -17,6 +17,12 @@ let package = Package(
                 .product(name: "GenTLABI", package: "GenTLABI")
             ]
         ),
-        .testTarget(name: "GenTLAPITests", dependencies: ["GenTLAPI"])
+        .testTarget(
+            name: "GenTLAPITests",
+            dependencies: [
+                "GenTLAPI",
+                .product(name: "GenTLABI", package: "GenTLABI")
+            ]
+        )
     ]
 )
