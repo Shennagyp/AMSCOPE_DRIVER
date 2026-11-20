@@ -313,3 +313,6 @@ The new macOS workflow has been triggered, but its four jobs fail before any ste
 ### Native argument fault injection (2026-11-20)
 
 Added negative tests for invalid GCGetInfo command, GCReadPort address, and GCWritePort payload. They assert exact custom error propagation and unchanged output buffers/sizes. Execution remains blocked by hosted runner provisioning.
+
+
+The latest run `44674821941` (commit `4c108885fb95c4bf7912da5997d0e42db2d33f43`) again shows all five jobs failing before step execution with runner ID zero. No compile or test result is available.
