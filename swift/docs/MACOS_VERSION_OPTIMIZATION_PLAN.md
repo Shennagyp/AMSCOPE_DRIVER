@@ -319,3 +319,16 @@ This branch is complete when:
 - Feature access after session closure now fails deterministically with `deviceSessionClosed`, rather than forwarding a stale handle to the backend.
 - Router lifecycle tests cover the owning device-handle identity and the closed-session boundary.
 
+### CI correction cycle — 2026-11-20
+
+The hosted macOS run for the preceding implementation did **not** pass. The first compile exposed incorrect assumptions in the router's use of imported C ABI types: GenTL handles are optional raw pointers at C out-parameter boundaries, and C enum constants must be converted to their ABI integer representation before comparing with `GC_ERROR`. The native test target also had corresponding C-enum/optional-handle typing errors and a brittle `Result.failure` assertion.
+
+Corrections committed:
+- Use `GenTLABI_ErrorFromCode` for GenTL error constants.
+- Use optional pointer variables for `TLOpen`, `TLOpenInterface` and `IFOpenDevice` out parameters, then unwrap after checking the returned status.
+- Preserve non-optional handle types once ownership is established.
+- Normalize imported `INFO_DATATYPE` constants and `GC_ERROR` values in native integration tests.
+- Replace the ambiguous `Result.failure` extraction with `XCTAssertThrowsError`.
+
+These changes are a response to compiler diagnostics from the actual hosted run. They are not yet verified; the next hosted macOS run must establish whether the corrections compile and whether further test failures remain.
+
