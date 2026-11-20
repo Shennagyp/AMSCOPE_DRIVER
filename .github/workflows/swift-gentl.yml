@@ -1,0 +1,47 @@
+name: Swift GenTL packages
+
+on:
+  push:
+    branches:
+      - swift-gentl-api
+  pull_request:
+    branches:
+      - swift-gentl-api
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-tests:
+    name: \${{ matrix.package }} tests
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: GenTLAPI
+            path: swift/Packages/GenTLAPI
+          - package: GenTLNative
+            path: swift/Packages/GenTLNative
+          - package: AmcamGenTL
+            path: swift/Packages/AmcamGenTL
+          - package: GenTLRouter
+            path: swift/Packages/GenTLRouter
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Record toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          clang --version
+
+      - name: Build GenTL ABI package
+        run: swift build --package-path swift/Packages/GenTLABI
+
+      - name: Run package tests
+        run: swift test --package-path "\${{ matrix.path }}" --parallel
