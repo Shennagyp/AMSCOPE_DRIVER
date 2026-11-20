@@ -357,6 +357,9 @@ public final class GenTLRouter: @unchecked Sendable {
     private let lock = NSRecursiveLock()
     private var registrations: [String: BackendRegistration] = [:]
     private var providerContexts: [String: GenTLProviderContext] = [:]
+    /// A backend whose GCInitLib succeeded but GCCloseLib cleanup failed must
+    /// never be initialized again in this process.
+    private var unavailableBackendIDs: Set<String> = []
     private var backendResourceOwners: [String: String] = [:]
 
     public init() {}
@@ -494,6 +497,10 @@ public final class GenTLRouter: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
+        guard !unavailableBackendIDs.contains(registration.identifier) else {
+            throw GenTLRouterError.providerContextUnavailable(registration.identifier)
+        }
+
         if let existing = providerContexts[registration.identifier] {
             guard !existing.isClosed else {
                 // An abandoned Producer may still own live native handles.
@@ -521,6 +528,7 @@ public final class GenTLRouter: @unchecked Sendable {
             do {
                 try api.GCCloseLib()
             } catch {
+                unavailableBackendIDs.insert(registration.identifier)
                 GenTLProviderRetainer.shared.retain(api)
             }
             throw error
