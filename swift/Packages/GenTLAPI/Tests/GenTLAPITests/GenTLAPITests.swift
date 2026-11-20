@@ -51,4 +51,23 @@ final class GenTLAPITests: XCTestCase {
         XCTAssertEqual(GenTLInfoDataType.buffer.rawValue, 13)
         XCTAssertEqual(GenTLInfoDataType.pointerDifference.rawValue, 14)
     }
+
+    func testInfoCommandIdentifiersMatchGenTL16() {
+        XCTAssertEqual(GenTLInfoCommand.TransportLayer.charEncoding.rawValue, 8)
+        XCTAssertEqual(GenTLInfoCommand.Interface.transportType.rawValue, 2)
+        XCTAssertEqual(GenTLInfoCommand.Device.timestampFrequency.rawValue, 9)
+        XCTAssertEqual(GenTLInfoCommand.Port.portName.rawValue, 12)
+
+        XCTAssertEqual(GenTLInfoCommand.Stream.payloadSize.rawValue, 7)
+        XCTAssertEqual(GenTLInfoCommand.Stream.transportType.rawValue, 10)
+
+        XCTAssertEqual(GenTLInfoCommand.Buffer.pixelFormat.rawValue, 20)
+        XCTAssertEqual(GenTLInfoCommand.Buffer.dataSize.rawValue, 27)
+        XCTAssertEqual(GenTLInfoCommand.Buffer.timestampNanoseconds.rawValue, 28)
+        XCTAssertEqual(GenTLInfoCommand.Buffer.isComposite.rawValue, 31)
+
+        XCTAssertEqual(GenTLInfoCommand.Event.maxSize.rawValue, 3)
+        XCTAssertEqual(GenTLInfoCommand.Event.infoDataSizeMax.rawValue, 4)
+        XCTAssertEqual(GenTLInfoCommand.EventData.numericID.rawValue, 2)
+    }
 }
