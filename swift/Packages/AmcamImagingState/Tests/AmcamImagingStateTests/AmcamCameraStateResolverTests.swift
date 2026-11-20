@@ -247,6 +247,10 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 enumerationValues: ["Off", "Once"]
             ),
             CameraFeatureDescriptor(
+                name: "UnadvertisedEnum", displayName: "Unknown enum", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: true
+            ),
+            CameraFeatureDescriptor(
                 name: "WhiteBalanceRGB", displayName: "RGB gain", kind: .integerVector,
                 isAvailable: true, isReadable: true, isWritable: true,
                 elementCount: 3
@@ -284,6 +288,10 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertEqual(
             resolver.validateWrite(.enumeration("Continuous"), named: "ExposureMode", descriptors: descriptors),
             .invalidValue("Continuous is not an advertised value for ExposureMode.")
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.enumeration("Any"), named: "UnadvertisedEnum", descriptors: descriptors),
+            .invalidValue("UnadvertisedEnum does not advertise any enumeration values.")
         )
         XCTAssertEqual(
             resolver.validateWrite(.integerVector([1, 2]), named: "WhiteBalanceRGB", descriptors: descriptors),
