@@ -18,6 +18,13 @@ private struct CallCounts {
 private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private let lock = NSLock()
     private var calls = CallCounts()
+    private let failSystemOpen: Bool
+    private let failLibraryClose: Bool
+
+    init(failSystemOpen: Bool = false, failLibraryClose: Bool = false) {
+        self.failSystemOpen = failSystemOpen
+        self.failLibraryClose = failLibraryClose
+    }
 
     private func record(_ update: (inout CallCounts) -> Void) {
         lock.lock()
@@ -37,10 +44,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 
     func GCCloseLib() throws {
         record { $0.gcClose += 1 }
+        if failLibraryClose { throw GC_ERROR.resourceInUse }
     }
 
     func TLOpen() throws -> TL_HANDLE {
         record { $0.tlOpen += 1 }
+        if failSystemOpen { throw GC_ERROR.error }
         return TL_HANDLE(rawValue: 1)
     }
 
@@ -104,6 +113,30 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 }
 
 final class GenTLRouterLifecycleTests: XCTestCase {
+    func testFailedInitializationCleanupQuarantinesBackend() {
+        let api = RecordingGenTLAPI(failSystemOpen: true, failLibraryClose: true)
+        var factoryCalls = 0
+        let router = GenTLRouter()
+        XCTAssertNoThrow(try router.register(backendID: "partial-init") {
+            factoryCalls += 1
+            return api
+        })
+
+        let first = router.discover()
+        XCTAssertEqual(first.devices.count, 0)
+        XCTAssertEqual(first.failures.count, 1)
+
+        let second = router.discover()
+        XCTAssertEqual(second.devices.count, 0)
+        XCTAssertEqual(second.failures.count, 1)
+
+        XCTAssertEqual(factoryCalls, 1)
+        let calls = api.snapshot()
+        XCTAssertEqual(calls.gcInit, 1)
+        XCTAssertEqual(calls.tlOpen, 1)
+        XCTAssertEqual(calls.gcClose, 1)
+    }
+
     func testNativeProducerSymlinkAliasesCannotRegisterTwice() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("GenTLRouterProducerIdentity-\(UUID().uuidString)", isDirectory: true)
