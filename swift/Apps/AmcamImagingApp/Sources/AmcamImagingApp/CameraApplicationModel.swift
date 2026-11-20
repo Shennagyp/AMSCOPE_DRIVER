@@ -620,10 +620,11 @@ final class CameraApplicationModel: ObservableObject {
         let (packedRowBytes, rowOverflow) = frame.width.multipliedReportingOverflow(by: 3)
         let (bytesPerRow, paddingOverflow) = packedRowBytes.addingReportingOverflow(frame.rowPaddingBytes)
         let (requiredBytes, heightOverflow) = bytesPerRow.multipliedReportingOverflow(by: frame.height)
+        let (packedDataSize, packedSizeOverflow) = packedRowBytes.multipliedReportingOverflow(by: frame.height)
         guard frame.width > 0, frame.height > 0,
-              !rowOverflow, !paddingOverflow, !heightOverflow,
+              !rowOverflow, !paddingOverflow, !heightOverflow, !packedSizeOverflow,
               frame.rowPaddingBytes >= 0,
-              frame.dataSize >= requiredBytes,
+              frame.dataSize >= packedDataSize,
               frame.sizeFilled >= requiredBytes,
               frame.bytes.count >= requiredBytes else {
             errorMessage = "The GenTL frame metadata is inconsistent with its RGB8 payload."
