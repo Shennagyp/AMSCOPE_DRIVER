@@ -68,9 +68,7 @@ public struct AmcamCameraStateResolver: Sendable {
             }
             if let range = descriptor.numericRange,
                !isWithinRange(number, range: range) {
-                return .invalidValue(
-                    "\(name) must be between \(range.minimum) and \(range.maximum)."
-                )
+                return .invalidValue(rangeValidationMessage(name, range: range))
             }
         case .integerVector(let values):
             guard let expectedCount = descriptor.elementCount else {
