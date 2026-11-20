@@ -28,6 +28,7 @@ private typealias GetExposureGainRangeFunction = @convention(c) (UnsafeMutableRa
 private typealias GetTemperatureTintFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?, UnsafeMutablePointer<Int32>?) -> Int32
 private typealias SetTemperatureTintFunction = @convention(c) (UnsafeMutableRawPointer?, Int32, Int32) -> Int32
 private typealias GetWhiteBalanceGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?) -> Int32
+private typealias SetWhiteBalanceGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<Int32>?) -> Int32
 typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
 /// Keeps an Amcam SDK loaded when a camera handle could not be closed safely.
@@ -92,6 +93,7 @@ final class AmcamSDK: @unchecked Sendable {
         let getTemperatureTint: GetTemperatureTintFunction?
         let setTemperatureTint: SetTemperatureTintFunction?
         let getWhiteBalanceGain: GetWhiteBalanceGainFunction?
+        let setWhiteBalanceGain: SetWhiteBalanceGainFunction?
     }
 
     private let library: UnsafeMutableRawPointer
@@ -137,7 +139,8 @@ final class AmcamSDK: @unchecked Sendable {
                 getExposureGainRange: try? load("Amcam_get_ExpoAGainRange", as: GetExposureGainRangeFunction.self),
                 getTemperatureTint: try? load("Amcam_get_TempTint", as: GetTemperatureTintFunction.self),
                 setTemperatureTint: try? load("Amcam_put_TempTint", as: SetTemperatureTintFunction.self),
-                getWhiteBalanceGain: try? load("Amcam_get_WhiteBalanceGain", as: GetWhiteBalanceGainFunction.self)
+                getWhiteBalanceGain: try? load("Amcam_get_WhiteBalanceGain", as: GetWhiteBalanceGainFunction.self),
+                setWhiteBalanceGain: try? load("Amcam_put_WhiteBalanceGain", as: SetWhiteBalanceGainFunction.self)
             )
             guard let versionPointer = resolved.version() else {
                 throw AmcamCameraError.incompatibleSDK(expected: expectedVersion, actual: "null")
@@ -407,7 +410,8 @@ final class AmcamSDK: @unchecked Sendable {
     }
 
     var whiteBalanceControlAvailable: Bool {
-        api.getTemperatureTint != nil && api.setTemperatureTint != nil
+        (api.getTemperatureTint != nil && api.setTemperatureTint != nil) ||
+        (api.getWhiteBalanceGain != nil && api.setWhiteBalanceGain != nil)
     }
 
     func readTemperatureTint(_ handle: UnsafeMutableRawPointer) throws -> (temperature: Int32, tint: Int32) {
@@ -486,6 +490,16 @@ final class AmcamSDK: @unchecked Sendable {
         }
         let result = setSpeed(handle, UInt16(level))
         try checkControlResult("Amcam_put_Speed", result)
+    }
+
+    func setWhiteBalanceGain(_ handle: UnsafeMutableRawPointer, values: [Int32]) throws {
+        guard values.count == 3, let setter = api.setWhiteBalanceGain else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose RGB white-balance gain control.")
+        }
+        let result = values.withUnsafeBufferPointer { buffer in
+            setter(handle, buffer.baseAddress)
+        }
+        try checkControlResult("Amcam_put_WhiteBalanceGain", result)
     }
 
     private func checkControlResult(_ operation: String, _ result: Int32) throws {
