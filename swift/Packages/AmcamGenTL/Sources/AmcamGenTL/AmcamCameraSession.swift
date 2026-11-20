@@ -754,11 +754,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
         if event == AmcamSDK.imageEvent {
             var info = AmcamFrameInfoV2()
             var frameMetadata: AmcamFrameMetadata?
-            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info, metadata: &frameMetadata)
+            var pullOperationName: String?
+            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName)
             guard result >= 0 else {
                 streaming = false
                 lock.unlock()
-                handler(.failure(.cameraReadbackFailed(operation: sdk.pullImageOperationName, code: result)))
+                handler(.failure(.cameraReadbackFailed(operation: pullOperationName ?? sdk.pullImageOperationName, code: result)))
                 return
             }
             let frameWidth = Int(info.width)
