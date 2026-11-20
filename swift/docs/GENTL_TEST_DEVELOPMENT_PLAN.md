@@ -301,3 +301,28 @@ Do not report “all tests pass” without the above context.
 7. Add fault-injection and acquisition tests after the core loader/dispatch path is proven.
 
 **Do not begin by writing a large simulated camera implementation before confirming the current package graph compiles.** A small correct mock and verified loader boundary are more valuable than a broad but unbuildable fixture.
+
+
+## 10. Work log — documentation and first executable test coverage
+
+### Completed source changes
+
+- Added `GENTL_ENGINEERING_RESEARCH.tex` as the detailed internal engineering research record.
+- Added this development plan as the ordered implementation roadmap.
+- Updated `GENTL_IMPLEMENTATION_PLAN.md` to link both documents and make the mock-Producer test decision explicit.
+- Extended `GenTLAPITests.swift` with an empty protocol conformer and 64 explicit assertions: every one of the 64 `GenTLAPI` requirements is invoked through its protocol default and must return `GC_ERR_NOT_IMPLEMENTED`.
+- A source-level consistency check compared the protocol method names with the new assertions: 64 declared operations, 64 assertions, no missing, unexpected, or duplicate operation names.
+
+### Evidence boundary
+
+The test source has been committed but has **not** been compiled or executed. The source-level count check proves coverage enumeration only; it does not prove Swift type-checking or runtime behavior. The next verification step is to run the `GenTLAPI` package tests in a Swift 5.10-compatible macOS environment and correct any compiler issues before treating this test as passing.
+
+### T0 inspection observations
+
+- `GenTLABI`, `GenTLAPI`, `GenTLNative`, `AmcamGenTL`, and `GenTLRouter` each have their own SwiftPM package manifest.
+- `GenTLAPI` already has a test target and test source; augmenting it is preferable to creating a parallel test package for protocol defaults.
+- `GenTLNative` already declares a `GenTLNativeTests` test target. The actual test source layout still needs to be enumerated before adding a C fixture.
+- The pinned header is at `swift/Packages/GenTLABI/Sources/GenTLABI/include/GenTL_v1_6.h`.
+- The native implementation uses imported `PGC*` / `P*` function-pointer typedefs and resolves native exports in `GenTLNativeImplementation.swift`.
+
+T0 is therefore partially complete at the source-inspection level. Package compilation, the full header-derived symbol inventory, and the native test target layout remain open. Do not advance the mock fixture design on assumptions about those items.
