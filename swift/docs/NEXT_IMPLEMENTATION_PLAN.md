@@ -19,7 +19,7 @@ The repository-level Makefile is the supported command interface:
 - `make run-local`: build and launch the app locally.
 - `make test-local`: run all six Swift package test suites locally.
 
-The default `make run` path deliberately uses the hosted macOS build. It requires macOS 13+, Apple Silicon, GitHub CLI (`gh`) and an authenticated GitHub CLI session, but does not require a local Xcode installation. Local build/test targets require a compatible local Swift toolchain and Apple SDK; they are optional and are not prerequisites for `make run`.
+The default `make run` path deliberately uses the hosted macOS build. It requires macOS 13+, Apple Silicon, `curl` and Python 3. It resolves and downloads the artifact anonymously through the public GitHub REST API; it does not require GitHub CLI, a GitHub token, authentication or a local Xcode installation. GitHub anonymous API rate limits apply. Local build/test targets require a compatible local Swift toolchain and Apple SDK; they are optional and are not prerequisites for `make run`.
 
 ## 2. Package and executable boundaries
 
@@ -54,12 +54,12 @@ Rules:
 ### Phase A — Make the repository runnable
 
 - [x] Add a root Makefile with explicit app, probe, local build and local test targets.
-- [x] Add an Xcode-free hosted-artifact launcher for the default run path.
+- [x] Add an Xcode-free hosted-artifact launcher for the default run path, using anonymous GitHub REST API artifact downloads.
 - [ ] Verify the launcher against a fresh successful workflow artifact on an Apple Silicon Mac.
 - [ ] Add a CI contract check that the app and probe artifacts are uploaded with the exact names expected by the launcher.
 - [ ] Add a small smoke check that the app bundle contains an arm64 executable and that the probe executable is present.
 
-Acceptance: a clean checkout can run `make run` after GitHub CLI authentication, without Xcode or a manually copied artifact.
+Acceptance: a clean checkout can run `make run` without GitHub authentication, Xcode or a manually copied artifact, provided the public workflow has a successful unexpired artifact.
 
 ### Phase B — Physical MU503 acceptance
 
