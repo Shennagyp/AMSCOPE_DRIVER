@@ -36,8 +36,8 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             "-w",
             "-I", headerDirectory.path
         ]
-        if omittingGetInfo {
-            arguments.append("-DMOCK_OMIT_GCGETINFO")
+        if let omittingRequiredSymbol {
+            arguments.append("-DMOCK_OMIT_\(omittingRequiredSymbol)")
         }
         if omittingOptionalExports {
             arguments.append("-DMOCK_OMIT_OPTIONAL_EXPORTS")
