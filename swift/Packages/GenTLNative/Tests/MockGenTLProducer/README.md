@@ -29,3 +29,5 @@ A Swift object conforming to GenTLAPI is not a substitute for this fixture: it b
 This is currently an ABI/loader/dispatch fixture, not a simulated camera. Most exports intentionally return deterministic test errors. It does not yet provide a valid System/Interface/Device topology, stream, buffers, or frame acquisition. Those behaviors are a later fixture increment after the current Swift package and integration tests compile and execute successfully.
 
 No physical camera or vendor CTI is required to run these tests.
+
+The test compiler uses `-Wall -Wextra -Werror` while suppressing only unused-parameter warnings from intentionally inert stubs. This makes the fixture a strict C compilation check against the pinned header.
