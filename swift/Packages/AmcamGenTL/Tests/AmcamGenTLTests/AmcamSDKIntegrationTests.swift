@@ -144,12 +144,13 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         defer { setIgnoreExposureWrite(0) }
 
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 30_000)) { error in
-            guard case .controlReadbackMismatch(
-                control: "exposure time",
-                requested: "30000 µs",
-                actual: "20000 µs"
-            ) = error as? AmcamCameraError else {
-                XCTFail("Expected exposure readback mismatch, got: \\(error)")
+            guard let cameraError = error as? AmcamCameraError,
+                  case .controlReadbackMismatch(
+                    control: "exposure time",
+                    requested: "30000 µs",
+                    actual: "20000 µs"
+                  ) = cameraError else {
+                XCTFail("Expected exposure readback mismatch, got: \(error)")
                 return
             }
         }
