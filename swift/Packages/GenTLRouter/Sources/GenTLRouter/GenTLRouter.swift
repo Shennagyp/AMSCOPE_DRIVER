@@ -376,7 +376,7 @@ public final class GenTLDeviceSession: @unchecked Sendable {
     public let deviceHandle: GenTLABI.DEV_HANDLE
 
     private let context: GenTLProviderContext
-    private let featureDeviceHandle: DEV_HANDLE
+    private let featureDeviceHandle: GenTLFeatureDeviceHandle
     private let lock = NSLock()
     private var isClosed = false
 
@@ -388,7 +388,7 @@ public final class GenTLDeviceSession: @unchecked Sendable {
         self.context = context
         self.api = api
         self.deviceHandle = deviceHandle
-        self.featureDeviceHandle = DEV_HANDLE(rawValue: UInt(bitPattern: deviceHandle))
+        self.featureDeviceHandle = GenTLFeatureDeviceHandle(rawValue: UInt(bitPattern: deviceHandle))
     }
 
     /// True when this backend supplies typed feature access alongside GenTLAPI.
