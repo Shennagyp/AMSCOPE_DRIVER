@@ -275,23 +275,15 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
             throw GenTLAcquisitionError.unexpectedUserPointer(userPointer)
         }
 
+        let frame: GenTLFrame
         do {
-            let frame = try readFrame(
+            frame = try readFrame(
                 stream: streamHandle,
                 buffer: bufferHandle
             )
-
-            stateLock.lock()
-            let shouldRequeue = !isStopping && !isClosed
-            stateLock.unlock()
-            if shouldRequeue {
-                try check(
-                    api.DSQueueBuffer(streamHandle, bufferHandle),
-                    operation: "DSQueueBuffer"
-                )
-            }
-            return frame
         } catch {
+            // Preserve the primary metadata/payload error. A best-effort requeue
+            // returns the announced buffer to the Producer when it is still live.
             stateLock.lock()
             let shouldRequeue = !isStopping && !isClosed
             stateLock.unlock()
@@ -300,6 +292,20 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
             }
             throw error
         }
+
+        stateLock.lock()
+        let shouldRequeue = !isStopping && !isClosed
+        stateLock.unlock()
+        if shouldRequeue {
+            // Do not retry a failed queue operation here. The Producer may have
+            // accepted the buffer despite returning an error; a second enqueue
+            // could submit the same handle twice.
+            try check(
+                api.DSQueueBuffer(streamHandle, bufferHandle),
+                operation: "DSQueueBuffer"
+            )
+        }
+        return frame
     }
 
     /// Stops acquisition and interrupts a blocked New Buffer event read.
