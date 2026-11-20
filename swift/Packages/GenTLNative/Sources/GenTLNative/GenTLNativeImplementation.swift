@@ -101,7 +101,7 @@ private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
 /// Keeps a CTI loaded if its GenTL lifecycle was not cleanly closed.
 /// Unloading a Producer with open module handles would invalidate native code
 /// and callback pointers still owned by that Producer.
-@_spi(BackendConvenience)
+@_spi(BackendFactory)
 public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecked Sendable {
     private struct Functions {
         let gcInitLib: GCInitLibFunction
