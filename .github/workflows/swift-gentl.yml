@@ -18,6 +18,12 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest pending validation run for this branch. A currently
+# running run is allowed to finish; superseded queued runs are replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   package-tests:
     name: ${{ matrix.package }} tests
