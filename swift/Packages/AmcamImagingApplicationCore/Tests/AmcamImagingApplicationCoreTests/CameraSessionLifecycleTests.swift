@@ -7,17 +7,38 @@ private enum FakeRuntimeError: Error {
     case startFailed
 }
 
-private actor FakeAcquisition: CameraRuntimeAcquisition {
-    private var iterator: AsyncStream<CameraFramePayload>.Iterator
+/// A single-consumer stream fake. The coordinator guarantees one capture reader;
+/// NSLock protects control counters while AsyncStream handles frame delivery.
+private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendable {
+    private let lock = NSLock()
+    private let iterator: AsyncStream<CameraFramePayload>.Iterator
     private let continuation: AsyncStream<CameraFramePayload>.Continuation
     private var closeFailuresRemaining: Int
     private var startFailuresRemaining: Int
     private var timeoutsRemaining: Int
     private let frameOnClose: CameraFramePayload?
 
-    private(set) var startAttempts = 0
-    private(set) var stopAttempts = 0
-    private(set) var closeAttempts = 0
+    private var startAttemptsValue = 0
+    private var stopAttemptsValue = 0
+    private var closeAttemptsValue = 0
+
+    var startAttempts: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return startAttemptsValue
+    }
+
+    var stopAttempts: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return stopAttemptsValue
+    }
+
+    var closeAttempts: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return closeAttemptsValue
+    }
 
     init(
         closeFailures: Int = 0,
@@ -35,18 +56,21 @@ private actor FakeAcquisition: CameraRuntimeAcquisition {
     }
 
     func start() async throws {
-        startAttempts += 1
-        if startFailuresRemaining > 0 {
-            startFailuresRemaining -= 1
-            throw FakeRuntimeError.startFailed
-        }
+        lock.lock()
+        startAttemptsValue += 1
+        let shouldFail = startFailuresRemaining > 0
+        if shouldFail { startFailuresRemaining -= 1 }
+        lock.unlock()
+        if shouldFail { throw FakeRuntimeError.startFailed }
     }
 
     func nextFrame(timeoutMilliseconds: UInt64) async throws -> CameraFramePayload {
-        if timeoutsRemaining > 0 {
-            timeoutsRemaining -= 1
-            throw CameraAcquisitionFailure.timeout
-        }
+        lock.lock()
+        let shouldTimeout = timeoutsRemaining > 0
+        if shouldTimeout { timeoutsRemaining -= 1 }
+        lock.unlock()
+        if shouldTimeout { throw CameraAcquisitionFailure.timeout }
+
         guard let frame = await iterator.next() else {
             throw CameraAcquisitionFailure.stopped
         }
@@ -54,19 +78,21 @@ private actor FakeAcquisition: CameraRuntimeAcquisition {
     }
 
     func stop() async throws {
-        stopAttempts += 1
+        lock.lock()
+        stopAttemptsValue += 1
+        lock.unlock()
         continuation.finish()
     }
 
     func close() async throws {
-        closeAttempts += 1
-        if closeFailuresRemaining > 0 {
-            closeFailuresRemaining -= 1
-            throw FakeRuntimeError.closeFailed
-        }
-        if let frameOnClose {
-            continuation.yield(frameOnClose)
-        }
+        lock.lock()
+        closeAttemptsValue += 1
+        let shouldFail = closeFailuresRemaining > 0
+        if shouldFail { closeFailuresRemaining -= 1 }
+        lock.unlock()
+
+        if shouldFail { throw FakeRuntimeError.closeFailed }
+        if let frameOnClose { continuation.yield(frameOnClose) }
         continuation.finish()
     }
 
@@ -132,9 +158,8 @@ final class CameraSessionLifecycleTests: XCTestCase {
         } catch {}
 
         let firstSnapshot = await lifecycle.snapshot()
-        let firstAcquisitionCloses = await acquisition.closeAttempts
-        let firstSessionCloses = await session.closeAttempts
-        XCTAssertTrue(firstSnapshot.hasSession)
+        let firstAcquisitionCloses = acquisition.closeAttempts
+                XCTAssertTrue(firstSnapshot.hasSession)
         XCTAssertTrue(firstSnapshot.hasAcquisition)
         XCTAssertFalse(firstSnapshot.isStreaming)
         XCTAssertEqual(firstAcquisitionCloses, 1)
@@ -143,7 +168,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         try await lifecycle.close()
 
         let finalSnapshot = await lifecycle.snapshot()
-        let finalAcquisitionCloses = await acquisition.closeAttempts
+        let finalAcquisitionCloses = acquisition.closeAttempts
         let finalSessionCloses = await session.closeAttempts
         XCTAssertFalse(finalSnapshot.hasSession)
         XCTAssertFalse(finalSnapshot.hasAcquisition)
@@ -165,7 +190,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         } catch {}
 
         let firstSnapshot = await lifecycle.snapshot()
-        let firstAcquisitionCloses = await acquisition.closeAttempts
+        let firstAcquisitionCloses = acquisition.closeAttempts
         let firstSessionCloses = await session.closeAttempts
         XCTAssertTrue(firstSnapshot.hasSession)
         XCTAssertFalse(firstSnapshot.hasAcquisition)
@@ -174,7 +199,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         try await lifecycle.close()
 
         let finalSnapshot = await lifecycle.snapshot()
-        let finalAcquisitionCloses = await acquisition.closeAttempts
+        let finalAcquisitionCloses = acquisition.closeAttempts
         let finalSessionCloses = await session.closeAttempts
         XCTAssertFalse(finalSnapshot.hasSession)
         XCTAssertEqual(finalAcquisitionCloses, 1, "A successfully closed child must not be closed twice.")
@@ -190,7 +215,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
 
         try await lifecycle.attach(session)
         try await lifecycle.start()
-        await acquisition.emit(makeFrame(sequence: 42))
+        acquisition.emit(makeFrame(sequence: 42))
 
         var receivedFrame: CameraFramePayload?
         while let event = await iterator.next() {
@@ -204,7 +229,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         try await lifecycle.stop()
 
         let snapshot = await lifecycle.snapshot()
-        let stopAttempts = await acquisition.stopAttempts
+        let stopAttempts = acquisition.stopAttempts
         XCTAssertFalse(snapshot.isStreaming)
         XCTAssertTrue(snapshot.hasSession)
         XCTAssertTrue(snapshot.hasAcquisition)
@@ -254,7 +279,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         } catch {}
 
         let snapshot = await lifecycle.snapshot()
-        let acquisitionCloseAttempts = await acquisition.closeAttempts
+        let acquisitionCloseAttempts = acquisition.closeAttempts
         XCTAssertTrue(snapshot.hasSession)
         XCTAssertFalse(snapshot.hasAcquisition)
         XCTAssertFalse(snapshot.isStreaming)
@@ -274,7 +299,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
 
         try await lifecycle.attach(session)
         try await lifecycle.start()
-        await acquisition.emit(makeFrame(sequence: 73))
+        acquisition.emit(makeFrame(sequence: 73))
 
         var receivedFrame: CameraFramePayload?
         while let event = await iterator.next() {
