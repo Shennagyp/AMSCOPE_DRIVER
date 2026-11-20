@@ -55,7 +55,55 @@ public struct AmcamCameraStateResolver: Sendable {
                 actual: value.kind
             )
         }
+
+        switch value {
+        case .integer(let number):
+            if let range = descriptor.numericRange,
+               !isWithinRange(Double(number), range: range) {
+                return .invalidValue(
+                    "\(name) must be between \(range.minimum) and \(range.maximum)."
+                )
+            }
+        case .floatingPoint(let number):
+            guard number.isFinite else {
+                return .invalidValue("\(name) must be a finite number.")
+            }
+            if let range = descriptor.numericRange,
+               !isWithinRange(number, range: range) {
+                return .invalidValue(
+                    "\(name) must be between \(range.minimum) and \(range.maximum)."
+                )
+            }
+        case .integerVector(let values):
+            if let expectedCount = descriptor.elementCount, values.count != expectedCount {
+                return .invalidValue(
+                    "\(name) requires exactly \(expectedCount) vector elements."
+                )
+            }
+        case .enumeration(let symbol):
+            if !descriptor.enumerationValues.isEmpty,
+               !descriptor.enumerationValues.contains(symbol) {
+                return .invalidValue(
+                    "\(symbol) is not an advertised value for \(name)."
+                )
+            }
+        case .boolean, .string:
+            break
+        }
         return nil
+    }
+
+    private func isWithinRange(_ value: Double, range: CameraFeatureNumericRange) -> Bool {
+        guard value.isFinite,
+              value >= range.minimum,
+              value <= range.maximum else {
+            return false
+        }
+        guard let increment = range.increment else { return true }
+        let steps = (value - range.minimum) / increment
+        let nearestStep = steps.rounded()
+        let tolerance = max(1e-9, abs(steps) * 1e-9)
+        return abs(steps - nearestStep) <= tolerance
     }
 
     public func capabilityFeature(for name: String) -> AmcamCameraFeature? {
