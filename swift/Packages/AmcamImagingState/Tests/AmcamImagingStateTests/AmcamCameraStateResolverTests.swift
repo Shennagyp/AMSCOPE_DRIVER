@@ -255,6 +255,10 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             resolver.validateWrite(.floatingPoint(10.5), named: "SteppedRate", descriptors: descriptors)
         )
         XCTAssertEqual(
+            resolver.validateWrite(.floatingPoint(.nan), named: "SteppedRate", descriptors: descriptors),
+            .invalidValue("SteppedRate must be a finite number.")
+        )
+        XCTAssertEqual(
             resolver.validateWrite(.enumeration("Continuous"), named: "ExposureMode", descriptors: descriptors),
             .invalidValue("Continuous is not an advertised value for ExposureMode.")
         )
