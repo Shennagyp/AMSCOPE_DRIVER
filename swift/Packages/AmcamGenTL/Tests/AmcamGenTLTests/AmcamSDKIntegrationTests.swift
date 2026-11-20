@@ -1128,6 +1128,77 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(try implementation.readFeature("AmcamAnalogGainPercent", from: GenTLFeatureDeviceHandle(rawValue: device.rawValue)), .integer(200))
     }
 
+    func testFeatureWritabilityTracksAcquisitionState() throws {
+        let libraryURL = try buildMockSDK()
+        let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)
+        try implementation.swiftGCInitLib()
+        let system = try implementation.TLOpen()
+        let interface = try implementation.TLOpenInterface(
+            system,
+            interfaceID: try implementation.TLGetInterfaceID(system, index: 0)
+        )
+        _ = try implementation.IFUpdateDeviceList(interface, timeout: 0)
+        let deviceID = try implementation.IFGetDeviceID(interface, index: 0)
+        let device = try implementation.IFOpenDevice(
+            interface,
+            deviceID: deviceID,
+            accessFlags: GenTLDeviceAccess.exclusive.rawValue
+        )
+        let featureHandle = GenTLFeatureDeviceHandle(rawValue: device.rawValue)
+        var stream: DS_HANDLE?
+        defer {
+            if let stream {
+                try? implementation.DSStopAcquisition(
+                    stream,
+                    flags: GenTLAcquisitionStopFlag.normal.rawValue
+                )
+                try? implementation.DSClose(stream)
+            }
+            try? implementation.DevClose(device)
+            try? implementation.IFClose(interface)
+            try? implementation.TLClose(system)
+            try? implementation.swiftGCCloseLib()
+        }
+
+        let initial = try implementation.featureDescriptors(for: featureHandle)
+        let initialByName = Dictionary(uniqueKeysWithValues: initial.map { ($0.name, $0) })
+        XCTAssertTrue(initialByName["AmcamResolutionIndex"]?.isWritable == true)
+        XCTAssertTrue(initialByName["AmcamPixelFormat"]?.isWritable == true)
+
+        let streamID = try implementation.DevGetDataStreamID(device, index: 0)
+        let openedStream = try implementation.DevOpenDataStream(device, dataStreamID: streamID)
+        stream = openedStream
+        _ = try implementation.DSAllocAndAnnounceBuffer(
+            openedStream,
+            size: 640 * 480 * 3,
+            privateData: nil
+        )
+        let buffer = try implementation.DSGetBufferID(openedStream, index: 0)
+        try implementation.DSQueueBuffer(openedStream, buffer: buffer)
+        try implementation.DSStartAcquisition(
+            openedStream,
+            flags: GenTLAcquisitionStartFlag.normal.rawValue,
+            numberToAcquire: GenTLConstants.infiniteCount
+        )
+
+        let streaming = try implementation.featureDescriptors(for: featureHandle)
+        let streamingByName = Dictionary(uniqueKeysWithValues: streaming.map { ($0.name, $0) })
+        XCTAssertFalse(streamingByName["AmcamResolutionIndex"]?.isWritable ?? true)
+        XCTAssertFalse(streamingByName["AmcamPixelFormat"]?.isWritable ?? true)
+
+        try implementation.DSStopAcquisition(
+            openedStream,
+            flags: GenTLAcquisitionStopFlag.normal.rawValue
+        )
+        let stopped = try implementation.featureDescriptors(for: featureHandle)
+        let stoppedByName = Dictionary(uniqueKeysWithValues: stopped.map { ($0.name, $0) })
+        XCTAssertTrue(stoppedByName["AmcamResolutionIndex"]?.isWritable == true)
+        XCTAssertTrue(stoppedByName["AmcamPixelFormat"]?.isWritable == true)
+
+        try implementation.DSClose(openedStream)
+        stream = nil
+    }
+
     func testTypedFeatureAccessExposesOnlyProbedCameraControlsAndVerifiesWrites() throws {
         let libraryURL = try buildMockSDK()
         let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)
