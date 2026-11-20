@@ -19,7 +19,7 @@ The repository-level Makefile is the supported command interface:
 - `make run-local`: alias for `make run`.
 - `make test-local`: run all nine Swift package test suites locally.
 
-The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. The vendor `libamcam.dylib` remains a separate runtime requirement for camera access.
+The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. Vendor SDKs are kept in `vendor/<vendor>/<platform>/<architecture>/`, copied into the app bundle under `Contents/Frameworks/Vendors/<vendor>/`, and signed as nested code before the app bundle is signed. The backend resolves the SDK automatically; the UI never asks the user to browse for a dylib. Proprietary binaries remain local unless redistribution is licensed.
 
 Hosted macOS GitHub Actions remain responsible for package tests and app compilation validation. CI does not supply the local app binary and does not establish physical camera compatibility.
 
@@ -75,9 +75,12 @@ Rules:
 - [x] Replace the SwiftUI application shell with AppKit so Command Line Tools builds do not require the SwiftUI macro plug-in.
 - [x] Assemble and ad-hoc sign a local `Amcam Imaging.app` bundle.
 - [ ] Pass the hosted macOS app-build job on the latest branch commit.
+- [x] Remove SDK file selection from the AppKit UI; the GenTL backend resolves the AmScope SDK from its managed vendor directory.
+- [x] Copy vendor SDK files into the app bundle and sign packaged dylibs before signing the application.
+- [ ] Validate the packaged AmScope dylib and all transitive dependencies on the target Mac; hosted CI cannot validate the proprietary local binary.
 - [ ] Run `make run` on the target Mac and verify the app opens.
 
-Acceptance: a clean macOS 13+ checkout with Apple's Swift compiler, macOS SDK and AppKit can build and launch with `make run`. Full Xcode, GitHub CLI authentication and downloaded binaries are not required. The vendor `libamcam.dylib` is required for actual camera access.
+Acceptance: a clean macOS 13+ checkout with Apple's Swift compiler, macOS SDK and AppKit can build and launch with `make run`. Full Xcode, GitHub CLI authentication and downloaded binaries are not required. Actual AmScope camera access additionally requires the licensed SDK at `vendor/amscope/macos/<architecture>/libamcam.dylib` with its runtime dependencies.
 
 ### Phase B — Physical MU503 acceptance
 
@@ -137,7 +140,7 @@ Acceptance: the same app workflow can select the CTI backend without Amcam-speci
 
 The current executable and camera backends are macOS-specific. AppKit is only the macOS frontend; it is not a cross-platform UI framework.
 
-- [x] Keep `NSWindow`, `NSOpenPanel`, `NSImage`, bitmap conversion and full-screen behavior in the AppKit frontend.
+- [x] Keep `NSWindow`, `NSImage`, bitmap conversion and full-screen behavior in the AppKit frontend. `NSOpenPanel` is not used to select native SDK libraries.
 - [x] Remove AppKit types and window/file-panel operations from `CameraApplicationModel`.
 - [x] Pass validated RGB8 frames to the frontend as a value object containing dimensions, row stride, bytes and a sequence number.
 - [x] Extract validated RGB8 frame values and GenTL payload validation into the platform-neutral AmcamImagingCore package.
