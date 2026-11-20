@@ -1215,7 +1215,6 @@ extension AmcamGenTLImplementation: GenTLAPI {
     }
 
     private func eventSource(_ pointer: GenTLABI.EVENTSRC_HANDLE) throws -> EVENTSRC_HANDLE {
-        guard let pointer else { try fail(.invalidHandle) }
         let rawValue = UInt(bitPattern: pointer)
         lock.lock()
         let isKnown = activeHandleTokens[rawValue] != nil
@@ -2118,8 +2117,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
     }
 
     public func EventFlush(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
-        guard let hEvent else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE) }
-        let key = UInt(bitPattern: hEvent)
+                let key = UInt(bitPattern: hEvent)
         let status = rawStatus { try EventFlush(EVENT_HANDLE(rawValue: key)) }
         if status == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) {
             eventReadCondition.lock()
