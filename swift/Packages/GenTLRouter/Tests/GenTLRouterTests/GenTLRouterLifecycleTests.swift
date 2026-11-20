@@ -36,6 +36,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var queuedBufferCount = 0
     private var flushCountValue = 0
     private var failBufferRevoke = false
+    private var forceEventTimeout = false
 
     init(
         failSystemOpen: Bool = false,
@@ -238,6 +239,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         return queuedBufferCount
     }
 
+    func setForceEventTimeout(_ value: Bool) {
+        lock.lock()
+        forceEventTimeout = value
+        lock.unlock()
+    }
+
     func setFailBufferRevoke(_ value: Bool) {
         lock.lock()
         failBufferRevoke = value
@@ -384,7 +391,10 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
               piSize.pointee >= 2 * MemoryLayout<UInt>.size else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
         }
-        guard !eventDelivered else {
+        lock.lock()
+        let shouldTimeout = forceEventTimeout || eventDelivered
+        lock.unlock()
+        guard !shouldTimeout else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_TIMEOUT)
         }
         var words = [UInt(UInt(bitPattern: bufferToken)), 0]
@@ -579,6 +589,30 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         try acquisition.close()
         XCTAssertEqual(api.flushCount(), 3, "Close must flush before revoking announced buffers.")
         try device.close()
+    }
+
+    func testEventTimeoutDoesNotPoisonAcquisitionSession() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "event-timeout") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        defer {
+            try? acquisition.close()
+            try? device.close()
+        }
+
+        try acquisition.start(numberToAcquire: 1)
+        api.setForceEventTimeout(true)
+        XCTAssertThrowsError(try acquisition.nextFrame(timeoutMilliseconds: 1)) { error in
+            XCTAssertEqual(error as? GenTLAcquisitionError, .eventTimeout)
+        }
+
+        api.setForceEventTimeout(false)
+        let frame = try acquisition.nextFrame(timeoutMilliseconds: 100)
+        XCTAssertEqual(frame.bytes, Data([1, 2, 3, 4, 5, 6]))
+        try acquisition.stop()
     }
 
     func testAcquisitionCloseRetainsOwnershipWhenBufferRevokeFailsAndCanRetry() throws {
