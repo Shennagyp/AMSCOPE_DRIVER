@@ -37,7 +37,8 @@ See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for p
 - **GenTLAPI** — the one application-facing Swift protocol. It mirrors the GenTL function surface and uses the imported GenTL C ABI types; it is a contract, not a Producer implementation.
 - **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
 - **AmcamCameraModel** — SDK-independent camera value types, capability descriptors, control snapshots and model-profile policy.
-- **AmcamImagingCore** — platform-neutral RGB8 frame values and validated GenTL payload metadata; Foundation-only, with a dedicated Linux CI compatibility job.
+- **AmcamImagingCore** — platform-neutral RGB8 frames, generic camera payload values and frame-rate estimation; Foundation-only, with Linux CI coverage.
+- **AmcamImagingApplicationCore** — backend-neutral async camera session/acquisition lifecycle with ordered cleanup, retryable ownership and stale-frame rejection; no AppKit, Combine, GenTL handles or vendor SDK dependency.
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract; it re-exports AmcamCameraModel for source compatibility.
 - **GenTLRouter** — backend registration, discovery aggregation, backend-bound sessions, typed feature forwarding and generic GenTL data-stream acquisition.
 - **AmcamImagingApp** — standalone macOS AppKit executable under `swift/Apps/AmcamImagingApp`; depends on AmcamCameraModel + GenTLABI + GenTLAPI + GenTLRouter, never on AmcamGenTL.
