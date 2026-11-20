@@ -2,34 +2,45 @@
 
 Swift-first camera access library for macOS.
 
-The application uses one public **GenTL-shaped Swift API** with two interchangeable implementations:
+## Architecture
 
-1. **GenTLNative** loads manufacturer-supplied GenTL Producer libraries (`.cti`) and forwards the standard GenTL C API.
-2. **AmcamGenTL** implements the same Swift API over the Amcam SDK. It does not require or generate an AmScope `.cti` file.
+The application uses one GenTL API contract with two interchangeable implementations:
 
-The application does not call vendor SDKs directly and does not maintain a second camera abstraction.
+1. **GenTLNative** loads manufacturer-supplied GenTL Producer libraries (.cti) and calls their actual exported GenTL C functions.
+2. **AmcamGenTL** implements the same GenTL operations by translating them to the Amcam SDK. It does not create, export or require an AmScope .cti file.
+
+**GenTLRouter** selects and manages the backend. Application code uses the common GenTL contract and does not call vendor SDKs directly. There is no second camera abstraction.
 
 ## Packages
 
-- `GenTLAPI` — shared Swift function surface, GenTL handles, information types and error codes.
-- `GenTLNative` — native GenTL Consumer, C ABI interop and `.cti` producer loading.
-- `AmcamGenTL` — Amcam-backed implementation of supported GenTL operations.
-- `GenTLRouter` — producer registration, discovery aggregation and backend-bound device candidates.
+- **GenTLABI** — shared imported C declarations from the pinned EMVA GenTL header, including ABI structure-layout checks. This is the single ABI source of truth.
+- **GenTLAPI** — the one application-facing GenTL contract, aligned to the imported declarations and GenTL semantics.
+- **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
+- **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
+- **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions.
 
-## GenTL producer discovery
+The shared ABI package is being extracted from the current GenTLNative package. Until that code change is complete, the existing repository layout is transitional.
 
-`GenTLRouter.registerDiscoveredNativeProducers()` reads the standard macOS `GENICAM_GENTL64_PATH` environment variable. Additional directories or individual `.cti` paths can be supplied explicitly. Each producer is registered once under its normalized path.
+## Implementation plan
 
-The native consumer resolves versioned GenTL extensions when they are exported by a producer. Missing extensions return `GC_ERR_NOT_IMPLEMENTED`; they do not prevent the producer's supported base API from being used.
+The implementation must bind to GenTL rather than recreate a parallel Swift version of it. The pinned GenTL 1.6 C header is authoritative for function signatures, types, constants, structures and ABI layout. The GenTL specification remains authoritative for runtime semantics.
 
-## Amcam limitations
+See [the GenTL implementation plan](swift/docs/GENTL_IMPLEMENTATION_PLAN.md) for the architecture rules, package dependency graph, phases, current status and completion criteria.
 
-Amcam feature controls are accessed through the vendor SDK. The current Amcam GenTL implementation supports discovery, device/session lifecycle, data-stream buffers, acquisition and buffer events. It does not expose a documented register map or GenApi XML port, so GenApi port/URL operations remain unsupported rather than being simulated.
+## GenTL Producer discovery
+
+The native backend reads the standard macOS GENICAM_GENTL64_PATH environment variable. Additional directories or individual .cti paths can be supplied explicitly. CTI paths are normalized to prevent registering the same library more than once under aliases.
+
+The native consumer validates the GenTL 1.0 required exports and resolves later-revision functions according to the pinned header. An absent optional extension is reported as not implemented; it does not invalidate a Producer that supports the required base API.
+
+## Amcam capability boundary
+
+Amcam feature controls are accessed through the vendor SDK. The current Amcam integration does not have a verified remote register map or GenApi XML port. GenApi port/URL operations therefore remain unsupported rather than simulated. The Amcam implementation must not invent serial numbers, timestamps, register behavior, chunks, multipart data, flows or other capabilities.
 
 ## Standards baseline
 
-- EMVA GenICam GenTL 1.6 API surface
-- GenTL SFNC 1.2 module information conventions
-- PFNC pixel-format identifiers for image payload metadata
+- EMVA GenICam GenTL 1.6 C API and specification.
+- GenTL SFNC module-information conventions where applicable.
+- PFNC pixel-format identifiers for image payload metadata.
 
-The implementation preserves GenTL error and lifecycle semantics. A backend must report unsupported operations honestly.
+This project does not claim formal GenTL certification. Compatibility depends on the Producer, device, SDK and behavior actually verified.
