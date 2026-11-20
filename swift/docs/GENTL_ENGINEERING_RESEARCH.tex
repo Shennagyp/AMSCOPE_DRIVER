@@ -526,4 +526,15 @@ The optional-export build variant omits all 17 later-revision exports while reta
 
 A source-level audit currently reports 64 header declarations, 64 protocol requirements, 64 mock exports, 60 unique-return dispatch assertions, and four explicit lifecycle assertions. This audit does not establish successful compilation or runtime dispatch. All native test source remains unexecuted until the macOS CI workflow or a local Xcode toolchain runs it.
 
+
+
+\section{Argument-forwarding sentinels}
+Three native operations now have deliberate argument and memory probes beyond neutral dispatch arguments:
+\begin{itemize}
+  \item \texttt{GCGetInfo} checks a distinctive command value and writes a datatype, payload marker, and output size.
+  \item \texttt{GCReadPort} checks a non-null opaque port handle, a distinctive 64-bit address, a non-null output pointer, and the supplied capacity before writing a deterministic 32-bit value.
+  \item \texttt{GCWritePort} checks the opaque handle, address, input pointer, exact four-byte payload, and supplied size.
+\end{itemize}
+The complete matrix therefore has 58 unique per-operation return-code assertions, two custom port argument/memory tests, and four stateful lifecycle operations. Test-only invocation counters cover all 64 protocol operations. This proves operation-to-export mapping and selected scalar/pointer forwarding paths; it is not yet exhaustive argument permutation coverage for every operation. Later test increments must add per-operation sentinel checks for info buffers, event payloads, stream buffers, and composite/stacked structures.
+
 \end{document}
