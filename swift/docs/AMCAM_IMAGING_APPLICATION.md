@@ -168,3 +168,25 @@ The vendor SDK is proprietary and is not bundled. The app requires a compatible 
 ## Verification boundary
 
 Swift package tests use a deterministic native C fixture. They verify ABI calls, state transitions, callbacks, feature range logic, and memory safety; they do not establish physical camera compatibility. The app's CI build proves compilation and packaging only. Physical MU503 acceptance remains a separate test.
+
+
+## CI build and current runnable artifact
+
+Latest successful macOS validation:
+
+- Workflow run: [44689152308](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44689152308)
+- Source revision used by the build: `07ebaf591ac4052ef525952b026edbeec0727d8a`
+- Amcam package tests: 21 XCTest cases scheduled and passed.
+- Diagnostic probe: release arm64 build and upload passed.
+- Imaging application: release build passed, app-bundle code signature verification passed, and Mach-O arm64 verification passed.
+- App artifact ID: `14606959758`
+- Artifact SHA-256: `6638aeb9d309d49e98577562d517080454d2d2b4221b5b2af66c6c86a198f903`
+- Artifact expiry: December 4, 2026.
+
+The app is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK.
+
+## TDD assessment
+
+The current suite has 21 tests across ABI string-bound checks, RGB24 layout, capability/profile resolution, and native C mock-SDK integration. The latest regression for auto-exposure mode remaining usable when manual exposure range queries fail was added before the implementation change and passed in CI.
+
+The entire development history is not strictly TDD: some earlier controls were implemented before their tests. Future feature work and the multiplatform extraction must follow the explicit failing-test → implementation → full regression → refactor sequence. A passing test alone is not proof that the entire feature was developed test-first.
