@@ -225,8 +225,10 @@ final class CameraSettingsViewController: NSViewController {
     private var temperatureSlider: NSSlider?
     private var tintSlider: NSSlider?
     private var frameRateSlider: NSSlider?
+    private var speedLevelSlider: NSSlider?
     private var exposureValue = NSTextField(labelWithString: "")
     private var gainValue = NSTextField(labelWithString: "")
+    private var speedLevelValue = NSTextField(labelWithString: "")
     private var temperatureValue = NSTextField(labelWithString: "")
     private var tintValue = NSTextField(labelWithString: "")
     private var redField = NSTextField(string: "100")
@@ -337,6 +339,8 @@ final class CameraSettingsViewController: NSViewController {
         addRow("Pixel format", control: pixelFormatPicker)
         addSection("Frame rate")
         frameRateSlider = addSlider("Fixed FPS", minimum: 1, maximum: 120, selector: #selector(frameRateChanged))
+        speedLevelSlider = addSlider("Frame speed level", minimum: 0, maximum: 1, selector: #selector(speedLevelChanged))
+        content.addArrangedSubview(speedLevelValue)
     }
 
     private func refreshValues() {
@@ -356,6 +360,8 @@ final class CameraSettingsViewController: NSViewController {
         colorMatrixButton.isHidden = true
         pixelFormatPicker.isHidden = true
         frameRateSlider?.isHidden = true
+        speedLevelSlider?.isHidden = true
+        speedLevelValue.isHidden = true
 
         guard let capabilities = model.cameraCapabilities,
               let controls = model.controls else { return }
@@ -494,6 +500,21 @@ final class CameraSettingsViewController: NSViewController {
             frameRateSlider?.minValue = frameRateRange.minimum
             frameRateSlider?.maxValue = frameRateRange.maximum
         }
+
+        if controls.frameRate.speedLevelSupported,
+           let currentLevel = controls.frameRate.currentSpeedLevel,
+           let speedRange = model.numericRange(for: "AmcamFrameSpeedLevel"),
+           capabilities.availability(of: .discreteFrameSpeed).isUsable,
+           model.isFeatureWritable("AmcamFrameSpeedLevel") {
+            speedLevelValue.stringValue = "Current speed level: \(currentLevel)"
+            speedLevelValue.isHidden = false
+            if speedRange.maximum > speedRange.minimum {
+                speedLevelSlider?.minValue = speedRange.minimum
+                speedLevelSlider?.maxValue = speedRange.maximum
+                speedLevelSlider?.doubleValue = Double(currentLevel)
+                speedLevelSlider?.isHidden = false
+            }
+        }
     }
 
     @objc private func refreshCamera() { model.refreshControls(); refreshValues() }
@@ -550,5 +571,11 @@ final class CameraSettingsViewController: NSViewController {
               let value = model.normalizedNumericValue(rawValue, for: "AmcamFixedFrameRate") else { return }
         frameRateSlider?.doubleValue = value
         model.setFixedFrameRate(value)
+    }
+    @objc private func speedLevelChanged() {
+        guard let rawValue = speedLevelSlider?.doubleValue,
+              let value = model.normalizedNumericValue(rawValue, for: "AmcamFrameSpeedLevel") else { return }
+        speedLevelSlider?.doubleValue = value
+        model.setFrameSpeedLevel(Int(value.rounded(.towardZero)))
     }
 }
