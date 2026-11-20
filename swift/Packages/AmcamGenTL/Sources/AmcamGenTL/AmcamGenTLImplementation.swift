@@ -1200,6 +1200,48 @@ extension AmcamGenTLImplementation: GenTLAPI {
         return BUFFER_HANDLE(rawValue: rawValue)
     }
 
+    private func writeStackedInfo(
+        _ value: GenTLInfoValue,
+        entry: inout GenTLABI.DS_BUFFER_INFO_STACKED
+    ) -> GenTLABI.GC_ERROR {
+        let (kind, bytes) = infoBytes(value)
+        let capacity = entry.iSize
+        entry.iType = kind
+        entry.iSize = bytes.count
+        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        guard !bytes.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
+        guard let output = entry.pBuffer, capacity >= bytes.count else {
+            return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
+        }
+        bytes.withUnsafeBytes { source in
+            if let base = source.baseAddress {
+                output.copyMemory(from: base, byteCount: source.count)
+            }
+        }
+        return GenTLABI.GC_ERR_SUCCESS
+    }
+
+    private func writeStackedPartInfo(
+        _ value: GenTLInfoValue,
+        entry: inout GenTLABI.DS_BUFFER_PART_INFO_STACKED
+    ) -> GenTLABI.GC_ERROR {
+        let (kind, bytes) = infoBytes(value)
+        let capacity = entry.iSize
+        entry.iType = kind
+        entry.iSize = bytes.count
+        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        guard !bytes.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
+        guard let output = entry.pBuffer, capacity >= bytes.count else {
+            return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
+        }
+        bytes.withUnsafeBytes { source in
+            if let base = source.baseAddress {
+                output.copyMemory(from: base, byteCount: source.count)
+            }
+        }
+        return GenTLABI.GC_ERR_SUCCESS
+    }
+
     // MARK: Library
 
     public func GCInitLib() -> GenTLABI.GC_ERROR {
@@ -1736,7 +1778,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
             guard chunks.isEmpty || pChunkData != nil else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
             for index in chunks.indices {
                 pChunkData![index].ChunkID = chunks[index].chunkID
-                pChunkData![index].ChunkOffset = chunks[index].offset
+                pChunkData![index].ChunkOffset = Int(chunks[index].offset)
                 pChunkData![index].ChunkLength = chunks[index].length
             }
             return GenTLABI.GC_ERR_SUCCESS
