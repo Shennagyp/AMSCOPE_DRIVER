@@ -81,7 +81,7 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
           "modelCode": "MU503",
           "displayName": "MU503",
           "allowedFeaturesByGroup": {
-            "capture": ["liveCapture", "resolution"],
+            "capture": ["liveCapture", "resolution", "whiteBalance"],
             "exposureAndGain": ["exposureAuto", "exposureManual", "analogGain"]
           },
           "deniedFeatures": ["analogGain"]
@@ -92,6 +92,7 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
         let registry = AmcamCameraProfileRegistry(profiles: profiles)
         XCTAssertNotNil(registry.profile(for: "MU503"))
         XCTAssertNil(registry.profile(for: "mu503"))
+        XCTAssertFalse(registry.profile(for: "MU503")?.allowedFeatures.contains(.whiteBalance) == true)
 
         let capabilities = registry.resolve(
             modelCode: "MU503",
