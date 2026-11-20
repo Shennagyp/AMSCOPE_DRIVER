@@ -146,7 +146,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
                 receivedFrame.store(frame)
                 frameReceived.fulfill()
             } else if case .failure(let error) = result {
-                XCTFail("Unexpected frame failure: \\(error)")
+                XCTFail("Unexpected frame failure: \(error)")
             }
         }
         wait(for: [frameReceived], timeout: 2)
