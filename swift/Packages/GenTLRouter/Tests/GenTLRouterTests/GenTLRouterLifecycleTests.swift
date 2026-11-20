@@ -32,6 +32,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var bufferMemory: UnsafeMutableRawPointer?
     private var eventDelivered = false
     private var queuedBufferCount = 0
+    private var flushCountValue = 0
 
     init(
         failSystemOpen: Bool = false,
@@ -232,6 +233,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return queuedBufferCount
+    }
+
+    func flushCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return flushCountValue
     }
 
     func DevGetNumDataStreams(
@@ -457,9 +464,13 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iOperation: GenTLABI.ACQ_QUEUE_TYPE
     ) -> GenTLABI.GC_ERROR {
-        return hDataStream == streamToken && iOperation == 2
-            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
-            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        guard hDataStream == streamToken, iOperation == 2 else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        lock.lock()
+        flushCountValue += 1
+        lock.unlock()
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
 
     func DSRevokeBuffer(
@@ -532,6 +543,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         }
 
         try acquisition.start(numberToAcquire: 1)
+        XCTAssertEqual(api.flushCount(), 1, "Start must discard stale output events before acquisition.")
         let frame = try acquisition.nextFrame(timeoutMilliseconds: 100)
 
         XCTAssertEqual(frame.width, 2)
@@ -545,7 +557,9 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(api.queuedBuffers(), 2)
 
         try acquisition.stop()
+        XCTAssertEqual(api.flushCount(), 2, "Stop must return outstanding buffers to the input pool.")
         try acquisition.close()
+        XCTAssertEqual(api.flushCount(), 3, "Close must flush before revoking announced buffers.")
         try device.close()
     }
 
