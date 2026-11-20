@@ -49,7 +49,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
 
     // MARK: Library
 
-    public func GCInitLib() throws {
+    public func swiftGCInitLib() throws {
         lock.lock()
         defer { lock.unlock() }
 
@@ -66,7 +66,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         }
     }
 
-    public func GCCloseLib() throws {
+    public func swiftGCCloseLib() throws {
         lock.lock()
         defer { lock.unlock() }
 
