@@ -376,14 +376,13 @@ final class CameraSettingsViewController: NSViewController {
 
         if let exposure = controls.exposure {
             exposureValue.stringValue = "Current: \(exposure.readbackMicroseconds ?? 0) µs"
+            let exposureRange = model.numericRange(for: "ExposureTime")
             let canWriteExposure = capabilities.availability(of: .exposureManual).isUsable
                 && model.isFeatureWritable("ExposureTime")
-            if canWriteExposure {
-                exposureSlider?.minValue = Double(exposure.minimumMicroseconds ?? 1)
-                exposureSlider?.maxValue = Double(max(
-                    exposure.minimumMicroseconds ?? 1,
-                    exposure.maximumMicroseconds ?? 1_000_000
-                ))
+                && exposureRange != nil
+            if let exposureRange, canWriteExposure {
+                exposureSlider?.minValue = exposureRange.minimum
+                exposureSlider?.maxValue = max(exposureRange.minimum + 1, exposureRange.maximum)
                 exposureSlider?.doubleValue = Double(exposure.readbackMicroseconds ?? 10_000)
             }
             exposureSlider?.isHidden = !canWriteExposure
@@ -418,6 +417,7 @@ final class CameraSettingsViewController: NSViewController {
             gainValue.stringValue = "Current: \(gain.readbackPercent)%"
             let canWriteGain = capabilities.availability(of: .analogGain).isUsable
                 && model.isFeatureWritable("AmcamAnalogGainPercent")
+                && model.numericRange(for: "AmcamAnalogGainPercent") != nil
             gainSlider?.isHidden = !canWriteGain
             gainValue.isHidden = false
         }
@@ -425,13 +425,23 @@ final class CameraSettingsViewController: NSViewController {
         if let white = controls.whiteBalance {
             if let temperature = white.temperature {
                 temperatureSlider?.doubleValue = Double(temperature)
+                if let range = model.numericRange(for: "AmcamWhiteBalanceTemperature") {
+                    temperatureSlider?.minValue = range.minimum
+                    temperatureSlider?.maxValue = max(range.minimum + 1, range.maximum)
+                }
                 temperatureSlider?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceTemperature")
+                    || model.numericRange(for: "AmcamWhiteBalanceTemperature") == nil
                 temperatureValue.stringValue = "Current: \(temperature) K"
                 temperatureValue.isHidden = false
             }
             if let tint = white.tint {
                 tintSlider?.doubleValue = Double(tint)
+                if let range = model.numericRange(for: "AmcamWhiteBalanceTint") {
+                    tintSlider?.minValue = range.minimum
+                    tintSlider?.maxValue = max(range.minimum + 1, range.maximum)
+                }
                 tintSlider?.isHidden = !model.isFeatureWritable("AmcamWhiteBalanceTint")
+                    || model.numericRange(for: "AmcamWhiteBalanceTint") == nil
                 tintValue.stringValue = "Current: \(tint)"
                 tintValue.isHidden = false
             }
@@ -465,13 +475,14 @@ final class CameraSettingsViewController: NSViewController {
         if let rate = controls.frameRate.readbackFramesPerSecond {
             frameRateSlider?.doubleValue = rate
         }
+        let frameRateRange = model.numericRange(for: "AmcamFixedFrameRate")
         let canWriteFrameRate = capabilities.availability(of: .preciseFrameRate).isUsable
             && model.isFeatureWritable("AmcamFixedFrameRate")
+            && frameRateRange != nil
         frameRateSlider?.isHidden = !canWriteFrameRate
-        if let range = controls.frameRate.minimumFramesPerSecond,
-           let maximum = controls.frameRate.maximumFramesPerSecond {
-            frameRateSlider?.minValue = range
-            frameRateSlider?.maxValue = Swift.max(range + 0.1, maximum)
+        if let frameRateRange {
+            frameRateSlider?.minValue = frameRateRange.minimum
+            frameRateSlider?.maxValue = Swift.max(frameRateRange.minimum + 0.1, frameRateRange.maximum)
         }
     }
 
