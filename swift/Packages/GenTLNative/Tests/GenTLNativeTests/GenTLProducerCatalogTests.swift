@@ -98,7 +98,9 @@ final class GenTLProducerCatalogTests: XCTestCase {
 
         XCTAssertEqual(result.producers.map(\.lastPathComponent), ["valid.cti"])
         XCTAssertEqual(result.issues.count, 1)
-        XCTAssertEqual(result.issues.first?.path, brokenLink.path)
+        let expectedBrokenPath = root.resolvingSymlinksInPath()
+            .appendingPathComponent("broken.cti").path
+        XCTAssertEqual(result.issues.first?.path, expectedBrokenPath)
     }
 
     func testExplicitCTIPathMustBeARegularFile() throws {
