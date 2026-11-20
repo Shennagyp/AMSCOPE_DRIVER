@@ -365,3 +365,8 @@ This first mock is intentionally a dispatch/loader fixture, not yet a simulated 
 Added `.github/workflows/swift-gentl.yml` for macOS 14. It records OS, Xcode, Swift, and Clang versions; builds `GenTLABI`; and runs the test suites for `GenTLAPI`, `GenTLNative`, `AmcamGenTL`, and `GenTLRouter`. The workflow is triggered by pushes and pull requests targeting `swift-gentl-api`, and can be manually dispatched from GitHub Actions.
 
 The workflow file is committed, but no workflow run has been observed yet. Its existence is not evidence of a successful CI run. If GitHub Actions does not start automatically for the repository, check repository Actions settings and workflow permissions; do not treat the empty run list as a pass.
+
+
+### Clarification to the initial T0 inventory
+
+The native test directory already contained `GenTLProducerCatalogTests.swift` and `GenTLProducerLibraryTests.swift`; the earlier inspection only checked for a guessed filename, `GenTLNativeTests.swift`, and did not establish that the directory was empty. The existing suites already cover catalog path handling, the 47-symbol GenTL 1.0 base-set inventory, and later-revision optional-symbol classification. The new `GenTLNativeIntegrationTests.swift` extends those suites rather than replacing them. The actual directory now contains all three Swift test files plus the C fixture.
