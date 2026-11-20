@@ -367,7 +367,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
 
 
 extension RecordingGenTLAPI: GenTLFeatureAccess {
-    func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor] {
+    func featureDescriptors(for device: GenTLFeatureDeviceHandle) throws -> [GenTLFeatureDescriptor] {
         guard device.rawValue == UInt(bitPattern: deviceToken) else {
             throw GenTLFeatureAccessError.featureUnavailable("wrong-device-handle")
         }
@@ -383,7 +383,7 @@ extension RecordingGenTLAPI: GenTLFeatureAccess {
         ]
     }
 
-    func readFeature(_ name: String, from device: DEV_HANDLE) throws -> GenTLFeatureValue {
+    func readFeature(_ name: String, from device: GenTLFeatureDeviceHandle) throws -> GenTLFeatureValue {
         guard name == "MockFeature", device.rawValue == UInt(bitPattern: deviceToken) else {
             throw GenTLFeatureAccessError.featureNotFound(name)
         }
@@ -393,7 +393,7 @@ extension RecordingGenTLAPI: GenTLFeatureAccess {
     func writeFeature(
         _ value: GenTLFeatureValue,
         named name: String,
-        to device: DEV_HANDLE
+        to device: GenTLFeatureDeviceHandle
     ) throws {
         guard name == "MockFeature", device.rawValue == UInt(bitPattern: deviceToken),
               value.kind == .integer else {
