@@ -15,7 +15,12 @@ The Swift `genTLVersion` property identifies the revision represented by this AP
 `GenTLNativeImplementation` forwards the GenTL function calls to a manufacturer-supplied `.cti` Producer.
 
 - The 47 GenTL 1.0 base functions are validated as required exported symbols before the Producer is accepted. This includes `EventGetDataInfo`; it is part of GenTL 1.0.
-- Functions introduced by later GenTL revisions are resolved opportunistically. This includes GenTL 1.1 parent/Port URL/register-stack functions and GenTL 1.2+ chunk, multipart, stacked-info, flow and segment functions.
+- Later-revision entry points are resolved opportunistically, using the revisions specified by the pinned GenTL header:
+  - GenTL 1.1: `GCGetNumPortURLs`, `GCGetPortURLInfo`, `GCReadPortStacked`, `GCWritePortStacked`.
+  - GenTL 1.3: `DSGetBufferChunkData`.
+  - GenTL 1.4: `IFGetParentTL`, `DevGetParentIF`, `DSGetParentDev`.
+  - GenTL 1.5: `DSGetNumBufferParts`, `DSGetBufferPartInfo`.
+  - GenTL 1.6: composite buffers, stacked buffer metadata, flows and buffer segments.
 - An absent optional function returns `GC_ERR_NOT_IMPLEMENTED`.
 - Producer handles remain opaque; this implementation does not synthesize handle IDs.
 - The pinned GenTL 1.6 header is compiled into the ABI target, with layout checks for the packed GenTL structures used by this consumer.
