@@ -332,7 +332,7 @@ T0 is therefore partially complete at the source-inspection level. Package compi
 
 ### Source changes committed
 
-- Added `Tests/GenTLNativeTests/Fixtures/MockGenTLProducer.c`, a C shared-library fixture that includes the pinned `GenTL_v1_6.h`.
+- Added `Tests/MockGenTLProducer/MockGenTLProducer.c`, a C shared-library fixture that includes the pinned `GenTL_v1_6.h`.
 - The fixture exports the 47 entry points currently classified by `GenTLProducerLibrary.requiredEntryPoints`: 46 deterministic `GC_ERR_NOT_IMPLEMENTED` stubs and a custom `GCGetInfo` implementation.
 - The custom `GCGetInfo` writes a known datatype, payload marker, and payload size, then returns the distinctive error code `-4321`. This makes argument/output/result forwarding observable across the real C ABI.
 - The fixture supports `MOCK_OMIT_GCGETINFO`, creating a malformed Producer variant for required-symbol rejection tests.
