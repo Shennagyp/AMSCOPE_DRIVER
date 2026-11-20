@@ -117,7 +117,7 @@ private struct CameraHardwareDock: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.green)
-            .disabled(model.isStreaming || model.selectedDevice == nil)
+            .disabled(model.isStreaming || model.selectedDevice == nil || model.cameraCapabilities?.availability(of: .liveCapture).isUsable != true)
 
             Button { model.stop() } label: {
                 Label("Stop", systemImage: "stop.fill")
