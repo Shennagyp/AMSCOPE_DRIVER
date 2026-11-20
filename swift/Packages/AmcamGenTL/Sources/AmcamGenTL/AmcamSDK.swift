@@ -29,6 +29,7 @@ private typealias GetTemperatureTintFunction = @convention(c) (UnsafeMutableRawP
 private typealias SetTemperatureTintFunction = @convention(c) (UnsafeMutableRawPointer?, Int32, Int32) -> Int32
 private typealias GetWhiteBalanceGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?) -> Int32
 private typealias SetWhiteBalanceGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<Int32>?) -> Int32
+private typealias PixelFormatSupportFunction = @convention(c) (UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<Int32>?) -> Int32
 typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
 /// Keeps an Amcam SDK loaded when a camera handle could not be closed safely.
@@ -94,6 +95,7 @@ final class AmcamSDK: @unchecked Sendable {
         let setTemperatureTint: SetTemperatureTintFunction?
         let getWhiteBalanceGain: GetWhiteBalanceGainFunction?
         let setWhiteBalanceGain: SetWhiteBalanceGainFunction?
+        let pixelFormatSupport: PixelFormatSupportFunction?
     }
 
     private let library: UnsafeMutableRawPointer
@@ -140,7 +142,8 @@ final class AmcamSDK: @unchecked Sendable {
                 getTemperatureTint: try? load("Amcam_get_TempTint", as: GetTemperatureTintFunction.self),
                 setTemperatureTint: try? load("Amcam_put_TempTint", as: SetTemperatureTintFunction.self),
                 getWhiteBalanceGain: try? load("Amcam_get_WhiteBalanceGain", as: GetWhiteBalanceGainFunction.self),
-                setWhiteBalanceGain: try? load("Amcam_put_WhiteBalanceGain", as: SetWhiteBalanceGainFunction.self)
+                setWhiteBalanceGain: try? load("Amcam_put_WhiteBalanceGain", as: SetWhiteBalanceGainFunction.self),
+                pixelFormatSupport: try? load("Amcam_get_PixelFormatSupport", as: PixelFormatSupportFunction.self)
             )
             guard let versionPointer = resolved.version() else {
                 throw AmcamCameraError.incompatibleSDK(expected: expectedVersion, actual: "null")
@@ -444,6 +447,25 @@ final class AmcamSDK: @unchecked Sendable {
         }
         try checkControlResult("Amcam_get_WhiteBalanceGain", result)
         return values
+    }
+
+    func readSupportedPixelFormats(_ handle: UnsafeMutableRawPointer) throws -> [Int32] {
+        guard let query = api.pixelFormatSupport else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose pixel-format enumeration.")
+        }
+        var count: Int32 = 0
+        try checkControlResult("Amcam_get_PixelFormatSupport(count)", query(handle, 0xff, &count))
+        guard count > 0, count <= 64 else {
+            throw AmcamCameraError.unsupportedControl("The camera returned an invalid supported pixel-format count.")
+        }
+        return try (0..<count).map { index in
+            var value: Int32 = 0
+            try checkControlResult(
+                "Amcam_get_PixelFormatSupport(\(index))",
+                query(handle, UInt32(index), &value)
+            )
+            return value
+        }
     }
 
     func readOption(_ handle: UnsafeMutableRawPointer, option: UInt32) throws -> Int32 {
