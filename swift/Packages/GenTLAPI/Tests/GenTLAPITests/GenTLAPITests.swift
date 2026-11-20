@@ -1,7 +1,7 @@
-private struct EmptyRawGenTLAPI: GenTLAPI {}
-
 import XCTest
 @_spi(BackendConvenience) @testable import GenTLAPI
+
+private struct EmptyRawGenTLAPI: GenTLAPI {}
 
 final class GenTLAPITests: XCTestCase {
     func testGenTLVersionAndInfiniteConstantsMatchTheStandard() {
