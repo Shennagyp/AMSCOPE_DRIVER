@@ -1,6 +1,6 @@
 import AmcamCameraModel
 import AmcamImagingCore
-import AmcamImagingApplicationCore
+import AmcamImagingRuntime
 import AmcamImagingGenTLAdapter
 import Foundation
 import GenTLABI

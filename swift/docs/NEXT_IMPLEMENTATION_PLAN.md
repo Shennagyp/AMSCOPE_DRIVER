@@ -47,7 +47,7 @@ Staged lifecycle boundary (packages are implemented and tested; AppKit model mig
 
 ```text
 AmcamImagingApp
-  -> AmcamImagingApplicationCore
+  -> AmcamImagingRuntime
   -> AmcamImagingGenTLAdapter
   -> GenTLRouter
 ```
@@ -60,7 +60,7 @@ Rules:
 4. Vendor SDK behavior remains in AmcamGenTL.
 5. Camera UI and model-facing policy remain in AmcamCameraModel and AmcamImagingApp.
 6. Pixel-format validation and backend-neutral image-frame values belong in AmcamImagingCore.
-7. Backend-neutral camera session/acquisition lifecycle contracts belong in AmcamImagingApplicationCore; GenTLRouter is bridged through AmcamImagingGenTLAdapter at the macOS boundary.
+7. Backend-neutral camera session/acquisition lifecycle contracts belong in AmcamImagingRuntime; GenTLRouter is bridged through AmcamImagingGenTLAdapter at the macOS boundary.
 8. Do not create fake executables for library-only packages. Add a CLI only when it provides a real diagnostic or operational use case.
 
 ## 3. Immediate implementation sequence
@@ -140,7 +140,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Extract validated RGB8 frame values and GenTL payload validation into the platform-neutral AmcamImagingCore package.
 - [x] Add deterministic tests for RGB8 format identity, row padding, payload bounds, invalid dimensions and arithmetic overflow.
 - [x] Extract monotonic-timestamp frame-rate estimation into AmcamImagingCore and test smoothing-window bounds, invalid timestamps and reset behavior.
-- [x] Add AmcamImagingApplicationCore with async backend protocols, an event stream, strict child-before-parent cleanup, retryable ownership and generation-based stale-frame rejection.
+- [x] Add AmcamImagingRuntime with async backend protocols, an event stream, strict child-before-parent cleanup, retryable ownership and generation-based stale-frame rejection.
 - [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, startup rollback, timeout recovery, unsolicited stop, fatal-read cleanup, concurrent-close rejection, frame delivery and stale-frame suppression.
 - [x] Add AmcamImagingGenTLAdapter to bridge GenTLRouter's synchronous device/acquisition sessions into the portable async lifecycle contracts; blocking reads run off the cooperative executor so stop/close can interrupt them.
 - [ ] Replace the AppKit model's direct acquisition task with the lifecycle coordinator and route session cleanup through the adapter.
@@ -149,7 +149,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
 - [ ] Add another frontend only after its backend path is proven on that OS.
 
-Do not describe the current application as cross-platform: the AppKit executable and native camera integrations remain macOS-specific, and the existing UI model still uses Combine. AmcamImagingCore and AmcamImagingApplicationCore are Foundation-only portable packages. AmcamImagingGenTLAdapter binds the lifecycle contract to the macOS GenTLRouter backend; the AppKit model migration is still pending. This is a portable data/lifecycle foundation, not a portable camera driver. UI separation is progress toward portability, not proof of portable camera access.
+Do not describe the current application as cross-platform: the AppKit executable and native camera integrations remain macOS-specific, and the existing UI model still uses Combine. AmcamImagingCore and AmcamImagingRuntime are Foundation-only portable packages. AmcamImagingGenTLAdapter binds the lifecycle contract to the macOS GenTLRouter backend; the AppKit model migration is still pending. This is a portable data/lifecycle foundation, not a portable camera driver. UI separation is progress toward portability, not proof of portable camera access.
 
 ## 4. Verification policy
 

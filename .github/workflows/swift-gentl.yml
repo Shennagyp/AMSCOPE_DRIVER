@@ -50,7 +50,7 @@ jobs:
         run: swift test --package-path swift/Packages/AmcamImagingCore
 
       - name: Build and test portable application lifecycle core
-        run: swift test --package-path swift/Packages/AmcamImagingApplicationCore
+        run: swift test --package-path swift/Packages/AmcamImagingRuntime
 
   package-tests:
     name: ${{ matrix.package }} tests
@@ -64,8 +64,8 @@ jobs:
             path: swift/Packages/AmcamCameraModel
           - package: AmcamImagingCore
             path: swift/Packages/AmcamImagingCore
-          - package: AmcamImagingApplicationCore
-            path: swift/Packages/AmcamImagingApplicationCore
+          - package: AmcamImagingRuntime
+            path: swift/Packages/AmcamImagingRuntime
           - package: AmcamImagingGenTLAdapter
             path: swift/Packages/AmcamImagingGenTLAdapter
           - package: GenTLAPI
