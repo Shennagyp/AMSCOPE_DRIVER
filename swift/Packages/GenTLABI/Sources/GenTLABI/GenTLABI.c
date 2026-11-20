@@ -49,3 +49,7 @@ int GenTLABI_LayoutValid(void) {
 GC_ERROR GenTLABI_ErrorNotImplemented(void) {
     return (GC_ERROR)GC_ERR_NOT_IMPLEMENTED;
 }
+
+GC_ERROR GenTLABI_ErrorFromCode(enum GC_ERROR_LIST code) {
+    return (GC_ERROR)code;
+}
