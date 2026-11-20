@@ -90,6 +90,12 @@ public enum AmcamPixelFormatCode: Int32, CaseIterable, Sendable, Identifiable {
     case gmcy8 = 9
     case gmcy12 = 10
     case uyvy = 11
+    case raw12Packed = 12
+    case raw11 = 13
+    case hdr8HighLow = 14
+    case hdr10HighLow = 15
+    case hdr11HighLow = 16
+    case hdr12HighLow = 17
 
     public var id: Int32 { rawValue }
     public var title: String {
@@ -106,6 +112,12 @@ public enum AmcamPixelFormatCode: Int32, CaseIterable, Sendable, Identifiable {
         case .gmcy8: return "GMCY 8"
         case .gmcy12: return "GMCY 12"
         case .uyvy: return "UYVY"
+        case .raw12Packed: return "RAW 12 Packed"
+        case .raw11: return "RAW 11"
+        case .hdr8HighLow: return "HDR 8 (H+L)"
+        case .hdr10HighLow: return "HDR 10 (H+L)"
+        case .hdr11HighLow: return "HDR 11 (H+L)"
+        case .hdr12HighLow: return "HDR 12 (H+L)"
         }
     }
 }
