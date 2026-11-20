@@ -117,6 +117,7 @@ final class GenTLAPITests: XCTestCase {
     func testEveryRawProtocolDefaultReturnsNotImplemented() {
         let api = EmptyRawGenTLAPI()
         let handle = UnsafeMutableRawPointer(bitPattern: 1)!
+        let handle = UnsafeMutableRawPointer(bitPattern: 1)!
         let unsupported: GenTLABI.GC_ERROR = GenTLABI.GenTLABI_ErrorNotImplemented()
 
         XCTAssertEqual(api.GCGetInfo(0, nil, nil, nil), unsupported)
