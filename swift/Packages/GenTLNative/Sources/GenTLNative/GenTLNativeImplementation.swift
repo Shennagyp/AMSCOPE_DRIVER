@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 import GenTLABI
-import GenTLAPI
+@_spi(BackendConvenience) import GenTLAPI
 
 // MARK: GenTL C ABI function pointer types
 //
@@ -101,7 +101,7 @@ private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
 /// Keeps a CTI loaded if its GenTL lifecycle was not cleanly closed.
 /// Unloading a Producer with open module handles would invalidate native code
 /// and callback pointers still owned by that Producer.
-public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
+public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecked Sendable {
     private struct Functions {
         let gcInitLib: GCInitLibFunction
         let gcCloseLib: GCCloseLibFunction
