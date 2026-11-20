@@ -509,13 +509,33 @@ final class CameraSettingsViewController: NSViewController {
         default: return
         }
     }
-    @objc private func exposureChanged() { model.setExposureTime(UInt32(exposureSlider?.doubleValue ?? 1)) }
-    @objc private func gainChanged() { model.setExposureGain(UInt16(gainSlider?.doubleValue ?? 0)) }
+    @objc private func exposureChanged() {
+        guard let rawValue = exposureSlider?.doubleValue,
+              let value = model.normalizedNumericValue(rawValue, for: "ExposureTime"),
+              value >= 0, value <= Double(UInt32.max) else { return }
+        exposureSlider?.doubleValue = value
+        model.setExposureTime(UInt32(value.rounded(.towardZero)))
+    }
+    @objc private func gainChanged() {
+        guard let rawValue = gainSlider?.doubleValue,
+              let value = model.normalizedNumericValue(rawValue, for: "AmcamAnalogGainPercent"),
+              value >= 0, value <= Double(UInt16.max) else { return }
+        gainSlider?.doubleValue = value
+        model.setExposureGain(UInt16(value.rounded(.towardZero)))
+    }
     @objc private func temperatureChanged() {
-        model.setWhiteBalanceTemperature(Int32(temperatureSlider?.doubleValue ?? 6503))
+        guard let rawValue = temperatureSlider?.doubleValue,
+              let value = model.normalizedNumericValue(rawValue, for: "AmcamWhiteBalanceTemperature"),
+              value >= Double(Int32.min), value <= Double(Int32.max) else { return }
+        temperatureSlider?.doubleValue = value
+        model.setWhiteBalanceTemperature(Int32(value.rounded(.towardZero)))
     }
     @objc private func tintChanged() {
-        model.setWhiteBalanceTint(Int32(tintSlider?.doubleValue ?? 1000))
+        guard let rawValue = tintSlider?.doubleValue,
+              let value = model.normalizedNumericValue(rawValue, for: "AmcamWhiteBalanceTint"),
+              value >= Double(Int32.min), value <= Double(Int32.max) else { return }
+        tintSlider?.doubleValue = value
+        model.setWhiteBalanceTint(Int32(value.rounded(.towardZero)))
     }
     @objc private func applyRGB() {
         guard let r = Int32(redField.stringValue), let g = Int32(greenField.stringValue), let b = Int32(blueField.stringValue) else { return }
