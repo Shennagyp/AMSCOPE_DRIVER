@@ -624,9 +624,7 @@ final class CameraApplicationModel: ObservableObject {
         )
     }
 
-    private func readIntegerFeature(
-        _ name: String,
-    ) async -> Int64? {
+    private func readIntegerFeature(_ name: String) async -> Int64? {
         guard case .integer(let value)? = try? await cameraLifecycle.readFeature(name) else {
             return nil
         }
