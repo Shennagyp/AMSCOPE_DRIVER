@@ -1,6 +1,7 @@
 import AmcamCameraModel
 import Foundation
 import GenTLABI
+import GenTLAPI
 import GenTLRouter
 
 public struct AmcamCameraCandidate: Sendable, Identifiable {
