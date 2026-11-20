@@ -420,3 +420,8 @@ The latest fixture revision adds three operation-specific ABI probes:
 - `GCWritePort` validates the same opaque handle/address and compares the exact input bytes and byte count.
 
 The dispatch matrix now uses 58 unique per-operation return-code assertions, two explicit port sentinel tests, and four lifecycle operations. The call-counter checks account for all 64 protocol operations. This provides stronger evidence than neutral-argument dispatch alone, but it is not yet exhaustive argument permutation coverage for every function. The next testing increment should expand argument/output sentinel cases by signature family and then per operation, especially info buffers, event payloads, stream buffers, and composite/stacked structures.
+
+
+### SwiftPM target isolation correction
+
+The C fixture has been moved to the sibling path `Tests/MockGenTLProducer/`, outside `Tests/GenTLNativeTests/`. This is deliberate: the Swift test target must remain a Swift-only target. Keeping a `.c` file nested inside its source directory risks SwiftPM treating the test target as a mixed-language target or compiling the fixture as part of the test module. The test compiles the sibling C source explicitly at runtime with `xcrun clang`, then loads the produced dynamic library. This preserves a clean SwiftPM target boundary.
