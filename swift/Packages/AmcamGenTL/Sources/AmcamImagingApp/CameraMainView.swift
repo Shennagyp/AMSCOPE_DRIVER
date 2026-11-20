@@ -296,7 +296,9 @@ private struct FeatureGroupView: View {
                         Text(feature.rawValue)
                             .font(.system(size: 12))
                         Spacer()
-                        Text(availability?.implemented == true ? "Available" : "Integration pending")
+                        Text(availability?.feature.isInformational == true
+                             ? "Detected"
+                             : (availability?.implemented == true ? "Available" : "Integration pending"))
                             .font(.system(size: 10))
                             .foregroundStyle(availability?.implemented == true ? .green : .secondary)
                     }
@@ -557,12 +559,15 @@ private struct FeatureGroupView: View {
     }
 
     private func featureStatus(_ feature: AmcamCameraFeature) -> some View {
-        HStack {
+        let availability = capability?.availability(of: feature)
+        return HStack {
             Text(feature.rawValue)
             Spacer()
-            Text("Hardware-supported; UI integration pending")
+            Text(availability?.feature.isInformational == true
+                 ? "Detected"
+                 : "Hardware-supported; UI integration pending")
                 .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(availability?.feature.isInformational == true ? .green : .secondary)
         }
     }
 }
