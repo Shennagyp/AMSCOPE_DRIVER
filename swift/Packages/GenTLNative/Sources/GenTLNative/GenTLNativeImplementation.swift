@@ -243,7 +243,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let gcRegisterEvent: GCRegisterEventFunction
         let gcUnregisterEvent: GCUnregisterEventFunction
         let eventGetData: EventGetDataFunction
-        let eventGetDataInfo: EventGetDataInfoFunction?
+        let eventGetDataInfo: EventGetDataInfoFunction
         let eventGetInfo: EventGetInfoFunction
         let eventFlush: EventSimpleFunction
         let eventKill: EventSimpleFunction
@@ -352,7 +352,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             gcRegisterEvent: load("GCRegisterEvent", as: GCRegisterEventFunction.self),
             gcUnregisterEvent: load("GCUnregisterEvent", as: GCUnregisterEventFunction.self),
             eventGetData: load("EventGetData", as: EventGetDataFunction.self),
-            eventGetDataInfo: try? load("EventGetDataInfo", as: EventGetDataInfoFunction.self),
+            eventGetDataInfo: load("EventGetDataInfo", as: EventGetDataInfoFunction.self),
             eventGetInfo: load("EventGetInfo", as: EventGetInfoFunction.self),
             eventFlush: load("EventFlush", as: EventSimpleFunction.self),
             eventKill: load("EventKill", as: EventSimpleFunction.self),
@@ -1375,12 +1375,9 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     ) throws -> GenTLInfoValue {
         try withLock {
             let eventPointer = try registeredEventPointer(event)
-            guard let eventGetDataInfo = functions.eventGetDataInfo else {
-                throw GC_ERROR.notImplemented
-            }
             return try inputData.withUnsafeBytes { input in
                 try readInfo { type, output, size in
-                    eventGetDataInfo(
+                    functions.eventGetDataInfo(
                         eventPointer, input.baseAddress, inputData.count,
                         command, type, output, size
                     )
