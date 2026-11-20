@@ -375,7 +375,10 @@ final class CameraSettingsViewController: NSViewController {
         resolutionPicker.isHidden = !resolutionIsWritable || resolutions.isEmpty
 
         if let exposure = controls.exposure {
-            exposureValue.stringValue = "Current: \(exposure.readbackMicroseconds ?? 0) µs"
+            if let readback = exposure.readbackMicroseconds {
+                exposureValue.stringValue = "Current: \(readback) µs"
+                exposureValue.isHidden = false
+            }
             let exposureRange = model.numericRange(for: "ExposureTime")
             let canWriteExposure = capabilities.availability(of: .exposureManual).isUsable
                 && model.isFeatureWritable("ExposureTime")
@@ -386,7 +389,7 @@ final class CameraSettingsViewController: NSViewController {
                 exposureSlider?.doubleValue = Double(exposure.readbackMicroseconds ?? 10_000)
             }
             exposureSlider?.isHidden = !canWriteExposure
-            exposureValue.isHidden = false
+            exposureSlider?.isEnabled = exposure.autoMode == .manual
 
             let supportedAutoModes = model.enumerationValues(for: "ExposureAuto")
             let modeItems: [(symbol: String, title: String)] = [
