@@ -1189,10 +1189,11 @@ extension AmcamGenTLImplementation: GenTLAPI {
     ) -> GenTLABI.GC_ERROR {
         guard let size else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         let capacity = size.pointee
-        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         size.pointee = data.count
-        // A NULL output pointer is the standard size-query form.
+        // A NULL output pointer is the standard size-query form; the input
+        // capacity is ignored in this case.
         guard let output else { return GenTLABI.GC_ERR_SUCCESS }
+        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         guard !data.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
         guard capacity >= data.count else {
             return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
@@ -1256,9 +1257,9 @@ extension AmcamGenTLImplementation: GenTLAPI {
         let capacity = entry.iSize
         entry.iType = kind
         entry.iSize = bytes.count
+        guard let output = entry.pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
         guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         guard !bytes.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
-        guard let output = entry.pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
         guard capacity >= bytes.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
         bytes.withUnsafeBytes { source in
             if let base = source.baseAddress {
@@ -1276,9 +1277,9 @@ extension AmcamGenTLImplementation: GenTLAPI {
         let capacity = entry.iSize
         entry.iType = kind
         entry.iSize = bytes.count
+        guard let output = entry.pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
         guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         guard !bytes.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
-        guard let output = entry.pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
         guard capacity >= bytes.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
         bytes.withUnsafeBytes { source in
             if let base = source.baseAddress {
@@ -2018,7 +2019,6 @@ extension AmcamGenTLImplementation: GenTLAPI {
         guard let piSize, let hEvent else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         let key = UInt(bitPattern: hEvent)
         let capacity = piSize.pointee
-        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
 
         // Serialize retrieval per event so an undersized destination can retain
         // the dequeued payload for the caller's retry instead of losing it.
@@ -2056,6 +2056,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
                 return GenTLABI.GC_ERR_SUCCESS
             }
             piSize.pointee = data.count
+            guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
 
             guard capacity >= data.count else {
                 eventReadCondition.lock()
