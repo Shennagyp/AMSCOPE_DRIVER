@@ -542,4 +542,9 @@ The complete matrix therefore has 58 unique per-operation return-code assertions
 \section{Optional-export absence verification}
 The missing-optional-export build variant now exercises all 17 later-revision Swift protocol methods. Each call must return exactly \texttt{GC\_ERR\_NOT\_IMPLEMENTED}. For operations with output parameters, the test seeds output storage with sentinel values and verifies that absent function pointers do not modify those values. This checks both loader tolerance and the raw protocol's absent-symbol behavior across all optional operations.
 
+
+
+\section{Required-symbol rejection matrix}
+The fixture supports an independent compile-time omission switch for every one of the 47 required GenTL 1.0 entry points. The native test iterates the loader's authoritative \texttt{requiredEntryPoints} inventory, builds a variant with one required export absent, and asserts that the loader rejects that exact library with a \texttt{missingRequiredSymbol} error naming the omitted export. This is stronger than a single malformed-library test because it exercises every required-symbol lookup branch. These variants are source-authored and still require macOS execution.
+
 \end{document}
