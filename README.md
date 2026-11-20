@@ -19,7 +19,7 @@ The application uses one GenTL API contract with two interchangeable implementat
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
 - **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions.
 
-The shared GenTLABI package has now been extracted and the GenTLAPI, GenTLNative and AmcamGenTL dependencies are wired to it. The remaining transition is to convert the public GenTLAPI contract and its ABI-relevant types to use the imported declarations directly.
+The shared GenTLABI package is extracted. GenTLAPI now mirrors all 64 GenTL 1.6 function prototypes using imported C ABI types and raw GenTL-style return codes. Both backends implement the 64-operation contract, and the router exposes that contract on candidates and sessions. A source-level prototype comparison found exact signature matches; build, runtime and device verification remain pending. The older Swift convenience API is retained behind internal BackendConvenience SPI during cleanup.
 
 ## Implementation plan
 
