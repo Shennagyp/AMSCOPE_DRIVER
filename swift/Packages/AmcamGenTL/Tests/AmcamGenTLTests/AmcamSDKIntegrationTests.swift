@@ -168,7 +168,16 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 1_000_001))
 
+        controls = try session.setAutoExposureMode(.once)
+        XCTAssertEqual(controls.exposure.autoMode, .once)
+        XCTAssertTrue(controls.exposure.automaticEnabled)
+
+        controls = try session.setAutoExposureMode(.manual)
+        XCTAssertEqual(controls.exposure.autoMode, .manual)
+        XCTAssertFalse(controls.exposure.automaticEnabled)
+
         controls = try session.setAutomaticExposure(enabled: true)
+        XCTAssertEqual(controls.exposure.autoMode, .continuous)
         XCTAssertTrue(controls.exposure.automaticEnabled)
 
         let changed = try session.setResolution(index: 1)
