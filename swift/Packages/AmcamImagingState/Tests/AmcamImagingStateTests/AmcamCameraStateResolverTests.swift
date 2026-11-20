@@ -125,7 +125,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             throw CameraFeatureAccessError.featureUnavailable(name)
         }
         let attemptedReads = await recorder.recordedNames()
-        XCTAssertTrue(attemptedReads.isEmpty)
+        XCTAssertEqual(attemptedReads, ["ExposureAuto"])
         let snapshot = await resolver.controlSnapshot(descriptors: descriptors) { name in
             throw CameraFeatureAccessError.featureUnavailable(name)
         }
@@ -227,6 +227,10 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 name: "WhiteBalanceRGB", displayName: "RGB gain", kind: .integerVector,
                 isAvailable: true, isReadable: true, isWritable: true,
                 elementCount: 3
+            ),
+            CameraFeatureDescriptor(
+                name: "UnspecifiedVector", displayName: "Unknown vector", kind: .integerVector,
+                isAvailable: true, isReadable: true, isWritable: true
             )
         ]
 
@@ -257,6 +261,10 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertEqual(
             resolver.validateWrite(.integerVector([1, 2]), named: "WhiteBalanceRGB", descriptors: descriptors),
             .invalidValue("WhiteBalanceRGB requires exactly 3 vector elements.")
+        )
+        XCTAssertEqual(
+            resolver.validateWrite(.integerVector([1, 2, 3]), named: "UnspecifiedVector", descriptors: descriptors),
+            .invalidValue("UnspecifiedVector does not declare its vector element count.")
         )
         XCTAssertEqual(
             resolver.validateWrite(.integer(10), named: "MissingFeature", descriptors: descriptors),
