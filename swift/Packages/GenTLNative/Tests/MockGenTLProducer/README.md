@@ -21,7 +21,7 @@ A Swift object conforming to GenTLAPI is not a substitute for this fixture: it b
 ## Build variants
 
 - Default: all 64 GenTL exports.
-- MOCK_OMIT_GCGETINFO: omit a required GenTL 1.0 export; the loader must reject the library.
+- MOCK_OMIT_<symbol>: omit one required GenTL 1.0 export, where <symbol> is the exact GenTL function name (for example GCGetInfo); the loader must reject the library. The test iterates all 47 required symbols.
 - MOCK_OMIT_OPTIONAL_EXPORTS: omit all 17 later-revision exports; the base Producer must still load, and calls to absent optional functions must return GC_ERR_NOT_IMPLEMENTED.
 
 ## Limits
