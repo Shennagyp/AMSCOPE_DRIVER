@@ -237,7 +237,7 @@ The checked-in `amcam.py` identifies the vendor SDK version as `58.28273.2025041
 - `Amcam_PullImageV4`: V4 metadata, which embeds V3 metadata and adds luminance/focus values, counters, and GPS data; explicit row pitch.
 - `Amcam_PullImageWithRowPitchV2`: V2 metadata with explicit row pitch.
 
-The Swift binding resolves these symbols independently at runtime and selects the highest available generation in this order: V4, V3, row-pitch V2, plain V2. Missing newer symbols do not prevent loading an SDK that exposes an older supported API. At least one pull API must exist.
+The Swift binding resolves these symbols independently at runtime and selects the highest available generation in this order: V4, V3, row-pitch V2, plain V2. Missing newer symbols do not prevent loading an SDK that exposes an older supported API. At least one pull API must exist. API availability is also camera-specific at runtime: the vendor defines `E_NOTIMPL` as a feature not supported by that camera model. The Swift backend therefore retries the next available API generation only when a pull function returns this exact result. It does not retry generic device, timeout, invalid-argument or buffer errors.
 
 For the current RGB24 acquisition path, V3/V4 and row-pitch V2 are called with `rowPitch = -1`, which the vendor wrapper documents as zero-padding/tightly packed rows (`width * 3` bytes for RGB24). This makes the buffer layout explicit instead of relying on platform DIB alignment. The V2 fallback retains its documented default row layout and is only used when no row-pitch-aware function exists.
 
@@ -245,7 +245,7 @@ V3/V4 metadata is now retained in the public `AmcamFrame.metadata` payload. It r
 
 The V4 ABI layout follows the checked-in Python ctypes definition exactly: `uFV` and `timecount` are signed 64-bit fields; the structure is 104 bytes on the supported 64-bit ABI and GPS begins at offset 72. C compile-time assertions verify these sizes and offsets. The mock SDK deliberately uses values larger than 32 bits for focus and time counters so truncation is detectable.
 
-Row layout is now tied to the selected function. V3/V4 and row-pitch V2 request `rowPitch = -1` and use tightly packed rows; plain V2 uses the SDK's default DWORD-aligned RGB24 rows. This distinction matters for widths where `width * 3` is not divisible by four. The frame's `bytesPerRow` and payload length follow the selected API's actual row contract.
+Row layout is now tied to the function that actually succeeds for the connected camera, not merely the newest exported symbol. V3/V4 and row-pitch V2 request `rowPitch = -1` and use tightly packed rows; plain V2 uses the SDK's default DWORD-aligned RGB24 rows. This distinction matters for widths where `width * 3` is not divisible by four. The frame's `bytesPerRow` and payload length follow the selected API's actual row contract.
 
 Hosted tests cover V4 preference and metadata, V3 fallback when V4 is absent, row-pitch V2 fallback when V3/V4 are absent, and plain V2 fallback when no row-pitch-aware function exists. ABI layout assertions cover V2, V3, GPS and V4. These tests validate the mock ABI and dispatch behavior; real-camera compatibility remains a separate hardware acceptance item. The current UI still requests 24-bit RGB; this work does not claim RAW10/RAW12 or RGB48 decoding support.
 
