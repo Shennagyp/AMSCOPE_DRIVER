@@ -28,8 +28,7 @@ final class CameraApplicationModel: ObservableObject {
     private var featureDescriptors: [GenTLFeatureDescriptor] = []
     private var hasInitialized = false
     private var profileRegistry = AmcamCameraProfileRegistry()
-    private var lastFrameHostTime: TimeInterval?
-    private var frameIntervals: [TimeInterval] = []
+    private var frameRateEstimator = FrameRateEstimator()
 
     private let featureNamesByCameraFeature: [AmcamCameraFeature: [String]] = [
         .resolution: ["AmcamResolutionIndex"],
@@ -167,8 +166,7 @@ final class CameraApplicationModel: ObservableObject {
             acquisition = newAcquisition
 
             latestFrame = nil
-            frameIntervals.removeAll(keepingCapacity: true)
-            lastFrameHostTime = nil
+            frameRateEstimator.reset()
             framesPerSecond = 0
             isStreaming = true
             status = "Live — \(device.displayName)"
@@ -754,15 +752,9 @@ final class CameraApplicationModel: ObservableObject {
         }
 
         let now = ProcessInfo.processInfo.systemUptime
-        if let previous = lastFrameHostTime, now > previous {
-            frameIntervals.append(now - previous)
-            if frameIntervals.count > 30 {
-                frameIntervals.removeFirst(frameIntervals.count - 30)
-            }
-            let mean = frameIntervals.reduce(0, +) / Double(frameIntervals.count)
-            if mean > 0 { framesPerSecond = 1.0 / mean }
+        if let estimate = frameRateEstimator.record(timestamp: now) {
+            framesPerSecond = estimate
         }
-        lastFrameHostTime = now
     }
 
     private func defaultSDKURL() -> URL? {
