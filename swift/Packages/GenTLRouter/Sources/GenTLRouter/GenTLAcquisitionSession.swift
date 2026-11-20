@@ -190,6 +190,10 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
         guard let streamHandle else { throw GenTLAcquisitionError.sessionClosed }
 
         try check(
+            api.DSFlushQueue(streamHandle, Constants.queueAllToInput),
+            operation: "DSFlushQueue(BeforeStart)"
+        )
+        try check(
             api.DSStartAcquisition(
                 streamHandle,
                 Constants.acquisitionStartDefault,
@@ -252,11 +256,17 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
                 )
             )
         }
-        guard userPointer == 0 else {
-            throw GenTLAcquisitionError.unexpectedUserPointer(userPointer)
-        }
         guard let bufferHandle = buffersByRawHandle[rawBufferHandle] else {
             throw GenTLAcquisitionError.unknownBufferHandle(rawBufferHandle)
+        }
+        guard userPointer == 0 else {
+            stateLock.lock()
+            let shouldRequeue = !isStopping && !isClosed
+            stateLock.unlock()
+            if shouldRequeue {
+                _ = api.DSQueueBuffer(streamHandle, bufferHandle)
+            }
+            throw GenTLAcquisitionError.unexpectedUserPointer(userPointer)
         }
 
         do {
@@ -321,13 +331,20 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
             streamHandle,
             Constants.acquisitionStopDefault
         )
+        let flushStatus: GenTLABI.GC_ERROR?
         if status == successStatus {
             isAcquiring = false
+            flushStatus = api.DSFlushQueue(streamHandle, Constants.queueAllToInput)
+        } else {
+            flushStatus = nil
         }
         isStopping = false
         stateLock.unlock()
 
         try check(status, operation: "DSStopAcquisition")
+        if let flushStatus {
+            try check(flushStatus, operation: "DSFlushQueue(AfterStop)")
+        }
     }
 
     /// Releases stream resources in GenTL ownership order. If any operation
