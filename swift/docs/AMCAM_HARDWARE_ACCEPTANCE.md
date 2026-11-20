@@ -4,7 +4,7 @@
 
 Validate the Amcam Swift implementation and the packaged imaging application against the physical AmScope MU503. CI tests use a deterministic C mock SDK. They do not establish physical camera compatibility.
 
-The user does not need Xcode, Swift, a compiler, or a development toolchain on the Mac. The application and diagnostic probe are built on GitHub Actions macOS runners.
+The full Xcode application is not required. The Mac needs Apple's Swift compiler, macOS SDK and AppKit SDK for the source build. Hosted CI validates package tests and app compilation; the user's Mac builds and launches the app with `make run` before physical-camera acceptance.
 
 ## Required files
 
