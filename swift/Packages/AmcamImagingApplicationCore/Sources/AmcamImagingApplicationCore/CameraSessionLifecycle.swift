@@ -16,19 +16,37 @@ public actor CameraSessionLifecycle {
     /// concurrent public lifecycle operations from acting on the same owned handles.
     private var lifecycleOperationInProgress = false
     private var generation: UInt64 = 0
-    private var continuations: [UUID: AsyncStream<CameraSessionLifecycleEvent>.Continuation] = [:]
+    private var eventContinuations: [UUID: AsyncStream<CameraSessionLifecycleEvent>.Continuation] = [:]
+    private var frameContinuations: [UUID: AsyncStream<CameraFramePayload>.Continuation] = [:]
 
     public init() {}
 
+    /// Reliable, low-volume state events. This stream is unbounded because
+    /// dropping a close/failure transition could leave a frontend stale.
     public func events() -> AsyncStream<CameraSessionLifecycleEvent> {
         let identifier = UUID()
         let pair = AsyncStream<CameraSessionLifecycleEvent>.makeStream(
-            bufferingPolicy: .bufferingNewest(8)
+            bufferingPolicy: .unbounded
         )
-        continuations[identifier] = pair.continuation
+        eventContinuations[identifier] = pair.continuation
         pair.continuation.onTermination = { @Sendable [weak self] _ in
             guard let lifecycle = self else { return }
-            Task { await lifecycle.removeContinuation(identifier) }
+            Task { await lifecycle.removeEventContinuation(identifier) }
+        }
+        return pair.stream
+    }
+
+    /// Image delivery is intentionally latest-frame-only. A slow renderer must
+    /// not accumulate full camera payloads or delay lifecycle state transitions.
+    public func frames() -> AsyncStream<CameraFramePayload> {
+        let identifier = UUID()
+        let pair = AsyncStream<CameraFramePayload>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        frameContinuations[identifier] = pair.continuation
+        pair.continuation.onTermination = { @Sendable [weak self] _ in
+            guard let lifecycle = self else { return }
+            Task { await lifecycle.removeFrameContinuation(identifier) }
         }
         return pair.stream
     }
@@ -171,7 +189,7 @@ public actor CameraSessionLifecycle {
                 let frame = try await acquisition.nextFrame(timeoutMilliseconds: 5_000)
                 guard !frame.isIncomplete else { continue }
                 guard activeGeneration == generation, isStreaming else { return }
-                publish(.frame(frame))
+                publishFrame(frame)
             } catch let failure as CameraAcquisitionFailure {
                 switch failure {
                 case .timeout:
@@ -198,12 +216,22 @@ public actor CameraSessionLifecycle {
     }
 
     private func publish(_ event: CameraSessionLifecycleEvent) {
-        for continuation in continuations.values {
+        for continuation in eventContinuations.values {
             continuation.yield(event)
         }
     }
 
-    private func removeContinuation(_ identifier: UUID) {
-        continuations.removeValue(forKey: identifier)
+    private func publishFrame(_ frame: CameraFramePayload) {
+        for continuation in frameContinuations.values {
+            continuation.yield(frame)
+        }
+    }
+
+    private func removeEventContinuation(_ identifier: UUID) {
+        eventContinuations.removeValue(forKey: identifier)
+    }
+
+    private func removeFrameContinuation(_ identifier: UUID) {
+        frameContinuations.removeValue(forKey: identifier)
     }
 }

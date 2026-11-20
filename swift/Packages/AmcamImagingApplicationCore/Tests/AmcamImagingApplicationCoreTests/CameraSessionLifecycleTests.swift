@@ -233,20 +233,14 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let acquisition = FakeAcquisition()
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
-        let events = await lifecycle.events()
-        var iterator = events.makeAsyncIterator()
+        let frames = await lifecycle.frames()
+        var iterator = frames.makeAsyncIterator()
 
         try await lifecycle.attach(session)
         try await lifecycle.start()
         acquisition.emit(makeFrame(sequence: 42))
 
-        var receivedFrame: CameraFramePayload?
-        while let event = await iterator.next() {
-            if case .frame(let frame) = event {
-                receivedFrame = frame
-                break
-            }
-        }
+        let receivedFrame = await iterator.next()
 
         XCTAssertEqual(receivedFrame?.sequence, 42)
         try await lifecycle.stop()
@@ -265,27 +259,24 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
         let events = await lifecycle.events()
-        var iterator = events.makeAsyncIterator()
+        let frames = await lifecycle.frames()
+        var eventIterator = events.makeAsyncIterator()
+        var frameIterator = frames.makeAsyncIterator()
 
         try await lifecycle.attach(session)
         try await lifecycle.start()
         try await lifecycle.close()
 
-        var receivedFrame = false
         var receivedClosed = false
-        while let event = await iterator.next() {
-            switch event {
-            case .frame:
-                receivedFrame = true
-            case .closed:
+        while let event = await eventIterator.next() {
+            if case .closed = event {
                 receivedClosed = true
-            default:
                 break
             }
-            if receivedClosed { break }
         }
+        let receivedFrame = await frameIterator.next()
 
-        XCTAssertFalse(receivedFrame, "A frame from an invalidated acquisition generation must not reach the UI.")
+        XCTAssertNil(receivedFrame, "A frame from an invalidated acquisition generation must not reach the UI.")
         XCTAssertTrue(receivedClosed)
     }
 
@@ -317,20 +308,14 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let acquisition = FakeAcquisition(timeoutCount: 1)
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
-        let events = await lifecycle.events()
-        var iterator = events.makeAsyncIterator()
+        let frames = await lifecycle.frames()
+        var iterator = frames.makeAsyncIterator()
 
         try await lifecycle.attach(session)
         try await lifecycle.start()
         acquisition.emit(makeFrame(sequence: 73))
 
-        var receivedFrame: CameraFramePayload?
-        while let event = await iterator.next() {
-            if case .frame(let frame) = event {
-                receivedFrame = frame
-                break
-            }
-        }
+        let receivedFrame = await iterator.next()
 
         XCTAssertEqual(receivedFrame?.sequence, 73)
         let snapshot = await lifecycle.snapshot()

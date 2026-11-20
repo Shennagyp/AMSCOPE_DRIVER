@@ -28,7 +28,6 @@ public protocol CameraRuntimeSession: Sendable {
 
 /// Events emitted by the portable session lifecycle coordinator.
 public enum CameraSessionLifecycleEvent: Equatable, Sendable {
-    case frame(CameraFramePayload)
     case streamingChanged(Bool)
     case failure(String)
     case closed
