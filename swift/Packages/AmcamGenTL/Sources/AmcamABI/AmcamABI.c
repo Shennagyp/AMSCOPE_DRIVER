@@ -13,10 +13,16 @@ _Static_assert(offsetof(AmcamDeviceV2, id) == 64, "AmcamDeviceV2.id offset misma
 _Static_assert(offsetof(AmcamDeviceV2, model) == 128, "AmcamDeviceV2.model offset mismatch");
 _Static_assert(sizeof(AmcamFrameInfoV2) == 24, "AmcamFrameInfoV2 ABI mismatch");
 _Static_assert(offsetof(AmcamFrameInfoV2, timestamp) == 16, "AmcamFrameInfoV2.timestamp offset mismatch");
+_Static_assert(sizeof(AmcamFrameInfoV3) == 32, "AmcamFrameInfoV3 ABI mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV3, shutterseq) == 24, "AmcamFrameInfoV3.shutterseq offset mismatch");
+_Static_assert(sizeof(AmcamGps) == 32, "AmcamGps ABI mismatch");
+_Static_assert(sizeof(AmcamFrameInfoV4) == 88, "AmcamFrameInfoV4 ABI mismatch");
+_Static_assert(offsetof(AmcamFrameInfoV4, gps) == 56, "AmcamFrameInfoV4.gps offset mismatch");
 
 int amcam_abi_layout_valid(void) {
     return sizeof(AmcamResolutionV2) == 8 && sizeof(AmcamModelV2) == 176 &&
            sizeof(AmcamDeviceV2) == 136 && sizeof(AmcamFrameInfoV2) == 24 &&
+           sizeof(AmcamFrameInfoV3) == 32 && sizeof(AmcamGps) == 32 && sizeof(AmcamFrameInfoV4) == 88 &&
            offsetof(AmcamDeviceV2, model) == 128 && offsetof(AmcamFrameInfoV2, timestamp) == 16;
 }
 
