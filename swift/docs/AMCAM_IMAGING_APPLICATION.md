@@ -108,10 +108,12 @@ The first application slice exposes:
 - exposure-time range and exact readback;
 - analog gain range, setter, and exact readback when the SDK symbols and camera queries are available;
 - temperature/tint and RGB-channel white-balance modes, each gated independently by its SDK symbols and runtime query;
+- color-matrix enable/disable with readback;
+- pixel-format selection from the camera's enumerated supported-format list, only while acquisition is stopped;
 - precise fixed frame rate when both model flag and runtime option probes succeed;
 - discrete sensor speed when model speed range and SDK get/set symbols are usable.
 
-Color correction and pixel-format support are also runtime-probed and surfaced in the corresponding settings group. Other Amcam feature groups are capability-described from the model flags, but controls not yet wired into the Swift backend are labelled as pending. They are not falsely exposed as editable settings. The next control integrations should follow the supplied wrapper's feature semantics and add readback plus model-specific tests before UI activation.
+Color correction and pixel-format support are runtime-probed and exposed as editable controls. Pixel-format changes are constrained to the enumerated formats returned by Amcam_get_PixelFormatSupport and are rejected during acquisition. Other Amcam feature groups are capability-described from the model flags, but controls not yet wired into the Swift backend are labelled as pending. They are not falsely exposed as editable settings. The next control integrations should follow the supplied wrapper's feature semantics and add readback plus model-specific tests before UI activation.
 
 ## Build and run
 
