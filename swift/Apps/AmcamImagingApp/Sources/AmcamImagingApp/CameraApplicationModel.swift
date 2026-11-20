@@ -438,7 +438,11 @@ final class CameraApplicationModel: ObservableObject {
         let operation = cameraSelectionGeneration
         let device = selectedDevice
         let lifecycle = cameraLifecycle
-        let resolution = await stateResolver.currentResolution(for: device) { name in
+        let descriptors = featureDescriptors
+        let resolution = await stateResolver.currentResolution(
+            for: device,
+            descriptors: descriptors
+        ) { name in
             try await lifecycle.readFeature(name)
         }
         guard isCurrentCameraSelectionOperation(operation) else { return }
