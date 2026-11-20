@@ -177,22 +177,22 @@ Swift package tests use a deterministic native C fixture. They verify ABI calls,
 
 ## CI build and current runnable artifact
 
-Latest successful hosted macOS validation: [workflow run 44703255740](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44703255740), built from commit `043b9f3448e529a1ed647963124d83c07bae7e2e`.
+Latest successful hosted macOS validation: [workflow run 44704623402](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402), commit `92ecde1a5a415899af8a35b518fa8160cf98b05c`.
 
-- All five package test jobs passed: GenTLAPI, GenTLNative, GenTLRouter, AmcamCameraModel and AmcamGenTL.
-- The new integer-vector feature contract and Amcam RGB white-balance integration tests passed.
+- GenTLAPI, GenTLNative, GenTLRouter, AmcamCameraModel and AmcamGenTL test jobs passed.
+- The acquisition tests passed, including buffer-revoke failure/retry and recoverable New Buffer event timeout.
 - The routed application dependency guard passed.
 - Camera probe release build and artifact upload passed.
-- Imaging application release build, app-bundle signature verification and arm64 Mach-O verification passed.
-- The app build emitted no compiler warnings in the captured job log.
+- Imaging application release build, app-bundle signature verification, arm64 Mach-O verification and artifact upload passed.
 
 Current application artifact:
 - Artifact: `amcam-imaging-macos-arm64`
-- Artifact ID: `14613319868`
-- Expiry: 2026-12-04 08:33 UTC.
-- The artifact is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK.
+- Artifact ID: `14613609245`
+- SHA-256: `1a85f5f8b280c9e9ef70f448e1f36410ba7cef74d1e952f44a8473536149400a`
+- Expires: 2026-12-04 08:44 UTC.
+- [Download artifact from the workflow run](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402).
 
-CI proves package tests, compilation and packaging. It does not prove camera discovery or physical acquisition. Physical MU503 acceptance remains outstanding.
+The artifact is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK. CI proves package tests, compilation and packaging. It does not prove camera discovery or physical acquisition. Physical MU503 acceptance remains outstanding.
 
 ## TDD assessment
 
