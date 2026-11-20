@@ -243,6 +243,44 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(session.currentDimensions().height, 480)
     }
 
+    func testUnsupportedExposureDoesNotDisableFrameRateOrStreamingControls() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let symbol = dlsym(fixtureHandle, "MockAmcam_SetExposureUnavailable") else {
+            XCTFail("Mock SDK is missing MockAmcam_SetExposureUnavailable")
+            return
+        }
+        let setExposureUnavailable = unsafeBitCast(
+            symbol,
+            to: (@convention(c) (Int32) -> Void).self
+        )
+        setExposureUnavailable(1)
+        defer { setExposureUnavailable(0) }
+
+        let capabilities = try session.cameraCapabilities()
+        XCTAssertFalse(capabilities.availability(of: .exposureAuto).available)
+        XCTAssertFalse(capabilities.availability(of: .exposureManual).available)
+        XCTAssertTrue(capabilities.availability(of: .preciseFrameRate).isUsable)
+        XCTAssertTrue(capabilities.availability(of: .analogGain).isUsable)
+
+        let controls = try session.readControls()
+        XCTAssertNil(controls.exposure)
+        XCTAssertTrue(controls.frameRate.supported)
+        XCTAssertEqual(controls.frameRate.readbackFramesPerSecond, 15.0)
+        XCTAssertEqual(controls.gain?.readbackPercent, 100)
+
+        let updated = try session.setFixedFrameRate(framesPerSecond: 12.5)
+        XCTAssertNil(updated.exposure)
+        XCTAssertEqual(updated.frameRate.readbackFramesPerSecond, 12.5)
+    }
+
     func testDataStreamQueuesAndDeliversACompleteRGBFrame() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)
