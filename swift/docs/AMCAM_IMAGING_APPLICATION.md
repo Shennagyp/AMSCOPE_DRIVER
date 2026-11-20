@@ -161,12 +161,30 @@ The display decoder currently accepts RGB8 only. Mono, Bayer, packed RAW, YUV an
 
 The app is built and packaged by hosted macOS GitHub Actions. A local Xcode installation is not required.
 
-1. Open the latest successful [macOS workflow run](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions).
-2. Download the `amcam-imaging-macos-arm64` artifact.
-3. Extract `Amcam-Imaging-macos-arm64.zip`.
-4. Open `Amcam Imaging.app`.
-5. If the app does not find the SDK automatically, use SDK… to select the vendor `libamcam.dylib`.
-6. Select the camera from the hardware dock, then start live acquisition.
+1. Confirm the Mac is Apple Silicon and runs macOS 13 or later:
+
+   ```sh
+   uname -m
+   sw_vers -productVersion
+   ```
+
+2. Open [workflow run 44711499416](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44711499416) and download the `amcam-imaging-macos-arm64` artifact.
+3. Save the downloaded artifact archive as `~/Downloads/amcam-imaging-macos-arm64.zip`, then run:
+
+   ```sh
+   set -e
+   test "$(uname -m)" = "arm64" || { echo "This build requires Apple Silicon (arm64)."; exit 1; }
+   major="$(sw_vers -productVersion | cut -d. -f1)"
+   test "$major" -ge 13 || { echo "This build requires macOS 13 or later."; exit 1; }
+   mkdir -p "$HOME/Downloads/amcam-imaging-artifact" "$HOME/Downloads/amcam-imaging-test"
+   ditto -x -k "$HOME/Downloads/amcam-imaging-macos-arm64.zip" "$HOME/Downloads/amcam-imaging-artifact"
+   ditto -x -k "$HOME/Downloads/amcam-imaging-artifact/Amcam-Imaging-macos-arm64.zip" "$HOME/Downloads/amcam-imaging-test"
+   xattr -dr com.apple.quarantine "$HOME/Downloads/amcam-imaging-test/Amcam Imaging.app" 2>/dev/null || true
+   open "$HOME/Downloads/amcam-imaging-test/Amcam Imaging.app"
+   ```
+
+4. If the app does not find the SDK automatically, use SDK… to select the vendor `libamcam.dylib`.
+5. Select the camera from the hardware dock, then start live acquisition.
 
 The vendor SDK is proprietary and is not bundled. The app requires a compatible arm64 `libamcam.dylib` version 58.28273.20250415. The app is ad-hoc signed for local testing, not notarized. CI does not establish physical camera compatibility; MU503 acceptance remains a separate hardware test.
 
@@ -177,23 +195,38 @@ Swift package tests use a deterministic native C fixture. They verify ABI calls,
 
 ## CI build and current runnable artifact
 
-Latest successful hosted macOS validation: [workflow run 44704623402](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402), commit `92ecde1a5a415899af8a35b518fa8160cf98b05c`.
+Current app artifact: [workflow run 44711499416](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44711499416).
 
-- GenTLAPI, GenTLNative, GenTLRouter, AmcamCameraModel and AmcamGenTL test jobs passed.
-- The acquisition tests passed, including buffer-revoke failure/retry and recoverable New Buffer event timeout.
-- The routed application dependency guard passed.
-- Camera probe release build and artifact upload passed.
-- Imaging application release build, app-bundle signature verification, arm64 Mach-O verification and artifact upload passed.
-
-Current application artifact:
 - Artifact: `amcam-imaging-macos-arm64`
-- Artifact ID: `14613609245`
-- SHA-256: `1a85f5f8b280c9e9ef70f448e1f36410ba7cef74d1e952f44a8473536149400a`
-- Expires: 2026-12-04 08:44 UTC.
-- [Download artifact from the workflow run](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402).
+- Artifact ID: `14617182885`
+- SHA-256: `c647d6d11ea8ab4df686b6f804f13d5b95aff9e039c14ec4b449fd49410ab5b9`
+- Expires: 2026-12-04 09:34 UTC.
+- The app build, ad-hoc code-signature verification, arm64 Mach-O verification, routed application dependency guard, and artifact upload all succeeded.
 
-The artifact is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK. CI proves package tests, compilation and packaging. It does not prove camera discovery or physical acquisition. Physical MU503 acceptance remains outstanding.
+The same run passed the AmcamGenTL and AmcamCameraModel test jobs. The GenTLAPI, GenTLNative and GenTLRouter jobs were still queued when this artifact was produced; the full five-package matrix is therefore not yet confirmed green. The app artifact itself is available for the first physical-camera smoke test.
 
+The app is ad-hoc signed for local testing, not notarized, and does not bundle the proprietary vendor SDK. It requires Apple Silicon (arm64), macOS 13 or later, and a compatible arm64 `libamcam.dylib` version 58.28273.20250415. The artifact is a build/package result, not proof of physical camera compatibility.
+
+### First physical-camera test
+
+Use the app first without changing the camera pixel format:
+
+1. Confirm discovery and exclusive open of the MU503.
+2. Start live acquisition and confirm a stable RGB image and a nonzero FPS display.
+3. Stop and restart acquisition three times.
+4. In Settings, test Exposure Auto Continuous, then Off (fixed/manual); change exposure time and confirm the readback.
+5. Change analog gain and confirm its readback. Gain is represented as a percentage, not dB.
+6. Close the app normally, disconnect/reconnect the camera, reopen the app and verify discovery again.
+
+The application display path currently decodes RGB8 only. Do not use RAW, Bayer, YUV or other pixel formats as an acceptance test yet. Keep the default format for the first test. Record any error text and whether it occurred during discovery, open, start, streaming, stop or close.
+
+The camera probe artifact from the same run is:
+- Artifact: `amcam-camera-probe-macos-arm64`
+- Artifact ID: `14617607266`
+- SHA-256: `b59e0add3313556ab751d29bb6b9da91862062fc1f5e08233d174fb663600d82`
+- Expires: 2026-12-04 09:33 UTC.
+
+The probe exercises the backend without the GUI and is useful if the app reports discovery or acquisition errors.
 ## TDD assessment
 
 The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close.

@@ -6,16 +6,16 @@ The probe uses the actual \`AmcamGenTLImplementation\` and GenTL-style acquisiti
 
 ## Obtain the executable
 
-The current source revision was verified in [workflow run 44683070601](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44683070601). Its **AmcamGenTL tests**, **Build macOS camera probe**, and **Upload macOS camera probe** steps all succeeded. Download `amcam-camera-probe-macos-arm64` from that run's **Artifacts** section.
+The current source revision was built and tested in [workflow run 44711499416](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44711499416). The AmcamGenTL test job, camera-probe release build, and probe artifact upload succeeded.
 
-- Artifact ID: `14605760059`
-- SHA-256: `b23ee03db32c19c8def9f7c341e882f70f6741d04b453edf29dbd67e3e8adb13`
-- Expiration: December 4, 2026
+- Artifact: `amcam-camera-probe-macos-arm64`
+- Artifact ID: `14617607266`
+- SHA-256: `b59e0add3313556ab751d29bb6b9da91862062fc1f5e08233d174fb663600d82`
+- Expires: December 4, 2026 at 09:33 UTC.
 
-The artifact is an Apple Silicon arm64 executable, matching the Mac's architecture. The same workflow also passed the imaging app build and uploaded the app artifact (ID `14606959758`). The overall workflow remains marked failed because the separate GenTLNative and GenTLRouter jobs fail; those failures do not affect the successful Amcam package, probe build, or artifact upload. The artifact contains the executable and this instruction file. The vendor SDK is proprietary and is not included.
+The same run also built and uploaded the AmScope Imaging app (artifact ID `14617182885`). The GenTLAPI, GenTLNative and GenTLRouter package-test jobs were still queued when these artifacts were produced; the complete five-package matrix is not yet confirmed green. The executable is an Apple Silicon arm64 build. The vendor SDK is proprietary and is not included.
 
-The original vendor Amcam SDK had already streamed successfully on this Mac. This probe is the next verification layer: it exercises the new Swift AmcamGenTL backend against the actual vendor dylib and physical camera, rather than retesting only the SDK itself.
-
+The probe uses the actual `AmcamGenTLImplementation` and GenTL-style acquisition path. It does not substitute a mock SDK at runtime. It does not modify exposure, gain, or frame-rate settings.
 ## Find the vendor SDK
 
 Supply the actual Amcam SDK dynamic library, normally named \`libamcam.dylib\`. Known deployment locations include:
