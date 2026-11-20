@@ -91,6 +91,11 @@ PLIST
 codesign --force --deep --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
 
+if [[ "${BUILD_ONLY:-0}" == "1" ]]; then
+  echo "Build completed: $app_bundle"
+  exit 0
+fi
+
 echo
 echo "Launching $app_bundle"
 open "$app_bundle"
