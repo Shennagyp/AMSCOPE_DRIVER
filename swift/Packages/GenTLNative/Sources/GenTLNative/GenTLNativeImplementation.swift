@@ -1277,7 +1277,7 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
                 let value = try readInfo { type, buffer, size in
                     functions.eventGetInfo(
                         registeredPointer,
-                        GenTLInfoCommand.Event.maxSize.rawValue,
+                        GenTLABI.EVENT_SIZE_MAX,
                         type,
                         buffer,
                         size
