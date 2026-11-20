@@ -15,6 +15,7 @@ private struct CallCounts {
     var interfaceUpdateDevices = 0
     var deviceClose = 0
     var bufferRevoke = 0
+    var bufferQueue = 0
     var dataStreamClose = 0
 }
 
@@ -36,6 +37,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var queuedBufferCount = 0
     private var flushCountValue = 0
     private var failBufferRevoke = false
+    private var queueBufferFailuresRemaining = 0
     private var forceEventTimeout = false
 
     init(
@@ -251,6 +253,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         lock.unlock()
     }
 
+    func setQueueBufferFailures(_ count: Int) {
+        lock.lock()
+        queueBufferFailuresRemaining = max(0, count)
+        lock.unlock()
+    }
+
     func flushCount() -> Int {
         lock.lock()
         defer { lock.unlock() }
@@ -364,6 +372,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
         lock.lock()
+        calls.bufferQueue += 1
+        if queueBufferFailuresRemaining > 0 {
+            queueBufferFailuresRemaining -= 1
+            lock.unlock()
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_ERROR)
+        }
         queuedBufferCount += 1
         lock.unlock()
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
@@ -589,6 +603,33 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         try acquisition.close()
         XCTAssertEqual(api.flushCount(), 3, "Close must flush before revoking announced buffers.")
         try device.close()
+    }
+
+
+    func testFailedBufferRequeueIsNotRetriedWithSameHandle() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "buffer-requeue-failure") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        defer {
+            try? acquisition.close()
+            try? device.close()
+        }
+
+        try acquisition.start(numberToAcquire: 1)
+        api.setQueueBufferFailures(1)
+
+        XCTAssertThrowsError(try acquisition.nextFrame(timeoutMilliseconds: 100)) { error in
+            guard case GenTLAcquisitionError.genTLCallFailed(let operation, _) = error else {
+                return XCTFail("Expected DSQueueBuffer failure, received \\(error)")
+            }
+            XCTAssertEqual(operation, "DSQueueBuffer")
+        }
+
+        XCTAssertEqual(api.snapshot().bufferQueue, 2, "One initial enqueue and one failed return attempt are expected.")
+        XCTAssertEqual(api.queuedBuffers(), 1, "A failed return must not be retried and double-enqueue the handle.")
     }
 
     func testEventTimeoutDoesNotPoisonAcquisitionSession() throws {
