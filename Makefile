@@ -6,7 +6,7 @@ SHELL := /bin/bash
 
 help:
 	@printf '%s\n' \
-	  'make run         Download and launch the latest hosted macOS imaging app' \
+	  'make run         Download and launch the latest public macOS release' \
 	  'make run-probe   Download and run the latest hosted camera diagnostic probe' \
 	  'make build-local Build the imaging app with the local Swift toolchain (Xcode required)' \
 	  'make run-local   Build and launch the imaging app locally (Xcode required)' \
