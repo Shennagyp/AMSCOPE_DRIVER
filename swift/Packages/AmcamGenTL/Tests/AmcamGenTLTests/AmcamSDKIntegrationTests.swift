@@ -265,6 +265,50 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(metadata?.apiVersion, .v3)
     }
 
+    func testPullFailureClearsOptionalOutputParameters() throws {
+        let libraryURL = try buildMockSDK()
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        defer { sdk.close(opened.handle) }
+
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let setterSymbol = dlsym(mockLibrary, "MockAmcam_SetPullFailure") else {
+            XCTFail("Mock SDK is missing MockAmcam_SetPullFailure")
+            return
+        }
+        let setFailure = unsafeBitCast(setterSymbol, to: (@convention(c) (Int32) -> Void).self)
+        setFailure(-1)
+
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: 640 * 480 * 3, alignment: 64)
+        defer { buffer.deallocate() }
+        var info = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata? = AmcamFrameMetadata(
+            apiVersion: .v4,
+            validityFlags: .max,
+            exposureTimeMicroseconds: 123
+        )
+        var operationName: String? = "stale operation"
+        var tightlyPackedRows = true
+
+        XCTAssertEqual(
+            sdk.pullImage(
+                opened.handle,
+                buffer: buffer,
+                frameInfo: &info,
+                metadata: &metadata,
+                operationName: &operationName,
+                tightlyPackedRows: &tightlyPackedRows
+            ),
+            -1
+        )
+        XCTAssertNil(metadata)
+        XCTAssertEqual(operationName, "Amcam_PullImageV4")
+        XCTAssertFalse(tightlyPackedRows)
+    }
+
     func testAcquisitionDoesNotFallbackForHardwareErrors() throws {
         let libraryURL = try buildMockSDK()
         let sdk = try AmcamSDK(libraryURL: libraryURL)

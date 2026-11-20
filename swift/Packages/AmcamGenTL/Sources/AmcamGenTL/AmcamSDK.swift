@@ -574,6 +574,12 @@ final class AmcamSDK: @unchecked Sendable {
         operationName: UnsafeMutablePointer<String?>? = nil,
         tightlyPackedRows: UnsafeMutablePointer<Bool>? = nil
     ) -> Int32 {
+        // Output parameters are deterministic even when one or more API
+        // generations reject the camera or acquisition fails.
+        metadata?.pointee = nil
+        operationName?.pointee = nil
+        tightlyPackedRows?.pointee = false
+
         // Amcam documents rowPitch = -1 as zero padding (tightly packed rows).
         // E_NOTIMPL is model-specific: retry the next API generation only for
         // that explicit result. Device, timeout, and buffer errors remain visible.
