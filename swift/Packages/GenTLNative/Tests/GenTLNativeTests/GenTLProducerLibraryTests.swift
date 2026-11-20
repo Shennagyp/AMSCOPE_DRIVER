@@ -59,14 +59,12 @@ final class GenTLProducerLibraryTests: XCTestCase {
     }
 
     func testLoaderRejectsDirectoryAsProducerFile() throws {
-        let error = try XCTUnwrap(
-            Result {
-                try GenTLProducerLibrary(url: FileManager.default.temporaryDirectory)
-            }.failure
-        )
-
-        guard case GenTLProducerLibraryError.notRegularFile = error else {
-            return XCTFail("Expected notRegularFile, received \(error)")
+        XCTAssertThrowsError(
+            try GenTLProducerLibrary(url: FileManager.default.temporaryDirectory)
+        ) { error in
+            guard case GenTLProducerLibraryError.notRegularFile = error else {
+                return XCTFail("Expected notRegularFile, received \(error)")
+            }
         }
     }
 
