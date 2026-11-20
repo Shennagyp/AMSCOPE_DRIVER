@@ -109,7 +109,10 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
     public let deniedFeatures: Set<AmcamCameraFeature>
 
     public var allowedFeatures: Set<AmcamCameraFeature> {
-        allowedFeaturesByGroup.values.reduce(into: Set<AmcamCameraFeature>()) { $0.formUnion($1) }
+        allowedFeaturesByGroup.reduce(into: Set<AmcamCameraFeature>()) { result, entry in
+            guard let group = AmcamCameraFeatureGroup(rawValue: entry.key) else { return }
+            result.formUnion(entry.value.filter { $0.group == group })
+        }
     }
 
     public init(modelCode: String, displayName: String? = nil,
