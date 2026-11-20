@@ -47,10 +47,10 @@ final class GenTLFeatureAccessContractTests: XCTestCase {
             name: "AmcamWhiteBalanceRGBGain",
             displayName: "White Balance RGB Gain",
             kind: .integerVector,
-            elementCount: 3,
             isAvailable: true,
             isReadable: true,
-            isWritable: true
+            isWritable: true,
+            elementCount: 3
         )
         XCTAssertEqual(vector.kind, .integerVector)
         XCTAssertEqual(vector.elementCount, 3)
