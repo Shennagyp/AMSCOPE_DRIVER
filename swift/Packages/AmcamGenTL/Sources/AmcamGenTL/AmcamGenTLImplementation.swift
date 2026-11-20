@@ -1064,3 +1064,925 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         }
     }
 }
+
+
+extension AmcamGenTLImplementation: GenTLAPI {
+    // MARK: GenTL C-boundary conversion
+
+    private func rawError(_ error: Error) -> GenTLABI.GC_ERROR {
+        if let code = error as? GC_ERROR {
+            setLastError(code, message: String(describing: code))
+            return code.rawValue
+        }
+        setLastError(.error, message: error.localizedDescription)
+        return GenTLABI.GC_ERR_ERROR
+    }
+
+    private func rawStatus(_ operation: () throws -> Void) -> GenTLABI.GC_ERROR {
+        do {
+            try operation()
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    private func rawHandle<Tag: Hashable & Sendable>(
+        _ handle: GenTLHandle<Tag>
+    ) -> UnsafeMutableRawPointer? {
+        UnsafeMutableRawPointer(bitPattern: handle.rawValue)
+    }
+
+    private func typedHandle<Tag: Hashable & Sendable>(
+        _ pointer: UnsafeMutableRawPointer?,
+        as type: Tag.Type
+    ) throws -> GenTLHandle<Tag> {
+        guard let pointer else { try fail(.invalidHandle) }
+        let rawValue = UInt(bitPattern: pointer)
+        guard rawValue == UInt(bitPattern: systemToken) ||
+              rawValue == UInt(bitPattern: interfaceToken) ||
+              activeHandleTokens[rawValue] != nil else {
+            try fail(.invalidHandle)
+        }
+        return GenTLHandle<Tag>(rawValue: rawValue)
+    }
+
+    private func readCString(_ pointer: UnsafePointer<CChar>?) throws -> String {
+        guard let pointer else { try fail(.invalidParameter) }
+        return String(cString: pointer)
+    }
+
+    private func dataBytes<T>(of value: T) -> Data {
+        var copy = value
+        return withUnsafeBytes(of: &copy) { Data($0) }
+    }
+
+    private func infoBytes(_ value: GenTLInfoValue) -> (GenTLABI.INFO_DATATYPE, Data) {
+        switch value {
+        case .string(let string):
+            return (1, Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
+        case .stringList(let strings):
+            var bytes: [UInt8] = []
+            for string in strings {
+                bytes.append(contentsOf: string.utf8)
+                bytes.append(0)
+            }
+            bytes.append(0)
+            return (2, Data(bytes))
+        case .int16(let value): return (3, dataBytes(of: value))
+        case .uint16(let value): return (4, dataBytes(of: value))
+        case .int32(let value): return (5, dataBytes(of: value))
+        case .uint32(let value): return (6, dataBytes(of: value))
+        case .int64(let value): return (7, dataBytes(of: value))
+        case .uint64(let value): return (8, dataBytes(of: value))
+        case .float64(let value): return (9, dataBytes(of: value))
+        case .pointer(let value): return (10, dataBytes(of: value))
+        case .bool8(let value): return (11, dataBytes(of: UInt8(value ? 1 : 0)))
+        case .size(let value): return (12, dataBytes(of: UInt(value)))
+        case .raw(let data): return (13, data)
+        case .pointerDifference(let value): return (14, dataBytes(of: value))
+        }
+    }
+
+    private func writeData(
+        _ data: Data,
+        output: UnsafeMutableRawPointer?,
+        size: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let size else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        let capacity = size.pointee
+        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        size.pointee = data.count
+        guard !data.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
+        guard let output, capacity >= data.count else {
+            return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
+        }
+        data.withUnsafeBytes { source in
+            if let base = source.baseAddress {
+                output.copyMemory(from: base, byteCount: source.count)
+            }
+        }
+        return GenTLABI.GC_ERR_SUCCESS
+    }
+
+    private func writeCString(
+        _ string: String,
+        output: UnsafeMutablePointer<CChar>?,
+        size: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        let bytes = Data(string.utf8CString.map { UInt8(bitPattern: $0) })
+        return writeData(bytes, output: output.map { UnsafeMutableRawPointer($0) }, size: size)
+    }
+
+    private func writeInfo(
+        _ value: GenTLInfoValue,
+        type: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        output: UnsafeMutableRawPointer?,
+        size: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        let (kind, bytes) = infoBytes(value)
+        type?.pointee = kind
+        return writeData(bytes, output: output, size: size)
+    }
+
+    private func eventSource(_ pointer: GenTLABI.EVENTSRC_HANDLE) throws -> EVENTSRC_HANDLE {
+        guard let pointer else { try fail(.invalidHandle) }
+        let rawValue = UInt(bitPattern: pointer)
+        guard activeHandleTokens[rawValue] != nil else { try fail(.invalidHandle) }
+        guard dataStreams[rawValue] != nil else { try fail(.notImplemented) }
+        return .dataStream(DS_HANDLE(rawValue: rawValue))
+    }
+
+    private func validBuffer(_ pointer: GenTLABI.BUFFER_HANDLE, in stream: DS_HANDLE) -> BUFFER_HANDLE? {
+        guard let pointer else { return nil }
+        let rawValue = UInt(bitPattern: pointer)
+        guard bufferHandlesByStream[stream.rawValue]?.contains(rawValue) == true else { return nil }
+        return BUFFER_HANDLE(rawValue: rawValue)
+    }
+
+    // MARK: Library
+
+    public func GCInitLib() -> GenTLABI.GC_ERROR {
+        rawStatus { try swiftGCInitLib() }
+    }
+
+    public func GCCloseLib() -> GenTLABI.GC_ERROR {
+        rawStatus { try swiftGCCloseLib() }
+    }
+
+    public func GCGetInfo(
+        _ iInfoCmd: GenTLABI.TL_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            return writeInfo(
+                try GCGetInfo(command: iInfoCmd),
+                type: piType,
+                output: pBuffer,
+                size: piSize
+            )
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCGetLastError(
+        _ piErrorCode: UnsafeMutablePointer<GenTLABI.GC_ERROR>?,
+        _ sErrText: UnsafeMutablePointer<CChar>?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        let value = GCGetLastError()
+        piErrorCode?.pointee = value.code.rawValue
+        return writeCString(value.message, output: sErrText, size: piSize)
+    }
+
+    // MARK: Port
+
+    public func GCReadPort(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ iAddress: UInt64,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let pBuffer, let piSize else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let data = try GCReadPort(typedHandle(hPort, as: PORTModule.self), address: iAddress, size: piSize.pointee)
+            return writeData(data, output: pBuffer, size: piSize)
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCWritePort(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ iAddress: UInt64,
+        _ pBuffer: UnsafeRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let pBuffer, let piSize, piSize.pointee >= 0 else {
+            return GenTLABI.GC_ERR_INVALID_PARAMETER
+        }
+        let bytes = Data(bytes: pBuffer, count: piSize.pointee)
+        return rawStatus {
+            try GCWritePort(typedHandle(hPort, as: PORTModule.self), address: iAddress, data: bytes)
+        }
+    }
+
+    public func GCGetPortURL(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ sURL: UnsafeMutablePointer<CChar>?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            return writeCString(
+                try GCGetPortURL(typedHandle(hPort, as: PORTModule.self)),
+                output: sURL,
+                size: piSize
+            )
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCGetPortInfo(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ iInfoCmd: GenTLABI.PORT_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try GCGetPortInfo(typedHandle(hPort, as: PORTModule.self), command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCGetNumPortURLs(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ piNumURLs: UnsafeMutablePointer<UInt32>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let piNumURLs else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            piNumURLs.pointee = try GCGetNumPortURLs(typedHandle(hPort, as: PORTModule.self))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCGetPortURLInfo(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ iURLIndex: UInt32,
+        _ iInfoCmd: GenTLABI.URL_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try GCGetPortURLInfo(
+                typedHandle(hPort, as: PORTModule.self),
+                index: iURLIndex,
+                command: iInfoCmd
+            )
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCReadPortStacked(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ pEntries: UnsafeMutablePointer<GenTLABI.PORT_REGISTER_STACK_ENTRY>?,
+        _ piNumEntries: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let pEntries, let piNumEntries, piNumEntries.pointee >= 0 else {
+            return GenTLABI.GC_ERR_INVALID_PARAMETER
+        }
+        do {
+            let port = try typedHandle(hPort, as: PORTModule.self)
+            let count = piNumEntries.pointee
+            for index in 0..<count {
+                let entry = pEntries[index]
+                guard entry.Size >= 0, let buffer = entry.pBuffer else {
+                    return GenTLABI.GC_ERR_INVALID_PARAMETER
+                }
+                let bytes = try GCReadPort(port, address: entry.Address, size: entry.Size)
+                guard bytes.count == entry.Size else { return GenTLABI.GC_ERR_INVALID_VALUE }
+                bytes.withUnsafeBytes { source in
+                    if let base = source.baseAddress {
+                        buffer.copyMemory(from: base, byteCount: source.count)
+                    }
+                }
+            }
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    public func GCWritePortStacked(
+        _ hPort: GenTLABI.PORT_HANDLE,
+        _ pEntries: UnsafeMutablePointer<GenTLABI.PORT_REGISTER_STACK_ENTRY>?,
+        _ piNumEntries: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let pEntries, let piNumEntries, piNumEntries.pointee >= 0 else {
+            return GenTLABI.GC_ERR_INVALID_PARAMETER
+        }
+        do {
+            let port = try typedHandle(hPort, as: PORTModule.self)
+            for index in 0..<piNumEntries.pointee {
+                let entry = pEntries[index]
+                guard entry.Size >= 0, let buffer = entry.pBuffer else {
+                    return GenTLABI.GC_ERR_INVALID_PARAMETER
+                }
+                try GCWritePort(port, address: entry.Address, data: Data(bytes: buffer, count: entry.Size))
+            }
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch {
+            return rawError(error)
+        }
+    }
+
+    // MARK: System
+
+    public func TLOpen(_ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?) -> GenTLABI.GC_ERROR {
+        guard let phTL else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phTL.pointee = rawHandle(try TLOpen())
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func TLClose(_ hTL: GenTLABI.TL_HANDLE) -> GenTLABI.GC_ERROR {
+        rawStatus { try TLClose(try typedHandle(hTL, as: TLModule.self)) }
+    }
+
+    public func TLGetInfo(
+        _ hTL: GenTLABI.TL_HANDLE, _ iInfoCmd: GenTLABI.TL_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try TLGetInfo(typedHandle(hTL, as: TLModule.self), command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func TLGetNumInterfaces(_ hTL: GenTLABI.TL_HANDLE, _ piNumIfaces: UnsafeMutablePointer<UInt32>?) -> GenTLABI.GC_ERROR {
+        guard let piNumIfaces else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            piNumIfaces.pointee = try TLGetNumInterfaces(typedHandle(hTL, as: TLModule.self))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func TLGetInterfaceID(
+        _ hTL: GenTLABI.TL_HANDLE, _ iIndex: UInt32,
+        _ sID: UnsafeMutablePointer<CChar>?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try TLGetInterfaceID(typedHandle(hTL, as: TLModule.self), index: iIndex)
+            return writeCString(value, output: sID, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func TLGetInterfaceInfo(
+        _ hTL: GenTLABI.TL_HANDLE, _ sIfaceID: UnsafePointer<CChar>?,
+        _ iInfoCmd: GenTLABI.INTERFACE_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try TLGetInterfaceInfo(
+                typedHandle(hTL, as: TLModule.self),
+                interfaceID: readCString(sIfaceID),
+                command: iInfoCmd
+            )
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func TLOpenInterface(
+        _ hTL: GenTLABI.TL_HANDLE, _ sIfaceID: UnsafePointer<CChar>?,
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let phIface else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phIface.pointee = rawHandle(try TLOpenInterface(
+                typedHandle(hTL, as: TLModule.self),
+                interfaceID: readCString(sIfaceID)
+            ))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func TLUpdateInterfaceList(
+        _ hTL: GenTLABI.TL_HANDLE,
+        _ pbChanged: UnsafeMutablePointer<GenTLABI.bool8_t>?,
+        _ iTimeout: UInt64
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let changed = try TLUpdateInterfaceList(typedHandle(hTL, as: TLModule.self), timeout: iTimeout)
+            guard let pbChanged else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+            pbChanged.pointee = changed ? 1 : 0
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    // MARK: Interface
+
+    public func IFClose(_ hIface: GenTLABI.IF_HANDLE) -> GenTLABI.GC_ERROR {
+        rawStatus { try IFClose(try typedHandle(hIface, as: IFModule.self)) }
+    }
+
+    public func IFGetInfo(
+        _ hIface: GenTLABI.IF_HANDLE, _ iInfoCmd: GenTLABI.INTERFACE_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try IFGetInfo(typedHandle(hIface, as: IFModule.self), command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func IFGetNumDevices(_ hIface: GenTLABI.IF_HANDLE, _ piNumDevices: UnsafeMutablePointer<UInt32>?) -> GenTLABI.GC_ERROR {
+        guard let piNumDevices else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            piNumDevices.pointee = try IFGetNumDevices(typedHandle(hIface, as: IFModule.self))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func IFGetDeviceID(
+        _ hIface: GenTLABI.IF_HANDLE, _ iIndex: UInt32,
+        _ sDeviceID: UnsafeMutablePointer<CChar>?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try IFGetDeviceID(typedHandle(hIface, as: IFModule.self), index: iIndex)
+            return writeCString(value, output: sDeviceID, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func IFUpdateDeviceList(
+        _ hIface: GenTLABI.IF_HANDLE, _ pbChanged: UnsafeMutablePointer<GenTLABI.bool8_t>?,
+        _ iTimeout: UInt64
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let changed = try IFUpdateDeviceList(typedHandle(hIface, as: IFModule.self), timeout: iTimeout)
+            guard let pbChanged else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+            pbChanged.pointee = changed ? 1 : 0
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func IFGetDeviceInfo(
+        _ hIface: GenTLABI.IF_HANDLE, _ sDeviceID: UnsafePointer<CChar>?,
+        _ iInfoCmd: GenTLABI.DEVICE_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try IFGetDeviceInfo(
+                typedHandle(hIface, as: IFModule.self),
+                deviceID: readCString(sDeviceID),
+                command: iInfoCmd
+            )
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func IFOpenDevice(
+        _ hIface: GenTLABI.IF_HANDLE, _ sDeviceID: UnsafePointer<CChar>?,
+        _ iOpenFlag: GenTLABI.DEVICE_ACCESS_FLAGS, _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let phDevice else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phDevice.pointee = rawHandle(try IFOpenDevice(
+                typedHandle(hIface, as: IFModule.self),
+                deviceID: readCString(sDeviceID),
+                accessFlags: iOpenFlag
+            ))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    // MARK: Device
+
+    public func DevGetPort(_ hDevice: GenTLABI.DEV_HANDLE, _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE>?) -> GenTLABI.GC_ERROR {
+        guard let phRemoteDevice else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phRemoteDevice.pointee = rawHandle(try DevGetPort(typedHandle(hDevice, as: DEVModule.self)))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DevGetNumDataStreams(_ hDevice: GenTLABI.DEV_HANDLE, _ piNumDataStreams: UnsafeMutablePointer<UInt32>?) -> GenTLABI.GC_ERROR {
+        guard let piNumDataStreams else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            piNumDataStreams.pointee = try DevGetNumDataStreams(typedHandle(hDevice, as: DEVModule.self))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DevGetDataStreamID(
+        _ hDevice: GenTLABI.DEV_HANDLE, _ iIndex: UInt32,
+        _ sDataStreamID: UnsafeMutablePointer<CChar>?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            return writeCString(
+                try DevGetDataStreamID(typedHandle(hDevice, as: DEVModule.self), index: iIndex),
+                output: sDataStreamID,
+                size: piSize
+            )
+        } catch { return rawError(error) }
+    }
+
+    public func DevOpenDataStream(
+        _ hDevice: GenTLABI.DEV_HANDLE, _ sDataStreamID: UnsafePointer<CChar>?,
+        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let phDataStream else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phDataStream.pointee = rawHandle(try DevOpenDataStream(
+                typedHandle(hDevice, as: DEVModule.self),
+                dataStreamID: readCString(sDataStreamID)
+            ))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DevGetInfo(
+        _ hDevice: GenTLABI.DEV_HANDLE, _ iInfoCmd: GenTLABI.DEVICE_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try DevGetInfo(typedHandle(hDevice, as: DEVModule.self), command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func DevClose(_ hDevice: GenTLABI.DEV_HANDLE) -> GenTLABI.GC_ERROR {
+        rawStatus { try DevClose(try typedHandle(hDevice, as: DEVModule.self)) }
+    }
+
+    // MARK: Data Stream / Buffer
+
+    public func DSAnnounceBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ pBuffer: UnsafeMutableRawPointer?, _ iSize: Int,
+        _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let pBuffer, let phBuffer, iSize > 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let handle = try DSAnnounceBuffer(
+                typedHandle(hDataStream, as: DSModule.self),
+                memory: GenTLBufferMemory(baseAddress: pBuffer, size: iSize),
+                privateData: pPrivate
+            )
+            phBuffer.pointee = rawHandle(handle)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSAllocAndAnnounceBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ iSize: Int, _ pPrivate: UnsafeMutableRawPointer?,
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let phBuffer else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let handle = try DSAllocAndAnnounceBuffer(
+                typedHandle(hDataStream, as: DSModule.self), size: iSize, privateData: pPrivate
+            )
+            phBuffer.pointee = rawHandle(handle)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSFlushQueue(_ hDataStream: GenTLABI.DS_HANDLE, _ iOperation: GenTLABI.ACQ_QUEUE_TYPE) -> GenTLABI.GC_ERROR {
+        rawStatus { try DSFlushQueue(typedHandle(hDataStream, as: DSModule.self), operation: iOperation) }
+    }
+
+    public func DSStartAcquisition(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ iStartFlags: GenTLABI.ACQ_START_FLAGS, _ iNumToAcquire: UInt64
+    ) -> GenTLABI.GC_ERROR {
+        rawStatus { try DSStartAcquisition(typedHandle(hDataStream, as: DSModule.self), flags: iStartFlags, numberToAcquire: iNumToAcquire) }
+    }
+
+    public func DSStopAcquisition(_ hDataStream: GenTLABI.DS_HANDLE, _ iStopFlags: GenTLABI.ACQ_STOP_FLAGS) -> GenTLABI.GC_ERROR {
+        rawStatus { try DSStopAcquisition(typedHandle(hDataStream, as: DSModule.self), flags: iStopFlags) }
+    }
+
+    public func DSGetInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ iInfoCmd: GenTLABI.STREAM_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try DSGetInfo(typedHandle(hDataStream, as: DSModule.self), command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetBufferID(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ iIndex: UInt32,
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let phBuffer else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phBuffer.pointee = rawHandle(try DSGetBufferID(typedHandle(hDataStream, as: DSModule.self), index: iIndex))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSClose(_ hDataStream: GenTLABI.DS_HANDLE) -> GenTLABI.GC_ERROR {
+        rawStatus { try DSClose(typedHandle(hDataStream, as: DSModule.self)) }
+    }
+
+    public func DSRevokeBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ ppBuffer: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
+        _ ppPrivate: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let ppBuffer, let ppPrivate else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let revoked = try DSRevokeBuffer(stream, buffer: buffer)
+            ppBuffer.pointee = revoked.baseAddress
+            ppPrivate.pointee = revoked.privateData
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSQueueBuffer(_ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE) -> GenTLABI.GC_ERROR {
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            try DSQueueBuffer(stream, buffer: buffer)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetBufferInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ iInfoCmd: GenTLABI.BUFFER_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let value = try DSGetBufferInfo(stream, buffer: buffer, command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    // MARK: GenTL extensions
+
+    public func DSGetBufferChunkData(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ pChunkData: UnsafeMutablePointer<GenTLABI.SINGLE_CHUNK_DATA>?, _ piNumChunks: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let piNumChunks else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let chunks = try DSGetBufferChunkData(stream, buffer: buffer)
+            let capacity = piNumChunks.pointee
+            piNumChunks.pointee = chunks.count
+            guard capacity >= chunks.count else { return GenTLABI.GC_ERR_BUFFER_TOO_SMALL }
+            guard chunks.isEmpty || pChunkData != nil else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+            for index in chunks.indices {
+                pChunkData![index].ChunkID = chunks[index].chunkID
+                pChunkData![index].ChunkOffset = chunks[index].offset
+                pChunkData![index].ChunkLength = chunks[index].length
+            }
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func IFGetParentTL(_ hIface: GenTLABI.IF_HANDLE, _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?) -> GenTLABI.GC_ERROR {
+        guard let phSystem else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phSystem.pointee = rawHandle(try IFGetParentTL(typedHandle(hIface, as: IFModule.self)))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DevGetParentIF(_ hDevice: GenTLABI.DEV_HANDLE, _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?) -> GenTLABI.GC_ERROR {
+        guard let phIface else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phIface.pointee = rawHandle(try DevGetParentIF(typedHandle(hDevice, as: DEVModule.self)))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetParentDev(_ hDataStream: GenTLABI.DS_HANDLE, _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?) -> GenTLABI.GC_ERROR {
+        guard let phDevice else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            phDevice.pointee = rawHandle(try DSGetParentDev(typedHandle(hDataStream, as: DSModule.self)))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetNumBufferParts(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ piNumParts: UnsafeMutablePointer<UInt32>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let piNumParts else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            piNumParts.pointee = try DSGetNumBufferParts(stream, buffer: buffer)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetBufferPartInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE, _ iPartIndex: UInt32,
+        _ iInfoCmd: GenTLABI.BUFFER_PART_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let value = try DSGetBufferPartInfo(stream, buffer: buffer, partIndex: iPartIndex, command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func DSAnnounceCompositeBuffer(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ iNumSegments: Int,
+        _ ppSegments: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ piSizes: UnsafeMutablePointer<Int>?,
+        _ pPrivate: UnsafeMutableRawPointer?, _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        GenTLABI.GC_ERR_NOT_IMPLEMENTED
+    }
+
+    public func DSGetBufferInfoStacked(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ pInfoStacked: UnsafeMutablePointer<GenTLABI.DS_BUFFER_INFO_STACKED>?, _ iNumInfos: Int
+    ) -> GenTLABI.GC_ERROR {
+        guard iNumInfos >= 0, iNumInfos == 0 || pInfoStacked != nil else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let commands = (0..<iNumInfos).map { pInfoStacked![$0].iInfoCmd }
+            let values = try DSGetBufferInfoStacked(stream, buffer: buffer, commands: commands)
+            var aggregate: GenTLABI.GC_ERROR = GenTLABI.GC_ERR_SUCCESS
+            for index in values.indices {
+                switch values[index] {
+                case .success(let value):
+                    let status = writeStackedInfo(value, entry: &pInfoStacked![index])
+                    pInfoStacked![index].iResult = status
+                    if status != GenTLABI.GC_ERR_SUCCESS { aggregate = status }
+                case .failure(let error):
+                    pInfoStacked![index].iResult = error.rawValue
+                    if aggregate == GenTLABI.GC_ERR_SUCCESS { aggregate = error.rawValue }
+                }
+            }
+            return aggregate == GenTLABI.GC_ERR_BUFFER_TOO_SMALL ? GenTLABI.GC_ERR_SUCCESS : aggregate
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetBufferPartInfoStacked(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ pInfoStacked: UnsafeMutablePointer<GenTLABI.DS_BUFFER_PART_INFO_STACKED>?, _ iNumInfos: Int
+    ) -> GenTLABI.GC_ERROR {
+        guard iNumInfos >= 0, iNumInfos == 0 || pInfoStacked != nil else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let requests = (0..<iNumInfos).map {
+                GenTLBufferPartInfoStackedRequest(partIndex: pInfoStacked![$0].iPartIndex, command: pInfoStacked![$0].iInfoCmd)
+            }
+            let values = try DSGetBufferPartInfoStacked(stream, buffer: buffer, requests: requests)
+            var aggregate: GenTLABI.GC_ERROR = GenTLABI.GC_ERR_SUCCESS
+            for index in values.indices {
+                switch values[index] {
+                case .success(let value):
+                    let status = writeStackedPartInfo(value, entry: &pInfoStacked![index])
+                    pInfoStacked![index].iResult = status
+                    if status != GenTLABI.GC_ERR_SUCCESS { aggregate = status }
+                case .failure(let error):
+                    pInfoStacked![index].iResult = error.rawValue
+                    if aggregate == GenTLABI.GC_ERR_SUCCESS { aggregate = error.rawValue }
+                }
+            }
+            return aggregate == GenTLABI.GC_ERR_BUFFER_TOO_SMALL ? GenTLABI.GC_ERR_SUCCESS : aggregate
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetNumFlows(_ hDataStream: GenTLABI.DS_HANDLE, _ piNumFlows: UnsafeMutablePointer<UInt32>?) -> GenTLABI.GC_ERROR {
+        guard let piNumFlows else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            piNumFlows.pointee = try DSGetNumFlows(typedHandle(hDataStream, as: DSModule.self))
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetFlowInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ iFlowIndex: UInt32, _ iInfoCmd: GenTLABI.FLOW_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let value = try DSGetFlowInfo(typedHandle(hDataStream, as: DSModule.self), flowIndex: iFlowIndex, command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetNumBufferSegments(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE,
+        _ piNumSegments: UnsafeMutablePointer<UInt32>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let piNumSegments else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            piNumSegments.pointee = try DSGetNumBufferSegments(stream, buffer: buffer)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func DSGetBufferSegmentInfo(
+        _ hDataStream: GenTLABI.DS_HANDLE, _ hBuffer: GenTLABI.BUFFER_HANDLE, _ iSegmentIndex: UInt32,
+        _ iInfoCmd: GenTLABI.SEGMENT_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pBuffer: UnsafeMutableRawPointer?, _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            let stream = try typedHandle(hDataStream, as: DSModule.self)
+            guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
+            let value = try DSGetBufferSegmentInfo(stream, buffer: buffer, segmentIndex: iSegmentIndex, command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    // MARK: Events
+
+    public func GCRegisterEvent(
+        _ hEventSrc: GenTLABI.EVENTSRC_HANDLE, _ iEventID: GenTLABI.EVENT_TYPE,
+        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let phEvent else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let source = try eventSource(hEventSrc)
+            let event = try GCRegisterEvent(source, eventType: iEventID)
+            phEvent.pointee = rawHandle(event)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func GCUnregisterEvent(
+        _ hEventSrc: GenTLABI.EVENTSRC_HANDLE, _ iEventID: GenTLABI.EVENT_TYPE
+    ) -> GenTLABI.GC_ERROR {
+        do {
+            try GCUnregisterEvent(eventSource(hEventSrc), eventType: iEventID)
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func EventGetData(
+        _ hEvent: GenTLABI.EVENT_HANDLE, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?, _ iTimeout: UInt64
+    ) -> GenTLABI.GC_ERROR {
+        guard let piSize, let hEvent else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        let event = EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))
+        let capacity = piSize.pointee
+        guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+        do {
+            let data = try EventGetData(event, timeout: iTimeout)
+            piSize.pointee = data.count
+            guard !data.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
+            guard let pBuffer, capacity >= data.count else {
+                return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
+            }
+            data.withUnsafeBytes { source in
+                if let base = source.baseAddress {
+                    pBuffer.copyMemory(from: base, byteCount: source.count)
+                }
+            }
+            return GenTLABI.GC_ERR_SUCCESS
+        } catch { return rawError(error) }
+    }
+
+    public func EventGetDataInfo(
+        _ hEvent: GenTLABI.EVENT_HANDLE, _ pInBuffer: UnsafeRawPointer?, _ iInSize: Int,
+        _ iInfoCmd: GenTLABI.EVENT_DATA_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
+        _ pOutBuffer: UnsafeMutableRawPointer?, _ piOutSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let hEvent, iInSize >= 0, (iInSize == 0 || pInBuffer != nil) else {
+            return GenTLABI.GC_ERR_INVALID_PARAMETER
+        }
+        let event = EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))
+        let input = pInBuffer.map { Data(bytes: $0, count: iInSize) } ?? Data()
+        do {
+            let value = try EventGetDataInfo(event, inputData: input, command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pOutBuffer, size: piOutSize)
+        } catch { return rawError(error) }
+    }
+
+    public func EventGetInfo(
+        _ hEvent: GenTLABI.EVENT_HANDLE, _ iInfoCmd: GenTLABI.EVENT_INFO_CMD,
+        _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
+        _ piSize: UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR {
+        guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
+        do {
+            let value = try EventGetInfo(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent)), command: iInfoCmd)
+            return writeInfo(value, type: piType, output: pBuffer, size: piSize)
+        } catch { return rawError(error) }
+    }
+
+    public func EventFlush(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
+        guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
+        rawStatus { try EventFlush(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))) }
+    }
+
+    public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
+        guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
+        rawStatus { try EventKill(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))) }
+    }
+}
