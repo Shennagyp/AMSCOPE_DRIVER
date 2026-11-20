@@ -31,6 +31,36 @@ typedef struct {
     uint32_t seq;
     int64_t timestamp;
 } AmcamFrameInfoV2;
+typedef struct {
+    uint32_t width;
+    uint32_t height;
+    uint32_t flag;
+    uint32_t seq;
+    int64_t timestamp;
+    uint32_t shutterseq;
+    uint32_t expotime;
+    uint16_t expogain;
+    uint16_t blacklevel;
+} AmcamFrameInfoV3;
+typedef struct {
+    int64_t utcstart;
+    int64_t utcend;
+    int32_t longitude;
+    int32_t latitude;
+    int32_t altitude;
+    uint16_t satellite;
+    uint16_t reserved;
+} AmcamGps;
+typedef struct {
+    AmcamFrameInfoV3 v3;
+    uint32_t reserved;
+    uint32_t uLum;
+    uint32_t uFV;
+    uint32_t timecount;
+    uint32_t framecount;
+    uint32_t tricount;
+    AmcamGps gps;
+} AmcamFrameInfoV4;
 int amcam_abi_layout_valid(void);
 int amcam_device_copy_display_name(const AmcamDeviceV2 *device, char *destination, size_t capacity);
 int amcam_device_copy_identifier(const AmcamDeviceV2 *device, char *destination, size_t capacity);
