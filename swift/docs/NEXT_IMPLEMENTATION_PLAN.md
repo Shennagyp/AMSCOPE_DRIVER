@@ -29,20 +29,22 @@ Current dependency direction:
 
 ```text
 AmcamImagingApp
+  -> AmcamCameraModel
   -> AmcamImagingCore
   -> AmcamImagingRuntime
   -> AmcamImagingGenTLAdapter
        -> AmcamCameraModel
+       -> AmcamImagingRuntime
        -> GenTLRouter
+            -> GenTLNative
+            -> AmcamGenTL
+                 -> GenTLAPI + GenTLABI
             -> GenTLAPI + GenTLABI
-  -> GenTLRouter
-       -> GenTLNative
-       -> AmcamGenTL
-            -> GenTLAPI + GenTLABI
+       -> GenTLAPI + GenTLABI
 
 amcam-camera-probe
   -> AmcamGenTL
-  -> GenTLAPI
+  -> GenTLAPI + GenTLABI
 ```
 
 Library-owned camera lifecycle boundary:
