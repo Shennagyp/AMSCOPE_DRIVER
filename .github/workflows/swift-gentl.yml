@@ -32,10 +32,10 @@ on:
 permissions:
   contents: read
 
-# Keep validation runs isolated by branch. v7 bypasses superseded v6 runs
-# left queued while the descriptor-driven feature-state changes were landing.
+# v8 moves platform-neutral model/state tests to Linux and avoids waiting
+# behind superseded macOS-only matrix jobs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v7
+  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v8
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +58,12 @@ jobs:
       - name: Build and test portable imaging runtime
         run: swift test --package-path swift/Packages/AmcamImagingRuntime
 
+      - name: Build and test camera model policy
+        run: swift test --package-path swift/Packages/AmcamCameraModel
+
+      - name: Build and test portable imaging state
+        run: swift test --package-path swift/Packages/AmcamImagingState
+
   package-tests:
     name: ${{ matrix.package }} tests
     runs-on: macos-15
@@ -66,16 +72,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - package: AmcamCameraModel
-            path: swift/Packages/AmcamCameraModel
-          - package: AmcamImagingCore
-            path: swift/Packages/AmcamImagingCore
-          - package: AmcamImagingRuntime
-            path: swift/Packages/AmcamImagingRuntime
           - package: AmcamImagingGenTLAdapter
             path: swift/Packages/AmcamImagingGenTLAdapter
-          - package: AmcamImagingState
-            path: swift/Packages/AmcamImagingState
           - package: GenTLAPI
             path: swift/Packages/GenTLAPI
           - package: GenTLNative
