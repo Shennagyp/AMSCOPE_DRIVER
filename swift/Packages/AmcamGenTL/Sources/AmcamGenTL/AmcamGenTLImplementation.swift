@@ -2511,6 +2511,6 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
     }
 
     private static func resolutionSymbol(_ resolution: AmcamResolution) -> String {
-        "(resolution.index):(resolution.width)x(resolution.height)"
+        "\(resolution.index):\(resolution.width)x\(resolution.height)"
     }
 }
