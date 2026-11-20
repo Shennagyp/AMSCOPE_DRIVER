@@ -377,7 +377,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             throw AmcamCameraError.controlReadbackMismatch(
                 control: "exposure time",
                 requested: "\(microseconds) µs",
-                actual: snapshot.exposure.map { "\($0.readbackMicroseconds) µs" } ?? "unavailable"
+                actual: snapshot.exposure?.readbackMicroseconds.map { "\($0) µs" } ?? "unavailable"
             )
         }
         requestedExposureMicroseconds = microseconds
