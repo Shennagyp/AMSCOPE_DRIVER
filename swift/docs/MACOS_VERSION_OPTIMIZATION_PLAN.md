@@ -375,3 +375,24 @@ This is hosted software validation only. No local Xcode run or physical camera a
 - Hosted run [44703255740](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44703255740) passed all five package suites and the app build. App artifact ID: `14613319868`.
 - Cleaned Swift concurrency and best-effort rollback warnings; the successful app build log contained no compiler warnings.
 - No physical camera acceptance was performed. RGB8 remains the only app display decoder. Other PFNC formats, physical MU503 behavior and native CTI GenApi access remain separate acceptance items.
+
+### 2026-11-20 — Acquisition cleanup retry and parent ownership
+
+**Review finding**
+- The app's former `closeSession()` logged an acquisition-close error but then discarded the acquisition reference and attempted to close the parent device anyway.
+- This violated the resource dependency graph: a data stream owns its event and announced buffers, and the data stream is a child of the open device. Parent close must not proceed while child cleanup is incomplete.
+
+**Correction**
+- `closeSession()` now returns success/failure and clears each reference only after that object's close succeeds.
+- If acquisition close fails, the acquisition and device session remain retained; device close is not attempted.
+- If device close fails, the device session remains retained for retry.
+- Device switching, backend reconfiguration and discovery-driven replacement abort when cleanup fails instead of silently abandoning the prior session.
+
+**TDD**
+- Added a fake Producer failure injection for `DSRevokeBuffer`.
+- The new test asserts that a failed revoke does not close the data stream, then retries close after clearing the injected failure and verifies successful buffer revocation and stream close.
+- Hosted validation for this latest increment is pending; earlier model-package extraction and routed app build/test run passed.
+
+**Consequence**
+- Cleanup errors remain visible and retryable. The application does not trade a locally convenient state reset for a provider handle leak or an invalid parent-before-child close.
+
