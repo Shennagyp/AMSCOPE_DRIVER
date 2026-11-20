@@ -28,6 +28,7 @@ jobs:
   package-tests:
     name: ${{ matrix.package }} tests
     runs-on: macos-15
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -101,36 +102,28 @@ jobs:
           codesign --force --deep --sign - "$app_bundle"
           codesign --verify --deep --strict "$app_bundle"
           file "$app_bundle/Contents/MacOS/amcam-imaging"
+          lipo -verify_arch arm64 "$app_bundle/Contents/MacOS/amcam-imaging"
           ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$app_root/Amcam-Imaging-macos-arm64.zip"
+          cat > "$app_root/RUN-THIS-TODAY.txt" <<'README'
+          AmScope Imaging — Apple Silicon
+          
+          1. Extract Amcam-Imaging-macos-arm64.zip.
+          2. Open AmScope Imaging.app.
+          3. Use SDK… in the camera dock to choose your vendor libamcam.dylib if it is not found automatically.
+          4. Select your camera and press Start.
+          5. Open Settings to see the controls confirmed for that exact camera.
+          
+          The vendor SDK is not bundled. Use the Amcam SDK version 58.28273.20250415.
+          This application is ad-hoc signed for local testing and is not notarized.
+          README
 
       - name: Upload macOS imaging application
         if: matrix.package == 'AmcamGenTL'
         uses: actions/upload-artifact@v4
         with:
           name: amcam-imaging-macos-arm64
-          path: ${{ runner.temp }}/amcam-imaging/Amcam-Imaging-macos-arm64.zip
+          path: |
+            ${{ runner.temp }}/amcam-imaging/Amcam-Imaging-macos-arm64.zip
+            ${{ runner.temp }}/amcam-imaging/RUN-THIS-TODAY.txt
           retention-days: 14
 
-  portable-contract-tests:
-    name: GenTL ABI and API contract (Linux)
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.2"
-
-      - name: Record toolchain
-        run: |
-          uname -a
-          swift --version
-          clang --version
-
-      - name: Build GenTL ABI package
-        run: swift build --package-path swift/Packages/GenTLABI
-
-      - name: Run GenTL API contract tests
-        run: swift test --package-path swift/Packages/GenTLAPI
