@@ -188,7 +188,7 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
     func testAvailableGroupsContainOnlyUsableFeatures() {
         let capabilities = AmcamCameraProfileRegistry().resolve(
             modelCode: "ModelA", modelFlags: 0x0000004000000000,
-            maximumSpeedLevel: nil, probes: [.preciseFrameRate: true],
+            maximumSpeedLevel: nil, probes: [.resolution: true, .preciseFrameRate: true],
             implemented: [.liveCapture, .resolution, .preciseFrameRate]
         )
 
