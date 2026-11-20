@@ -780,7 +780,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
                 sequence: (info.flag & AmcamSDK.frameSequenceFlag) != 0 ? info.seq : nil,
                 deviceTimestampMicroseconds: (info.flag & AmcamSDK.frameTimestampFlag) != 0 && info.timestamp >= 0
                     ? UInt64(info.timestamp)
-                    : nil
+                    : nil,
+                metadata: frameMetadata
             )
             lock.unlock()
             handler(.success(frame))
