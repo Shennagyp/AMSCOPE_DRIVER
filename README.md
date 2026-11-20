@@ -9,7 +9,7 @@ The application uses one GenTL API contract with two interchangeable implementat
 1. **GenTLNative** loads manufacturer-supplied GenTL Producer libraries (.cti) and calls their actual exported GenTL C functions.
 2. **AmcamGenTL** implements the same GenTL operations by translating them to the Amcam SDK. It does not create, export or require an AmScope .cti file.
 
-**GenTLRouter** selects and manages the backend and provides discovery candidates. The imaging runtime library, through its GenTL adapter, owns device opening/closing and acquisition lifecycle; the app borrows the opened GenTL session only for typed feature access. Camera domain types and capability policy live in AmcamCameraModel. The app's CameraApplicationModel now exposes validated RGB8 frames as a value type and contains no AppKit window, image, or file-panel APIs; the AppKit frontend owns SDK selection, bitmap conversion, windows and full-screen behavior. This is a UI boundary, not a claim that the current app or camera backends are cross-platform.
+**GenTLRouter** selects and manages the backend and provides discovery candidates. The imaging runtime library, through its GenTL adapter, owns device opening/closing and acquisition lifecycle; the app borrows the opened GenTL session only for typed feature access. Camera domain types and capability policy live in AmcamCameraModel. The app's CameraApplicationModel exposes validated RGB8 frames as a value type and contains no AppKit window or image APIs; the AppKit frontend owns bitmap conversion, windows and full-screen behavior. Vendor SDK discovery, path resolution and loading belong to the backend libraries, never to a UI file picker. This is a UI boundary, not a claim that the current app or camera backends are cross-platform.
 
 ## Run from source
 
@@ -21,7 +21,7 @@ make run
 
 `make run` builds every Swift library package in this repository, then builds the app executable through Swift Package Manager, assembles a local `Amcam Imaging.app` bundle, ad-hoc signs it and launches it. It does not download binaries, use GitHub Releases, require GitHub CLI authentication, or depend on a hosted Actions artifact.
 
-The full Xcode application is not required. The application UI uses AppKit rather than SwiftUI, avoiding the SwiftUI macro plug-in that is missing from some Command Line Tools installations. Apple's Swift compiler, AppKit SDK and macOS SDK are required. If `swift` is unavailable, install Apple's Command Line Tools with `xcode-select --install`, then verify with `swift --version`. The vendor `libamcam.dylib` is still required for camera access and is not bundled.
+The full Xcode application is not required. The application UI uses AppKit rather than SwiftUI, avoiding the SwiftUI macro plug-in that is missing from some Command Line Tools installations. Apple's Swift compiler, AppKit SDK and macOS SDK are required. If `swift` is unavailable, install Apple's Command Line Tools with `xcode-select --install`, then verify with `swift --version`. The AmScope SDK is placed under `vendor/amscope/macos/<architecture>/` and copied into `Contents/Frameworks/Vendors/amscope/` by the build script. The backend resolves it automatically, and the build signs the packaged dylib before signing the app. No SDK file picker is exposed in the UI. Proprietary SDK binaries are not committed unless redistribution is explicitly permitted.
 
 Other targets:
 
