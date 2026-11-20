@@ -68,6 +68,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         XCTAssertEqual(snapshot.exposure?.minimumMicroseconds, 100)
         XCTAssertEqual(snapshot.exposure?.maximumMicroseconds, 500_000)
         XCTAssertEqual(snapshot.gain?.readbackPercent, 400)
+        XCTAssertNil(snapshot.gain?.defaultPercent)
         XCTAssertEqual(snapshot.image?.pixelFormatCode, 8)
         XCTAssertEqual(snapshot.image?.supportedPixelFormats, [0, 8])
         XCTAssertEqual(snapshot.frameRate.readbackFramesPerSecond, 60)
