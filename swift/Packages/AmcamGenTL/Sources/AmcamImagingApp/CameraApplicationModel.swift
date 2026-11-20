@@ -64,6 +64,9 @@ final class CameraApplicationModel: ObservableObject {
                 selectedDeviceID = found.first?.identifier ?? ""
                 closeSession()
             }
+            if session == nil, selectedDevice != nil {
+                prepareSelectedCamera()
+            }
             status = found.isEmpty ? "No AmScope cameras detected" : "\(found.count) camera(s) detected"
             errorMessage = nil
         } catch {
@@ -80,6 +83,7 @@ final class CameraApplicationModel: ObservableObject {
         cameraCapabilities = nil
         controls = nil
         status = selectedDevice.map { "Ready: \($0.displayName)" } ?? "No camera selected"
+        prepareSelectedCamera()
     }
 
     func start() {
@@ -89,7 +93,7 @@ final class CameraApplicationModel: ObservableObject {
         }
         do {
             if session == nil {
-                session = try driver.open(deviceIdentifier: device.identifier)
+                prepareSelectedCamera()
             }
             guard let session else { return }
             cameraCapabilities = try session.cameraCapabilities(using: profileRegistry)
@@ -191,6 +195,26 @@ final class CameraApplicationModel: ObservableObject {
         guard let window = NSApp.keyWindow ?? NSApp.windows.first else { return }
         window.toggleFullScreen(nil)
         isFullScreen.toggle()
+    }
+
+    private func prepareSelectedCamera() {
+        guard let driver, let device = selectedDevice else { return }
+        do {
+            if session == nil {
+                session = try driver.open(deviceIdentifier: device.identifier)
+            }
+            guard let session else { return }
+            cameraCapabilities = try session.cameraCapabilities(using: profileRegistry)
+            controls = try? session.readControls()
+            status = "Ready — \(device.displayName)"
+            errorMessage = nil
+        } catch {
+            session = nil
+            cameraCapabilities = nil
+            controls = nil
+            status = "Unable to open camera"
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func configureSDK(at url: URL) {
