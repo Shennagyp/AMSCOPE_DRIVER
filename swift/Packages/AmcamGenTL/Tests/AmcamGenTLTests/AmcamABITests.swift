@@ -5,11 +5,11 @@ final class AmcamABITests: XCTestCase {
     func testCopiesNullTerminatedDeviceFieldsWithinTheirFixedBounds() {
         var device = AmcamDeviceV2()
         withUnsafeMutableBytes(of: &device.displayname) {
-            $0.initializeMemory(as: UInt8.self, repeating: 0, count: $0.count)
+            $0.initializeMemory(as: UInt8.self, repeating: 0, )
             $0.copyBytes(from: Array("Mock AmScope Camera".utf8))
         }
         withUnsafeMutableBytes(of: &device.id) {
-            $0.initializeMemory(as: UInt8.self, repeating: 0, count: $0.count)
+            $0.initializeMemory(as: UInt8.self, repeating: 0, )
             $0.copyBytes(from: Array("MOCK-001".utf8))
         }
 
@@ -32,7 +32,7 @@ final class AmcamABITests: XCTestCase {
     func testRejectsUnterminatedFixedDeviceFields() {
         var device = AmcamDeviceV2()
         withUnsafeMutableBytes(of: &device.displayname) {
-            $0.initializeMemory(as: UInt8.self, repeating: 0x41, count: $0.count)
+            $0.initializeMemory(as: UInt8.self, repeating: 0x41, )
         }
 
         var destination = [CChar](repeating: 0x5a, count: 65)
@@ -47,7 +47,7 @@ final class AmcamABITests: XCTestCase {
     func testRejectsDestinationThatCannotHoldTheCompleteString() {
         var device = AmcamDeviceV2()
         withUnsafeMutableBytes(of: &device.id) {
-            $0.initializeMemory(as: UInt8.self, repeating: 0, count: $0.count)
+            $0.initializeMemory(as: UInt8.self, repeating: 0, )
             $0.copyBytes(from: Array("CAMERA-IDENTIFIER".utf8))
         }
 
