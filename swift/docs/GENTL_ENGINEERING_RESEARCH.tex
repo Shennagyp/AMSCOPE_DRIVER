@@ -589,4 +589,36 @@ The protocol and default implementations now model output handle parameters as p
 
 The initial Linux API test pass remains valid evidence for commit \\texttt{430ccf9da3b098cedb79fd932874c031943317cd}. The latest source commit is \\texttt{6364f89117ea3fc76fe4cb62663913eab100f6a1}; workflow run \\texttt{44676898035} completed its Ubuntu 24.04 ABI/API job successfully, including the GenTL ABI package build and all 9 GenTLAPI tests. The four macOS package jobs remain queued, so the updated Amcam/native backends and macOS integration suite are not yet verified.
 
+
+
+\section{Amcam macOS camera path: priority and current evidence --- 2026-11-20}
+
+The immediate product objective is reliable operation of the AmScope MU503 camera on macOS. Cross-platform native-loader work is explicitly deferred. This does not change the shared \texttt{GenTLAPI} protocol; it changes the order of engineering work. The \texttt{AmcamGenTL} implementation is the current camera path because it maps the common Swift API to the Amcam SDK directly. It is not a GenTL Producer and does not load a vendor CTI.
+
+A deterministic native mock SDK was added as a C dynamic library fixture. The fixture is loaded through the same \texttt{dlopen}/\texttt{dlsym} code as the vendor SDK; it is not a Swift fake and does not bypass the ABI boundary. The fixture reports the Amcam SDK version expected by the implementation and models the MU503 preview modes 2560x1922, 1280x960, and 640x480. It deliberately invokes the image callback synchronously from \texttt{Amcam\_StartPullModeWithCallback}, exercising callback reentrancy before the start call returns.
+
+The Amcam package test job completed successfully on macOS 15.8.2 arm64 with Swift 6.1.2 in workflow run \texttt{44680215484}, source commit \texttt{4969dbcbfbeb7e0b713df2b6cf852a22c73d6bb0}. The Amcam job's package-test step succeeded. Its six scheduled test cases comprise three RGB24 layout tests and three SDK integration tests:
+\begin{itemize}
+\item device enumeration, model/resolution metadata, camera open, three repeated start/frame/stop cycles, synchronous callback delivery, disconnect notification, and callback cleanup;
+\item exposure auto/manual transitions, exposure range validation and readback, resolution selection/readback, a captured frame at 1280x960, and rejection of resolution changes while streaming;
+\item data-stream input queue, finite acquisition, new-buffer event delivery, RGB24 buffer contents and metadata, and completion of the GenTL stop/close lifecycle.
+\end{itemize}
+
+The workflow as a whole was not green: the separate \texttt{GenTLNative} and \texttt{GenTLRouter} jobs failed. Those failures are not evidence against the Amcam package job, which completed successfully. Conversely, the Amcam mock tests are not evidence that a physical MU503 has been opened or streamed on the user's Mac.
+
+After that successful run, the ABI declaration for \texttt{AmcamFrameInfoV2.timestamp} was corrected to signed 64-bit, matching the SDK's frame-info structure semantics. Negative timestamp values are treated as unavailable rather than reinterpreted as very large unsigned timestamps. An additional undersized-buffer test now verifies that a too-small consumer buffer is reported incomplete and is not overwritten. These latest changes are pending a subsequent macOS CI result at the time of this document revision.
+
+The physical acceptance gate remains separate:
+\begin{enumerate}
+\item load the actual arm64-compatible vendor \texttt{libamcam.dylib} and verify its reported version and required symbols;
+\item enumerate the connected MU503 (the prior hardware profile records VID:PID \texttt{0547:4511});
+\item open the camera and read back its actual current resolution and exposure controls;
+\item capture and inspect frames at the available preview modes, including sequence/timestamp metadata and row stride;
+\item run sustained acquisition and repeated start/stop/disconnect cycles while measuring delivered frames, camera-side loss, host-side drops, and payload goodput.
+\end{enumerate}
+
+The previous hardware profile records the user's Mac connection as USB 2.0 High Speed at 480 Mbit/s through the observed hub path. The historical Windows observation of 101 fps at 640x480 is a performance reference, not a promise for the present Mac connection. The SDK path must first measure the actual camera and transport behavior; nominal USB signaling speed and published frame rates are not substitutes for measured image-payload goodput. Do not change exposure or gain automatically to compensate for lower transport capacity.
+
+The next development work is therefore Amcam SDK correctness, camera controls, buffer ownership, event delivery, disconnect cleanup, and a reproducible macOS hardware smoke-test path. Linux/Windows native-loader expansion and platform-neutral mock compilation are deferred until the AmScope camera path is reliable on macOS.
+
 \end{document}
