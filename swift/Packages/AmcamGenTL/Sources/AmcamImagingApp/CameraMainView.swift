@@ -469,7 +469,35 @@ private struct FeatureGroupView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        ForEach([AmcamCameraFeature.colorCorrection, .imageLevelRange, .blackLevel,
+        if let image = controls?.image, let colorMatrix = image.colorMatrixEnabled {
+            Toggle(
+                "Color matrix",
+                isOn: Binding(
+                    get: { colorMatrix },
+                    set: { model.setColorMatrixEnabled($0) }
+                )
+            )
+        }
+        if let image = controls?.image,
+           let pixelFormat = image.pixelFormatCode,
+           !image.supportedPixelFormats.isEmpty {
+            HStack {
+                Text("Pixel format")
+                Spacer()
+                Picker("Pixel format", selection: Binding(
+                    get: { pixelFormat },
+                    set: { model.setPixelFormat($0) }
+                )) {
+                    ForEach(image.supportedPixelFormats, id: \.self) { code in
+                        Text(AmcamPixelFormatCode(rawValue: code)?.title ?? "Format \(code)")
+                            .tag(code)
+                    }
+                }
+                .labelsHidden()
+                .disabled(model.isStreaming)
+            }
+        }
+        ForEach([AmcamCameraFeature.imageLevelRange, .blackLevel,
                  .conversionGain, .lowNoiseMode].filter {
             capability?.availability(of: $0).available == true
         }) { feature in
