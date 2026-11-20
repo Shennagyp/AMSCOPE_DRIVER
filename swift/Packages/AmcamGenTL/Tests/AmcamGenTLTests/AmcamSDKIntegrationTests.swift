@@ -221,6 +221,42 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(operationName, "Amcam_PullImageV4")
     }
 
+    func testCameraFallsBackAcrossUnsupportedPullAPIsToPlainV2() throws {
+        let libraryURL = try buildMockSDK()
+        let sdk = try AmcamSDK(libraryURL: libraryURL)
+        let device = try XCTUnwrap(sdk.enumerate().first)
+        let opened = try sdk.open(identifier: device.identifier)
+        defer { sdk.close(opened.handle) }
+
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let setterSymbol = dlsym(mockLibrary, "MockAmcam_SetUnsupportedPullAPIMask"),
+              let versionSymbol = dlsym(mockLibrary, "MockAmcam_PullAPIVersion") else {
+            XCTFail("Mock SDK is missing pull API capability controls")
+            return
+        }
+        let setMask = unsafeBitCast(setterSymbol, to: (@convention(c) (UInt32) -> Void).self)
+        let reportedVersion = unsafeBitCast(versionSymbol, to: (@convention(c) () -> UInt32).self)
+        // Bit positions identify API generations: V2=1, row-pitch V2=2, V3=3, V4=4.
+        setMask((1 << 4) | (1 << 3) | (1 << 2))
+
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: 640 * 480 * 3, alignment: 64)
+        defer { buffer.deallocate() }
+        var info = AmcamFrameInfoV2()
+        var metadata: AmcamFrameMetadata?
+        var operationName: String?
+        var tightlyPackedRows = true
+        XCTAssertEqual(
+            sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata, operationName: &operationName, tightlyPackedRows: &tightlyPackedRows),
+            0
+        )
+        XCTAssertEqual(operationName, "Amcam_PullImageV2")
+        XCTAssertEqual(reportedVersion(), 1)
+        XCTAssertFalse(tightlyPackedRows)
+        XCTAssertEqual(metadata?.apiVersion, .v2)
+    }
+
     func testAcquisitionFallsBackToV3WhenV4IsNotExported() throws {
         let libraryURL = try buildMockSDK(disableV4: true)
         let sdk = try AmcamSDK(libraryURL: libraryURL)
