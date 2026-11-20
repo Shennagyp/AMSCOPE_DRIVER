@@ -247,6 +247,8 @@ public enum GenTLInfoCommand {
         case numQueued = 4, numAwaitDelivery = 5, numStarted = 6
         case payloadSize = 7, isGrabbing = 8, definesPayloadSize = 9
         case transportType = 10
+        case numChunksMax = 11, bufferAnnounceMin = 12, bufferAlignment = 13 // GenTL 1.3
+        case flowTable = 14, genDCPrefetchDescriptor = 15 // GenTL 1.6
     }
     public enum Buffer: Int32, Sendable {
         case base = 0, size = 1, userPointer = 2, timestamp = 3
@@ -258,6 +260,25 @@ public enum GenTLInfoCommand {
         case deliveredChunkPayloadSize = 23, chunkLayoutID = 24, fileName = 25
         case pixelEndianness = 26, dataSize = 27, timestampNanoseconds = 28
         case dataLargerThanBuffer = 29, containsChunkData = 30, isComposite = 31
+    }
+    public enum URL: Int32, Sendable {
+        case url = 0, schemaVersionMajor = 1, schemaVersionMinor = 2
+        case fileVersionMajor = 3, fileVersionMinor = 4, fileVersionSubminor = 5
+        case fileSHA1Hash = 6, fileRegisterAddress = 7, fileSize = 8
+        case scheme = 9, fileName = 10 // GenTL 1.1 through 1.5
+    }
+    public enum BufferPart: Int32, Sendable {
+        case base = 0, dataSize = 1, dataType = 2, dataFormat = 3
+        case dataFormatNamespace = 4, width = 5, height = 6
+        case xOffset = 7, yOffset = 8, xPadding = 9
+        case sourceID = 10, deliveredImageHeight = 11
+        case regionID = 12, dataPurposeID = 13 // GenTL 1.5/1.6
+    }
+    public enum Flow: Int32, Sendable {
+        case size = 0 // GenTL 1.6
+    }
+    public enum Segment: Int32, Sendable {
+        case base = 0, size = 1, isIncomplete = 2, sizeFilled = 3, dataSize = 4 // GenTL 1.6
     }
     public enum Event: Int32, Sendable {
         case eventType = 0, numInQueue = 1, numFired = 2
