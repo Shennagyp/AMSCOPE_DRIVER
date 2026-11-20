@@ -1,6 +1,7 @@
 import AppKit
 
 @main
+@MainActor
 final class AmcamImagingAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var model: CameraApplicationModel?
