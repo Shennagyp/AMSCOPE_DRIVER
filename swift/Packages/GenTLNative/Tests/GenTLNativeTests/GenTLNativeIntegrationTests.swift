@@ -88,9 +88,13 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let producerURL = try buildMockProducer(omittingGetInfo: true)
 
         XCTAssertThrowsError(try GenTLNativeImplementation(ctiURL: producerURL)) { error in
-            guard case GenTLProducerLibraryError.missingRequiredSymbol("GCGetInfo") = error else {
-                return XCTFail("Unexpected loader error: \(error)")
+            guard let loaderError = error as? GenTLProducerLibraryError else {
+                return XCTFail("Unexpected error type: \(error)")
             }
+            guard case .missingRequiredSymbol(let symbol) = loaderError else {
+                return XCTFail("Unexpected loader error: \(loaderError)")
+            }
+            XCTAssertEqual(symbol, "GCGetInfo")
         }
     }
 
