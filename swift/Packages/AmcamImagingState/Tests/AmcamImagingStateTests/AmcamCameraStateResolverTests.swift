@@ -80,4 +80,46 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         }
         XCTAssertEqual(result, AmcamResolution(index: 3, width: 1920, height: 1080))
     }
+    func testCapabilityPolicyCannotFabricateUnavailableHardwareFeatures() {
+        let profile = AmcamCameraModelProfile(
+            modelCode: "MU503",
+            allowedFeatures: [.exposureManual]
+        )
+        let resolver = AmcamCameraStateResolver(
+            profileRegistry: AmcamCameraProfileRegistry(profiles: [profile])
+        )
+        let device = AmcamDevice(
+            identifier: "camera", displayName: "Camera", modelName: "MU503",
+            modelFlags: nil, maximumSpeedLevel: nil,
+            sensorPixelSizeMicrometers: nil, previewResolutions: []
+        )
+        let descriptors = [
+            CameraFeatureDescriptor(
+                name: "ExposureTime", displayName: "Exposure", kind: .integer,
+                isAvailable: false, isReadable: false, isWritable: false
+            ),
+            CameraFeatureDescriptor(
+                name: "ExposureAuto", displayName: "Auto exposure", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: true,
+                enumerationValues: ["Off", "Once", "Continuous"]
+            )
+        ]
+
+        let capabilities = resolver.capabilities(
+            for: device,
+            descriptors: descriptors,
+            hasDataStream: false
+        )
+
+        let manualExposure = capabilities.availability(of: .exposureManual)
+        let autoExposure = capabilities.availability(of: .exposureAuto)
+        let liveCapture = capabilities.availability(of: .liveCapture)
+
+        XCTAssertFalse(manualExposure.isUsable, "A profile allow-list cannot override unavailable hardware.")
+        XCTAssertFalse(autoExposure.isUsable, "Features outside the explicit allow-list remain unavailable.")
+        XCTAssertFalse(liveCapture.isUsable, "A profile cannot fabricate a missing data stream.")
+        XCTAssertTrue(manualExposure.reason?.contains("runtime") == true)
+        XCTAssertTrue(autoExposure.reason?.contains("allow-list") == true)
+    }
+
 }
