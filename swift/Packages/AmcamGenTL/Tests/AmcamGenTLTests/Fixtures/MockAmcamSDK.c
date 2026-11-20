@@ -143,6 +143,12 @@ int32_t Amcam_get_TempTint(void *handle, int32_t *temperature, int32_t *tint) {
     *tint = white_balance_tint;
     return 0;
 }
+int32_t Amcam_put_TempTint(void *handle, int32_t temperature, int32_t tint) {
+    if (!handle || temperature < 2000 || temperature > 15000 || tint < 200 || tint > 2500) return -1;
+    white_balance_temperature = temperature;
+    white_balance_tint = tint;
+    return 0;
+}
 int32_t Amcam_get_WhiteBalanceGain(void *handle, int32_t *values) {
     if (!handle || !values) return -1;
     values[0] = white_balance_rgb[0];
