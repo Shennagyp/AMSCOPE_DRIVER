@@ -158,6 +158,9 @@ private struct CameraSettingsView: View {
     @State private var gainDraft = 100.0
     @State private var temperatureDraft = 6_503.0
     @State private var tintDraft = 1_000.0
+    @State private var redGainDraft = "100"
+    @State private var greenGainDraft = "100"
+    @State private var blueGainDraft = "100"
     @State private var frameRateDraft = 15.0
 
     private var capabilities: AmcamCameraCapabilities? { model.cameraCapabilities }
@@ -192,6 +195,9 @@ private struct CameraSettingsView: View {
                                              gainDraft: $gainDraft,
                                              temperatureDraft: $temperatureDraft,
                                              tintDraft: $tintDraft,
+                                             redGainDraft: $redGainDraft,
+                                             greenGainDraft: $greenGainDraft,
+                                             blueGainDraft: $blueGainDraft,
                                              frameRateDraft: $frameRateDraft)
                         }
                     }
@@ -222,6 +228,9 @@ private struct CameraSettingsView: View {
             gainDraft = Double(controls?.gain?.readbackPercent ?? 100)
             temperatureDraft = Double(controls?.whiteBalance?.temperature ?? 6_503)
             tintDraft = Double(controls?.whiteBalance?.tint ?? 1_000)
+            redGainDraft = String(controls?.whiteBalance?.rgbGain?[safe: 0] ?? 100)
+            greenGainDraft = String(controls?.whiteBalance?.rgbGain?[safe: 1] ?? 100)
+            blueGainDraft = String(controls?.whiteBalance?.rgbGain?[safe: 2] ?? 100)
             frameRateDraft = controls?.frameRate.readbackFramesPerSecond ?? 15
         }
         .onChange(of: controls?.exposure?.readbackMicroseconds) { value in
@@ -236,6 +245,13 @@ private struct CameraSettingsView: View {
         .onChange(of: controls?.whiteBalance?.tint) { value in
             if let value { tintDraft = Double(value) }
         }
+        .onChange(of: controls?.whiteBalance?.rgbGain) { values in
+            if let values, values.count == 3 {
+                redGainDraft = String(values[0])
+                greenGainDraft = String(values[1])
+                blueGainDraft = String(values[2])
+            }
+        }
         .onChange(of: controls?.frameRate.readbackFramesPerSecond) { value in
             if let value { frameRateDraft = value }
         }
@@ -249,6 +265,9 @@ private struct FeatureGroupView: View {
     @Binding var gainDraft: Double
     @Binding var temperatureDraft: Double
     @Binding var tintDraft: Double
+    @Binding var redGainDraft: String
+    @Binding var greenGainDraft: String
+    @Binding var blueGainDraft: String
     @Binding var frameRateDraft: Double
 
     private var capability: AmcamCameraCapabilities? { model.cameraCapabilities }
@@ -395,38 +414,56 @@ private struct FeatureGroupView: View {
     private var imageControls: some View {
         if capability?.availability(of: .whiteBalance).isUsable == true,
            let whiteBalance = controls?.whiteBalance {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Color temperature")
-                    Spacer()
-                    Text("\(Int(temperatureDraft.rounded())) K")
-                        .monospacedDigit()
-                }
-                Slider(value: $temperatureDraft, in: 2_000...15_000) { editing in
-                    if !editing {
-                        model.setWhiteBalanceTemperatureTint(
-                            temperature: Int32(temperatureDraft.rounded()),
-                            tint: Int32(tintDraft.rounded())
-                        )
+            if let temperature = whiteBalance.temperature, let tint = whiteBalance.tint {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Color temperature")
+                        Spacer()
+                        Text("\(Int(temperatureDraft.rounded())) K")
+                            .monospacedDigit()
                     }
-                }
-                HStack {
-                    Text("Tint")
-                    Spacer()
-                    Text("\(Int(tintDraft.rounded()))")
-                        .monospacedDigit()
-                }
-                Slider(value: $tintDraft, in: 200...2_500) { editing in
-                    if !editing {
-                        model.setWhiteBalanceTemperatureTint(
-                            temperature: Int32(temperatureDraft.rounded()),
-                            tint: Int32(tintDraft.rounded())
-                        )
+                    Slider(value: $temperatureDraft, in: 2_000...15_000) { editing in
+                        if !editing {
+                            model.setWhiteBalanceTemperatureTint(
+                                temperature: Int32(temperatureDraft.rounded()),
+                                tint: Int32(tintDraft.rounded())
+                            )
+                        }
                     }
+                    HStack {
+                        Text("Tint")
+                        Spacer()
+                        Text("\(Int(tintDraft.rounded()))")
+                            .monospacedDigit()
+                    }
+                    Slider(value: $tintDraft, in: 200...2_500) { editing in
+                        if !editing {
+                            model.setWhiteBalanceTemperatureTint(
+                                temperature: Int32(temperatureDraft.rounded()),
+                                tint: Int32(tintDraft.rounded())
+                            )
+                        }
+                    }
+                    Text("Current readback: \(temperature) K / \(tint)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                 }
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                Text("Current readback: \(whiteBalance.temperature) K / \(whiteBalance.tint)")
+            }
+            if let rgb = whiteBalance.rgbGain, rgb.count == 3 {
+                HStack(spacing: 8) {
+                    TextField("R", text: $redGainDraft).frame(width: 64)
+                    TextField("G", text: $greenGainDraft).frame(width: 64)
+                    TextField("B", text: $blueGainDraft).frame(width: 64)
+                    Button("Apply RGB") {
+                        if let red = Int32(redGainDraft),
+                           let green = Int32(greenGainDraft),
+                           let blue = Int32(blueGainDraft) {
+                            model.setWhiteBalanceRGBGain([red, green, blue])
+                        }
+                    }
+                    .disabled(Int32(redGainDraft) == nil || Int32(greenGainDraft) == nil || Int32(blueGainDraft) == nil)
+                }
+                Text("RGB readback: \(rgb[0]), \(rgb[1]), \(rgb[2])")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
