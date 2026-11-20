@@ -1003,8 +1003,10 @@ final class AmcamSDKIntegrationTests: XCTestCase {
                 AmcamRGB24Layout(width: 641, height: 480)
             ).payloadSize
             XCTAssertEqual(announcedCapacity, packedBytes + 480)
-            let expectedFilledBytes = forcePlainV2 ? announcedCapacity : packedBytes
-            let expectedPaddingBytes = forcePlainV2 ? 1 : 0
+            // Both the vendor sample's V4 call (rowPitch: 0) and plain V2
+            // use the SDK's default DWORD-aligned DIB row layout.
+            let expectedFilledBytes = announcedCapacity
+            let expectedPaddingBytes = 1
             let memory = UnsafeMutableRawPointer.allocate(byteCount: announcedCapacity, alignment: 64)
             memory.initializeMemory(as: UInt8.self, repeating: 0, count: announcedCapacity)
             var cleanupCompleted = false
