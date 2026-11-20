@@ -168,7 +168,10 @@ public struct AmcamCameraStateResolver: Sendable {
             descriptors.map { ($0.name, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
-        let descriptorsByName = latestDescriptorByName.filter { $0.value.isAvailable }
+        let descriptorsByName = Dictionary(
+            latestDescriptorByName.filter { $0.value.isAvailable },
+            uniquingKeysWith: { _, latest in latest }
+        )
         let readableFeatureNames = Set(
             latestDescriptorByName.values
                 .filter { $0.isAvailable && $0.isReadable }
