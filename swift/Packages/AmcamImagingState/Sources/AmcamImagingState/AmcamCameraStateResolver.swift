@@ -23,7 +23,7 @@ public struct AmcamCameraStateResolver: Sendable {
             descriptors.map { ($0.name, $0.isAvailable) },
             uniquingKeysWith: { _, latest in latest }
         )
-        let maximumSpeedLevel = descriptors.first(where: { $0.name == "AmcamFrameSpeedLevel" })?
+        let maximumSpeedLevel = descriptors.last(where: { $0.name == "AmcamFrameSpeedLevel" })?
             .numericRange.flatMap { Int(exactly: $0.maximum) }
         return profileRegistry.resolveRuntime(
             device: device,
@@ -123,7 +123,7 @@ public struct AmcamCameraStateResolver: Sendable {
     }
 
     public func resolutions(from descriptors: [CameraFeatureDescriptor]) -> [AmcamResolution] {
-        let resolutionDescriptor = descriptors.first(where: { $0.name == "AmcamResolutionIndex" })
+        let resolutionDescriptor = descriptors.last(where: { $0.name == "AmcamResolutionIndex" })
         guard resolutionDescriptor?.isAvailable == true else { return [] }
         let options = resolutionDescriptor?.enumerationValues ?? []
         return options.compactMap { symbol -> AmcamResolution? in
@@ -144,7 +144,7 @@ public struct AmcamCameraStateResolver: Sendable {
         readFeature: FeatureReader
     ) async -> AmcamResolution? {
         guard let device,
-              let descriptor = descriptors.first(where: { $0.name == "AmcamResolutionIndex" }),
+              let descriptor = descriptors.last(where: { $0.name == "AmcamResolutionIndex" }),
               descriptor.isAvailable,
               descriptor.isReadable,
               case .enumeration(let symbol)? = try? await readFeature("AmcamResolutionIndex"),
@@ -159,13 +159,17 @@ public struct AmcamCameraStateResolver: Sendable {
         descriptors: [CameraFeatureDescriptor],
         readFeature: FeatureReader
     ) async -> AmcamControlSnapshot {
-        // Unavailable features must not contribute controls, ranges or advertised options.
-        let descriptorsByName = Dictionary(
-            descriptors.filter(\.isAvailable).map { ($0.name, $0) },
+        // The latest descriptor for a name is authoritative. An older duplicate
+        // must not re-enable a feature that the current descriptor disables.
+        let latestDescriptorByName = Dictionary(
+            descriptors.map { ($0.name, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
+        let descriptorsByName = latestDescriptorByName.filter { $0.value.isAvailable }
         let readableFeatureNames = Set(
-            descriptors.filter { $0.isAvailable && $0.isReadable }.map { $0.name }
+            latestDescriptorByName.values
+                .filter { $0.isAvailable && $0.isReadable }
+                .map { $0.name }
         )
         let safeReadFeature: FeatureReader = { name in
             guard readableFeatureNames.contains(name) else {
