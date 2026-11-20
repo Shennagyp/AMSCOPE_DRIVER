@@ -84,8 +84,6 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let api: any GenTLAPI
     public let systemHandle: GenTLABI.TL_HANDLE
     public let interfaceHandle: GenTLABI.IF_HANDLE
-    private let backendAPI: any GenTLBackendConvenience
-    private let backendSystemHandle: TL_HANDLE
     private let backendInterfaceHandle: IF_HANDLE
 
     private let context: GenTLProviderContext
@@ -113,8 +111,6 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
         self.api = context.api
         self.systemHandle = UnsafeMutableRawPointer(bitPattern: context.systemHandle.rawValue)
         self.interfaceHandle = UnsafeMutableRawPointer(bitPattern: interfaceHandle.rawValue)
-        self.backendAPI = context.backendAPI
-        self.backendSystemHandle = context.systemHandle
         self.backendInterfaceHandle = interfaceHandle
         self.context = context
     }
@@ -408,7 +404,7 @@ public final class GenTLRouter: @unchecked Sendable {
     private func registerUniqueResource(
         backendID: String,
         resourceIdentity: String,
-        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience
+        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience & GenTLAPI
     ) throws {
         let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty, normalized == backendID else {
