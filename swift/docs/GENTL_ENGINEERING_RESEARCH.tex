@@ -557,6 +557,6 @@ The native integration suite now asserts the compiled header version code is \te
 \section{CI execution evidence and current infrastructure blocker}
 The macOS workflow was triggered on push (run 54, commit \texttt{8512306e3c8d0cbc731fe32869bae82fb0f3278a}). All four matrix jobs were marked failed within seconds. The GitHub job records report \texttt{runner\_id: 0}, empty step arrays, and no downloadable runner logs; rerunning the failed jobs produced the same result. The available evidence therefore indicates that no runner acquired the jobs and no Swift build or test command executed. This is not evidence that the source failed to compile or that a test assertion failed.
 
-The GitHub Actions/macOS runner availability or repository billing/permissions must be repaired, or the exact package commands must be run locally on macOS with Xcode command-line tools. Until a job contains executed steps and logs, the CI conclusion must not be interpreted as a code test result.
+GitHub Actions hosted-runner provisioning or repository billing/permissions must be repaired. A subsequent run included both macOS and Ubuntu jobs, and all jobs again reported runner ID zero with no steps, so the blocker is not specific to the macOS image. Alternatively, the exact package commands must be run locally on macOS with Xcode command-line tools. Until a job contains executed steps and logs, the CI conclusion must not be interpreted as a code test result.
 
 \end{document}
