@@ -32,13 +32,12 @@ AmcamImagingApp
   -> AmcamImagingCore
   -> AmcamImagingRuntime
   -> AmcamImagingGenTLAdapter
-  -> GenTLRouter
-  -> AmcamCameraModel
-  -> GenTLAPI + GenTLABI
+       -> AmcamCameraModel
+       -> GenTLRouter
+            -> GenTLAPI + GenTLABI
   -> GenTLRouter
        -> GenTLNative
        -> AmcamGenTL
-            -> AmcamCameraModel
             -> GenTLAPI + GenTLABI
 
 amcam-camera-probe
@@ -52,16 +51,16 @@ Library-owned camera lifecycle boundary:
 AmcamImagingApp
   -> AmcamImagingRuntime
   -> AmcamImagingGenTLAdapter
-  -> GenTLRouter
+       -> GenTLRouter
 ```
 
 Rules:
 
 1. The app must not import or instantiate `AmcamCameraDriver` or `AmcamCameraSession`.
-2. Backend registration, provider contexts, discovery and candidate creation remain in GenTLRouter; active camera session and acquisition ownership belong to AmcamImagingRuntime.
+2. GenTLRouter owns provider contexts and generic discovery. AmcamImagingGenTLAdapter owns AmScope SDK registration, camera metadata mapping and opaque runtime-device candidate creation; active camera session and acquisition ownership belong to AmcamImagingRuntime.
 3. Camera-independent contracts remain in GenTLAPI/GenTLABI.
 4. Vendor SDK behavior remains in AmcamGenTL.
-5. Camera UI and model-facing policy remain in AmcamCameraModel and AmcamImagingApp.
+5. Camera feature taxonomy, model profiles and capability resolution belong in AmcamCameraModel. AmcamImagingApp is a presentation/command adapter and must not import GenTLABI, GenTLAPI or GenTLRouter.
 6. Pixel-format validation and backend-neutral image-frame values belong in AmcamImagingCore.
 7. Camera device opening, session ownership, acquisition start/stop, frame delivery and ordered cleanup belong in AmcamImagingRuntime. GenTLRouter is bridged through AmcamImagingGenTLAdapter; the UI only sends commands and consumes events/frames.
 8. Do not create fake executables for library-only packages. Add a CLI only when it provides a real diagnostic or operational use case.
