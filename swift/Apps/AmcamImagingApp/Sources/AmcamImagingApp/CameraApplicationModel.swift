@@ -51,6 +51,19 @@ final class CameraApplicationModel: ObservableObject {
         featureDescriptors.last(where: { $0.name == name })?.numericRange
     }
 
+    func normalizedNumericValue(_ value: Double, for name: String) -> Double? {
+        guard let range = numericRange(for: name),
+              value.isFinite,
+              range.maximum > range.minimum else {
+            return nil
+        }
+        let clamped = Swift.min(Swift.max(value, range.minimum), range.maximum)
+        guard let increment = range.increment else { return clamped }
+        let steps = ((clamped - range.minimum) / increment).rounded()
+        let snapped = range.minimum + steps * increment
+        return Swift.min(Swift.max(snapped, range.minimum), range.maximum)
+    }
+
     func initialize() {
         guard !hasInitialized else { return }
         hasInitialized = true
