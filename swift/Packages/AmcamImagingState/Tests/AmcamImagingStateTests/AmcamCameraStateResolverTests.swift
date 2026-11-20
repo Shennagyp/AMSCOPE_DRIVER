@@ -1,0 +1,83 @@
+import XCTest
+import AmcamCameraModel
+import AmcamImagingRuntime
+@testable import AmcamImagingState
+
+final class AmcamCameraStateResolverTests: XCTestCase {
+    func testControlSnapshotMapsTypedReadbacksAndRanges() async {
+        let resolver = AmcamCameraStateResolver()
+        let descriptors = [
+            CameraFeatureDescriptor(
+                name: "ExposureTime", displayName: "Exposure", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: true,
+                numericRange: CameraFeatureNumericRange(minimum: 100, maximum: 500_000)
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamAnalogGainPercent", displayName: "Gain", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: true,
+                numericRange: CameraFeatureNumericRange(minimum: 100, maximum: 1600)
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamPixelFormat", displayName: "Pixel format", kind: .enumeration,
+                isAvailable: true, isReadable: true, isWritable: true,
+                enumerationValues: ["0", "8"]
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamFixedFrameRate", displayName: "Fixed frame rate", kind: .floatingPoint,
+                isAvailable: true, isReadable: true, isWritable: true,
+                numericRange: CameraFeatureNumericRange(minimum: 1, maximum: 120)
+            )
+        ]
+        let values: [String: CameraFeatureValue] = [
+            "ExposureAuto": .enumeration("Off"),
+            "ExposureTime": .integer(12_500),
+            "AmcamAnalogGainPercent": .integer(400),
+            "AmcamPixelFormat": .enumeration("8"),
+            "AmcamFixedFrameRate": .floatingPoint(60),
+            "AmcamFrameSpeedLevel": .integer(2)
+        ]
+        let snapshot = await resolver.controlSnapshot(descriptors: descriptors) { name in
+            guard let value = values[name] else { throw CameraFeatureAccessError.featureNotFound(name) }
+            return value
+        }
+
+        XCTAssertEqual(snapshot.exposure?.autoMode, .manual)
+        XCTAssertEqual(snapshot.exposure?.readbackMicroseconds, 12_500)
+        XCTAssertEqual(snapshot.exposure?.minimumMicroseconds, 100)
+        XCTAssertEqual(snapshot.exposure?.maximumMicroseconds, 500_000)
+        XCTAssertEqual(snapshot.gain?.readbackPercent, 400)
+        XCTAssertEqual(snapshot.image?.pixelFormatCode, 8)
+        XCTAssertEqual(snapshot.image?.supportedPixelFormats, [0, 8])
+        XCTAssertEqual(snapshot.frameRate.readbackFramesPerSecond, 60)
+        XCTAssertEqual(snapshot.frameRate.currentSpeedLevel, 2)
+    }
+
+    func testMalformedResolutionOptionsAreIgnored() {
+        let resolver = AmcamCameraStateResolver()
+        let descriptor = CameraFeatureDescriptor(
+            name: "AmcamResolutionIndex", displayName: "Resolution", kind: .enumeration,
+            isAvailable: true, isReadable: true, isWritable: true,
+            enumerationValues: ["0:640x480", "1:1920x1080", "broken", "2:badx720"]
+        )
+        XCTAssertEqual(
+            resolver.resolutions(from: [descriptor]),
+            [AmcamResolution(index: 0, width: 640, height: 480),
+             AmcamResolution(index: 1, width: 1920, height: 1080)]
+        )
+    }
+
+    func testCurrentResolutionUsesTypedFeatureReadback() async {
+        let resolver = AmcamCameraStateResolver()
+        let device = AmcamDevice(
+            identifier: "camera", displayName: "Camera", modelName: "MU503",
+            modelFlags: nil, maximumSpeedLevel: nil,
+            sensorPixelSizeMicrometers: nil,
+            previewResolutions: [AmcamResolution(index: 3, width: 1920, height: 1080)]
+        )
+        let result = await resolver.currentResolution(for: device) { name in
+            XCTAssertEqual(name, "AmcamResolutionIndex")
+            return .enumeration("3:1920x1080")
+        }
+        XCTAssertEqual(result, AmcamResolution(index: 3, width: 1920, height: 1080))
+    }
+}
