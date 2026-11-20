@@ -33,7 +33,10 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             "--sdk", "macosx", "clang",
             "-dynamiclib",
             "-fPIC",
-            "-w",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
             "-I", headerDirectory.path
         ]
         if let omittingRequiredSymbol {
