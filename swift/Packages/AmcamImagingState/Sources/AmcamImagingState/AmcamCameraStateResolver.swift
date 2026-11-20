@@ -132,10 +132,25 @@ public struct AmcamCameraStateResolver: Sendable {
         guard let increment = range.increment else {
             return Swift.min(Swift.max(value, range.minimum), range.maximum)
         }
-        let maximumSteps = ((range.maximum - range.minimum) / increment).rounded(.down)
-        guard maximumSteps.isFinite, maximumSteps >= 0 else { return nil }
-        let maximumValidValue = range.minimum + maximumSteps * increment
-        guard maximumValidValue.isFinite else { return nil }
+        let maximumStepRatio = (range.maximum - range.minimum) / increment
+        guard maximumStepRatio.isFinite, maximumStepRatio >= 0 else { return nil }
+        let stepTolerance = max(
+            1e-9,
+            Double.ulpOfOne * max(1, abs(maximumStepRatio)) * 8
+        )
+        let nearestMaximumStep = maximumStepRatio.rounded()
+        let maximumSteps = abs(maximumStepRatio - nearestMaximumStep) <= stepTolerance
+            ? nearestMaximumStep
+            : maximumStepRatio.rounded(.down)
+        let gridMaximum = range.minimum + maximumSteps * increment
+        guard gridMaximum.isFinite else { return nil }
+        // Preserve the descriptor's exact endpoint when floating-point
+        // arithmetic places an otherwise valid grid endpoint a few ULPs above it.
+        let maximumValidValue = gridMaximum > range.maximum
+            && gridMaximum - range.maximum <= stepTolerance * max(1, abs(increment))
+            ? range.maximum
+            : gridMaximum
+        guard maximumValidValue <= range.maximum else { return nil }
         let clamped = Swift.min(Swift.max(value, range.minimum), maximumValidValue)
         let steps = ((clamped - range.minimum) / increment).rounded()
         let normalized = range.minimum + steps * increment
