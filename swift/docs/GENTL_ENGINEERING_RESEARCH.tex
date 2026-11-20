@@ -484,4 +484,35 @@ The absence of a physical GenTL camera is a limitation on hardware validation, n
 
 The strongest defensible outcome before hardware access is: compiler-verified contract, ABI-checked declarations, native mock integration, exhaustive dispatch and lifecycle tests, deterministic simulated acquisition, and clearly bounded claims. Vendor and physical-camera validation then become an additional compatibility layer rather than the first opportunity to discover fundamental interface defects.
 
+
+
+\chapter{Implementation Progress: First Native Mock Boundary}
+
+\section{Fixture now present in source}
+A first C fixture has been added under
+\texttt{swift/Packages/GenTLNative/Tests/GenTLNativeTests/Fixtures/MockGenTLProducer.c}.
+It includes the pinned \texttt{GenTL\_v1\_6.h} rather than redeclaring GenTL types. The fixture exports all 47 names currently listed in \texttt{GenTLProducerLibrary.requiredEntryPoints}. Forty-six functions are deterministic stubs returning \texttt{GC\_ERR\_NOT\_IMPLEMENTED}; \texttt{GCGetInfo} is deliberately implemented with observable outputs and a distinctive return code.
+
+The fixture has a compile-time variant, \texttt{MOCK\_OMIT\_GCGETINFO}, which omits the required export while leaving the other required exports present. This permits a targeted required-symbol rejection test rather than testing only a library with no GenTL symbols at all.
+
+\section{Native integration tests now present in source}
+\texttt{GenTLNativeIntegrationTests.swift} builds the fixture at test runtime using the macOS SDK compiler and loads the resulting dynamic library through the production \texttt{GenTLNativeImplementation} initializer. The first dispatch test invokes \texttt{GCGetInfo} through an \texttt{any GenTLAPI} reference and checks:
+\begin{itemize}
+  \item the distinctive native return code \texttt{-4321};
+  \item the datatype written by C;
+  \item the deterministic payload marker written through the output pointer;
+  \item the returned output size.
+\end{itemize}
+
+Additional tests verify that omission of required \texttt{GCGetInfo} rejects the CTI and that omission of optional GenTL 1.1 \texttt{GCGetNumPortURLs} does not prevent loading; invoking the absent optional operation returns \texttt{GC\_ERR\_NOT\_IMPLEMENTED} and leaves the output sentinel unchanged.
+
+The native test target now explicitly depends on \texttt{GenTLABI} and \texttt{GenTLAPI} so tests can inspect ABI values and call the shared protocol. It reuses the package's already-declared test target.
+
+\section{What this progress establishes and what it does not}
+A source-level comparison finds 47 required entry-point names in the fixture, matching the current required-symbol inventory. This is not compiler evidence. The tests have not yet been executed; no claim is made that the C fixture compiles, the Swift tests type-check, the loader succeeds at runtime, or the dispatch assertions pass.
+
+This initial fixture is intentionally not a simulated camera. Most exports return \texttt{GC\_ERR\_NOT\_IMPLEMENTED}. It isolates the native ABI and loader boundary first. Subsequent fixture increments must add valid System/Interface/Device discovery and then Data Stream, buffer, event, and acquisition behavior.
+
+The first execution gate is to run \texttt{swift test --package-path swift/Packages/GenTLNative} and \texttt{swift test --package-path swift/Packages/GenTLAPI} on macOS with Xcode command-line tools. Record the exact toolchain, architecture, command, and output before proceeding.
+
 \end{document}
