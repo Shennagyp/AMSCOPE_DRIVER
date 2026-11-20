@@ -169,7 +169,7 @@ git pull
 make run
 ```
 
-The command builds all six Swift library packages from source, builds the imaging executable, assembles and ad-hoc signs `Amcam Imaging.app`, and launches it. It does not download a release asset or depend on GitHub Actions artifacts.
+The command builds all ten Swift library packages from source, builds the imaging executable, assembles and ad-hoc signs `Amcam Imaging.app`, and launches it. It does not download a release asset or depend on GitHub Actions artifacts.
 
 The application UI uses AppKit, not SwiftUI. This avoids the `SwiftUIMacros.StateMacro` plugin dependency that caused the Command Line Tools build failure. The full Xcode application is not required; Apple's Swift compiler, macOS SDK and AppKit SDK must be available. If Swift is missing, install Command Line Tools with `xcode-select --install`.
 
