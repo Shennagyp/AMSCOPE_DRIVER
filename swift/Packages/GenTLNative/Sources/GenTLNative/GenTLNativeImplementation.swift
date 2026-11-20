@@ -1276,7 +1276,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 let value = try readInfo { type, buffer, size in
                     functions.eventGetInfo(
                         registeredPointer,
-                        GenTLABI.EVENT_SIZE_MAX.rawValue,
+                        Int32(bitPattern: GenTLABI.EVENT_SIZE_MAX.rawValue),
                         type,
                         buffer,
                         size
@@ -1578,7 +1578,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     }
 
     private func rawError(_ error: Error) -> GenTLABI.GC_ERROR {
-        if let code = error as? GenTLAPI.GC_ERROR {
+        if let code = error as? GC_ERROR {
             return code.rawValue
         }
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_ERROR)
@@ -1586,8 +1586,8 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     private func rawEventHandle(
         _ event: GenTLABI.EVENT_HANDLE
-    ) -> GenTLAPI.EVENT_HANDLE {
-        GenTLAPI.EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+    ) -> EVENT_HANDLE {
+        EVENT_HANDLE(rawValue: UInt(bitPattern: event))
     }
 
     // MARK: Library
@@ -1678,16 +1678,16 @@ extension GenTLNativeImplementation: GenTLAPI {
                 guard !registeredEventsByHandle.values.contains(where: {
                     $0.sourcePointer == hEventSrc && $0.eventType == iEventID
                 }) else {
-                    throw GenTLAPI.GC_ERROR.resourceInUse
+                    throw GC_ERROR.resourceInUse
                 }
 
                 var event: UnsafeMutableRawPointer?
                 try check(functions.gcRegisterEvent(hEventSrc, iEventID, &event))
-                guard let event else { throw GenTLAPI.GC_ERROR.invalidHandle }
+                guard let event else { throw GC_ERROR.invalidHandle }
                 let key = UInt(bitPattern: event)
                 guard registeredEventsByHandle[key] == nil else {
                     try? functions.gcUnregisterEvent(hEventSrc, iEventID)
-                    throw GenTLAPI.GC_ERROR.resourceInUse
+                    throw GC_ERROR.resourceInUse
                 }
                 registeredEventsByHandle[key] = RegisteredEvent(
                     sourcePointer: hEventSrc,
