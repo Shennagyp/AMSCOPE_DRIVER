@@ -3,6 +3,36 @@ import XCTest
 import AmcamImagingCore
 @testable import AmcamImagingApplicationCore
 
+private actor AsyncGate {
+    private var isEntered = false
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+    private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func pause() async {
+        isEntered = true
+        let waiters = enteredWaiters
+        enteredWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+        await withCheckedContinuation { continuation in
+            releaseContinuation = continuation
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard !isEntered else { return }
+        await withCheckedContinuation { continuation in
+            enteredWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+    }
+}
+
 private enum FakeRuntimeError: Error {
     case closeFailed
     case startFailed
@@ -18,6 +48,7 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
     private var startFailuresRemaining: Int
     private var timeoutsRemaining: Int
     private let frameOnClose: CameraFramePayload?
+    private let closeGate: AsyncGate?
 
     private var startAttemptsValue = 0
     private var stopAttemptsValue = 0
@@ -45,7 +76,8 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
         closeFailures: Int = 0,
         startFailures: Int = 0,
         timeoutCount: Int = 0,
-        frameOnClose: CameraFramePayload? = nil
+        frameOnClose: CameraFramePayload? = nil,
+        closeGate: AsyncGate? = nil
     ) {
         let stream = AsyncStream<CameraFramePayload>.makeStream()
         iterator = stream.stream.makeAsyncIterator()
@@ -54,6 +86,7 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
         startFailuresRemaining = startFailures
         timeoutsRemaining = timeoutCount
         self.frameOnClose = frameOnClose
+        self.closeGate = closeGate
     }
 
     func start() async throws {
@@ -79,7 +112,9 @@ private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendab
     }
 
     func close() async throws {
-        if recordCloseAttemptAndShouldFail() {
+        let shouldFail = recordCloseAttemptAndShouldFail()
+        if let closeGate { await closeGate.pause() }
+        if shouldFail {
             throw FakeRuntimeError.closeFailed
         }
         if let frameOnClose { continuation.yield(frameOnClose) }
@@ -323,6 +358,36 @@ final class CameraSessionLifecycleTests: XCTestCase {
         XCTAssertTrue(snapshot.isStreaming)
         try await lifecycle.stop()
         try await lifecycle.close()
+    }
+
+    func testConcurrentCloseIsRejectedWhileFirstCloseSuspends() async throws {
+        let gate = AsyncGate()
+        let acquisition = FakeAcquisition(closeGate: gate)
+        let session = FakeSession(acquisition: acquisition)
+        let lifecycle = CameraSessionLifecycle()
+
+        try await lifecycle.attach(session)
+        try await lifecycle.start()
+
+        let firstClose = Task {
+            try await lifecycle.close()
+        }
+        await gate.waitUntilEntered()
+
+        do {
+            try await lifecycle.close()
+            XCTFail("A second close must not operate on the same acquisition concurrently.")
+        } catch {
+            XCTAssertEqual(error as? CameraSessionLifecycleError, .operationInProgress)
+        }
+
+        await gate.release()
+        try await firstClose.value
+
+        let snapshot = await lifecycle.snapshot()
+        XCTAssertFalse(snapshot.hasSession)
+        XCTAssertFalse(snapshot.hasAcquisition)
+        XCTAssertEqual(acquisition.closeAttempts, 1)
     }
 
     func testStartRequiresAnAttachedSession() async {
