@@ -64,11 +64,12 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshDevices() {
-        Task { await refreshDevicesOwned() }
+        let operation = beginCameraSelectionOperation()
+        Task { await refreshDevicesOwned(operation: operation) }
     }
 
-    private func refreshDevicesOwned() async {
-        let operation = beginCameraSelectionOperation()
+    private func refreshDevicesOwned(operation: UInt64) async {
+        guard isCurrentCameraSelectionOperation(operation) else { return }
         guard let cameraProvider else {
             status = "AmScope camera provider is unavailable"
             return
@@ -361,11 +362,12 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func configureSDK() {
-        Task { await configureSDKOwned() }
+        let operation = beginCameraSelectionOperation()
+        Task { await configureSDKOwned(operation: operation) }
     }
 
-    private func configureSDKOwned() async {
-        let operation = beginCameraSelectionOperation()
+    private func configureSDKOwned(operation: UInt64) async {
+        guard isCurrentCameraSelectionOperation(operation) else { return }
         guard await closeSession(),
               isCurrentCameraSelectionOperation(operation) else { return }
         cameraProvider = nil
@@ -375,7 +377,7 @@ final class CameraApplicationModel: ObservableObject {
 
         do {
             cameraProvider = try AmcamCameraProvider()
-            await refreshDevicesOwned()
+            await refreshDevicesOwned(operation: operation)
         } catch {
             status = "AmScope camera provider is unavailable"
             errorMessage = error.localizedDescription
