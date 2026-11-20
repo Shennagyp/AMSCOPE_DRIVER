@@ -287,20 +287,21 @@ final class CameraSessionLifecycleTests: XCTestCase {
         }
         await featureGate.waitUntilEntered()
 
-        do {
+        let closeTask = Task {
             try await lifecycle.close()
-            XCTFail("Close must not overlap an in-flight feature operation.")
-        } catch {
-            XCTAssertEqual(error as? CameraSessionLifecycleError, .operationInProgress)
         }
+        await Task.yield()
+
+        let snapshotWhileReadIsBlocked = await lifecycle.snapshot()
+        XCTAssertTrue(snapshotWhileReadIsBlocked.hasSession)
 
         await featureGate.release()
         let value = try await featureRead.value
         XCTAssertEqual(value, .integer(7))
+        try await closeTask.value
 
-        try await lifecycle.close()
-        let snapshot = await lifecycle.snapshot()
-        XCTAssertFalse(snapshot.hasSession)
+        let closedSnapshot = await lifecycle.snapshot()
+        XCTAssertFalse(closedSnapshot.hasSession)
     }
 
     func testAcquisitionCloseFailureRetainsParentAndAllowsRetry() async throws {
