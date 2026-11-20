@@ -187,6 +187,22 @@ private typealias DSGetBufferPartInfoStackedFunction = @convention(c) (
 ///
 /// The implementation owns one loaded CTI library. Handles returned by the
 /// Producer remain opaque and are never synthesized or reinterpreted as IDs.
+/// Keeps a CTI loaded if its GenTL lifecycle was not cleanly closed.
+/// Unloading a Producer with open module handles would invalidate native code
+/// and callback pointers still owned by that Producer.
+private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
+    static let shared = GenTLProducerLibraryRetainer()
+
+    private let lock = NSLock()
+    private var libraries: [GenTLProducerLibrary] = []
+
+    func retain(_ library: GenTLProducerLibrary) {
+        lock.lock()
+        defer { lock.unlock() }
+        libraries.append(library)
+    }
+}
+
 public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     private struct Functions {
         let gcInitLib: GCInitLibFunction
@@ -370,6 +386,15 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             dsGetNumBufferSegments: try? load("DSGetNumBufferSegments", as: DSGetNumBufferSegmentsFunction.self),
             dsGetBufferSegmentInfo: try? load("DSGetBufferSegmentInfo", as: DSGetBufferSegmentInfoFunction.self)
         )
+    }
+
+    deinit {
+        // This implementation intentionally does not guess which native
+        // module handles a caller may still own. Only a successful
+        // GCCloseLib proves the Producer has completed its lifecycle.
+        if initialized || !registeredEventsByHandle.isEmpty || hasActiveEventDataReads {
+            GenTLProducerLibraryRetainer.shared.retain(library)
+        }
     }
 
     // MARK: Library
