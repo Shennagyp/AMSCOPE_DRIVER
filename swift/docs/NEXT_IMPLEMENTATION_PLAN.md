@@ -17,7 +17,7 @@ The repository-level Makefile is the supported command interface:
 - `make run-probe`: build and run the Amcam camera diagnostic locally.
 - `make build-local`: build every Swift library and the imaging app without launching it.
 - `make run-local`: alias for `make run`.
-- `make test-local`: run all nine Swift package test suites locally.
+- `make test-local`: run all ten Swift package test suites locally.
 
 The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. Vendor SDKs are kept in `vendor/<vendor>/<platform>/`, copied into the app bundle under `Contents/Frameworks/Vendors/<vendor>/`, architecture-checked against the app executable, and signed as nested code before the app bundle is signed. The AmScope backend resolves the bundled SDK first and then standard per-user/machine installation paths; the UI never asks the user to browse for a dylib. Proprietary binaries remain local unless redistribution is licensed.
 
