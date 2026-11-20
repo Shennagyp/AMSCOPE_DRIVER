@@ -512,10 +512,10 @@ final class CameraSettingsViewController: NSViewController {
     @objc private func exposureChanged() { model.setExposureTime(UInt32(exposureSlider?.doubleValue ?? 1)) }
     @objc private func gainChanged() { model.setExposureGain(UInt16(gainSlider?.doubleValue ?? 0)) }
     @objc private func temperatureChanged() {
-        model.setWhiteBalanceTemperatureTint(temperature: Int32(temperatureSlider?.doubleValue ?? 6503), tint: Int32(tintSlider?.doubleValue ?? 1000))
+        model.setWhiteBalanceTemperature(Int32(temperatureSlider?.doubleValue ?? 6503))
     }
     @objc private func tintChanged() {
-        model.setWhiteBalanceTemperatureTint(temperature: Int32(temperatureSlider?.doubleValue ?? 6503), tint: Int32(tintSlider?.doubleValue ?? 1000))
+        model.setWhiteBalanceTint(Int32(tintSlider?.doubleValue ?? 1000))
     }
     @objc private func applyRGB() {
         guard let r = Int32(redField.stringValue), let g = Int32(greenField.stringValue), let b = Int32(blueField.stringValue) else { return }
