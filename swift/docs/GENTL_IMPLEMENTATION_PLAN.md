@@ -1,0 +1,219 @@
+# GenTL Swift API and backend implementation plan
+
+**Branch:** swift-gentl-api  
+**Plan status:** Architecture correction in progress  
+**Standards baseline:** EMVA GenICam GenTL 1.6, with versioned functions identified by the pinned header
+
+## 1. Objective
+
+Implement the GenTL API in Swift by binding to the standard GenTL C interface, not by independently recreating a parallel API from memory or translating the standard into a second, hand-maintained set of declarations.
+
+The checked-in GenTL 1.6 C header is the authority for:
+
+- Function names, signatures, calling conventions and return types.
+- Handle types and opaque-handle semantics.
+- Enumerations, constants, structures, packing and field layouts.
+- Revision ownership of functions and data structures.
+
+The standard specification remains authoritative for behavioral semantics that cannot be established from declarations alone. Header upgrades must be deliberate, versioned and reviewed.
+
+## 2. Required architecture
+
+There is one GenTL contract and two interchangeable implementations.
+
+### GenTLAPI
+
+The sole application-facing GenTL API contract.
+
+It must represent the actual GenTL function surface and semantics. Its declarations must be derived from, and checked against, the imported C declarations. It must not maintain independent copies of GenTL enums, constants, structures, handle representations or function signatures when those already exist in the header.
+
+The public operations must preserve GenTL naming, module ownership, parameter meaning, output-parameter behavior, error results and lifecycle semantics. Any safer Swift conveniences must be thin additions over this contract; they must not replace or redefine the GenTL operations.
+
+### GenTLNative
+
+A GenTL Consumer implementation for manufacturer-supplied CTI Producer libraries.
+
+- Load a CTI library dynamically.
+- Resolve the actual GenTL C exports using the function declarations and function-pointer types from the shared ABI module.
+- Require the complete GenTL 1.0 base function set before accepting a Producer.
+- Resolve later-revision functions according to the pinned header and Producer capability.
+- Forward calls without changing their ABI, argument meaning or error semantics.
+- Preserve the existing safe handle, event, stream and library-lifetime rules.
+
+This is real GenTL C interoperability. The native backend must not simulate a Producer using a Swift-only API.
+
+### AmcamGenTL
+
+A second implementation of the same GenTL operations, translated to the Amcam SDK.
+
+- It does not create, export or impersonate a CTI Producer.
+- It does not call GenTLNative or route through a synthetic CTI library.
+- It must implement the shared GenTL contract directly.
+- It reports only capabilities that the SDK can actually provide.
+- Unsupported operations return the appropriate GenTL error; they must not fabricate register maps, GenApi XML, chunks, multipart data, flows or other capabilities.
+- Amcam-specific driver, camera, session and SDK details remain internal to the package.
+
+### GenTLRouter
+
+Selects and owns backend contexts, aggregates discovery, and returns candidates and sessions bound to the implementation that created them.
+
+The application uses the common GenTL contract and does not branch on vendor SDK types.
+
+## 3. Package dependency correction
+
+The current GenTLABI C target is nested inside the GenTLNative package. That makes the ABI declarations structurally owned by the native implementation even though the API contract and Amcam implementation also need the same declarations.
+
+Move the ABI target and its header into a standalone Swift package:
+
+- GenTLABI — the shared C module containing the pinned GenTL header and ABI layout checks.
+- GenTLAPI — depends on GenTLABI and defines the single application-facing contract.
+- GenTLNative — depends on GenTLABI and GenTLAPI.
+- AmcamGenTL — depends on GenTLABI and GenTLAPI.
+- GenTLRouter — depends on GenTLAPI, GenTLNative and AmcamGenTL.
+
+The header must exist in one authoritative location. Do not copy it into multiple packages.
+
+## 4. ABI and API binding rules
+
+1. Import the checked-in GenTL header through the GenTLABI Clang module.
+2. Use the imported C types, constants, enumerations and structures wherever the header defines them.
+3. Use the header's dynamic-loading function-pointer typedefs for CTI calls where possible. Avoid retyping each C function signature by hand.
+4. Keep dynamic symbol resolution in GenTLNative. The header declares the function ABI; a CTI file supplies the implementation at runtime.
+5. Do not confuse a Swift protocol or wrapper with a GenTL C Producer. AmcamGenTL is a Swift backend for the common contract, not a binary CTI Producer.
+6. Keep GenTL C error results and output-parameter semantics observable at the GenTL contract boundary. Swift convenience methods may translate them only in a clearly separate layer.
+7. Do not use independently invented enum raw values, structure layouts, packing, pointer ownership or calling conventions.
+8. Keep versioned additions tied to the revision in which the header introduces them. Absence of an optional later-revision export must not be treated as absence of the GenTL 1.0 base API.
+9. Do not classify a function as optional or required by guesswork. The pinned header and corresponding GenTL revision define the mapping.
+10. Do not claim GenTL certification or full device compatibility without the applicable conformance evidence.
+
+## 5. Function revision policy
+
+The native loader validates the GenTL 1.0 base export set before accepting a CTI Producer. EventGetDataInfo is part of the GenTL 1.0 base and is required.
+
+Later functions are resolved according to their standard revision and the pinned header:
+
+- GenTL 1.1: port URL enumeration and stacked port register operations.
+- GenTL 1.3: buffer chunk data.
+- GenTL 1.4: parent-module queries.
+- GenTL 1.5: buffer-part enumeration and information.
+- GenTL 1.6: composite buffers, stacked buffer information, flows and buffer segments.
+
+An absent later-revision function is reported as not implemented when invoked. The Producer's supported GenTL revision must be queried from the Producer; the revision represented by the shared API contract does not prove that every Producer supports every later function.
+
+## 6. Implementation phases
+
+### Phase 0 — Establish the source of truth
+
+- Keep one pinned GenTL 1.6 header.
+- Record its source, license notice, revision and content hash in the repository.
+- Review the relevant GenTL specification for semantics not expressed by C declarations.
+- Maintain an explicit function/revision inventory derived from the header.
+- Confirm the required GenTL 1.0 exports and the later-revision additions.
+
+**Exit condition:** the header, revision inventory and source provenance are documented and internally consistent.
+
+### Phase 1 — Extract the shared ABI package
+
+- Move the GenTL C target, header and layout-check source into GenTLABI.
+- Keep the header byte-for-byte unchanged during the move.
+- Expose the ABI module as a package product.
+- Rewire GenTLAPI, GenTLNative and AmcamGenTL to depend on that one product.
+- Remove the old nested copy from GenTLNative.
+
+**Exit condition:** all three packages import the same GenTL C declarations from one location; there is no duplicate header.
+
+### Phase 2 — Correct the GenTLAPI contract
+
+- Audit every public type and operation against the imported header.
+- Replace hand-maintained duplicates with imported C declarations.
+- Align function operations with the standard names, signatures, module boundaries and error semantics.
+- Preserve the GenTL output-buffer sizing pattern and opaque handles.
+- Keep any Swift-safe convenience layer thin and secondary.
+- Remove API concepts that have no GenTL source or are only duplicate abstractions.
+
+**Exit condition:** every public GenTL operation and ABI-relevant type has a traceable source in the pinned header or the standard specification.
+
+### Phase 3 — Bind the native CTI implementation
+
+- Bind the native loader to imported function-pointer typedefs.
+- Verify every required symbol against the GenTL 1.0 inventory.
+- Verify each optional symbol against its revision.
+- Keep dynamic symbol lookup and C-call mechanics isolated in GenTLNative.
+- Preserve the existing producer, module, event, buffer and library lifetime safeguards.
+- Exercise the native implementation against a controlled mock CTI library and, separately, real vendor CTIs when available.
+
+**Exit condition:** native calls use the actual GenTL C ABI and no independently maintained signature table can drift from the header.
+
+### Phase 4 — Map the Amcam implementation
+
+- Make AmcamGenTL implement the corrected common contract.
+- Translate only operations with verified SDK equivalents.
+- Preserve GenTL ownership, queue, acquisition, timeout and event semantics as far as the SDK permits.
+- Return precise unsupported/not-available errors for capabilities the SDK does not expose.
+- Keep vendor-specific SDK objects out of the common public API.
+- Treat GenApi XML/register-port integration as a separate milestone requiring verified documentation.
+
+**Exit condition:** Amcam uses the same GenTL contract as the native backend, with no fabricated capabilities and no CTI requirement.
+
+### Phase 5 — Integrate the router
+
+- Keep one initialized context per registered backend.
+- Preserve context and handle ownership across discovery refreshes and open sessions.
+- Retain the existing duplicate-registration, rollback, quarantine and failed-close protections.
+- Ensure candidates and sessions remain bound to their originating backend.
+- Keep application code independent of implementation-specific types.
+
+**Exit condition:** repeated discovery, concurrent lifecycle operations and failed cleanup cannot cause use-after-close, duplicate initialization or backend confusion.
+
+### Phase 6 — Verify conformance and remove duplication
+
+- Run the same contract tests against both implementations wherever the operation is applicable.
+- Add ABI layout and imported-type checks against the pinned header.
+- Test exact required/optional symbol resolution with mock CTI libraries.
+- Test unsupported Amcam operations and capability reporting.
+- Test buffer ownership, event cancellation, acquisition, close ordering and failure cleanup.
+- Remove redundant handwritten declarations, stale documentation and misleading claims.
+- Record unimplemented standard functions explicitly.
+
+**Exit condition:** one source of truth, one shared API, two implementations, and tests that detect semantic drift.
+
+## 7. Existing work to preserve
+
+The architecture correction does not discard valid implementation work. Preserve and re-audit:
+
+- CTI discovery, path normalization, dynamic loading and required/optional symbol resolution.
+- Native producer handle and library lifetime safeguards.
+- Router context reuse, registration identity and failure quarantine.
+- Amcam buffer layout, queue ownership, acquisition and event synchronization.
+- Honest reporting of unsupported Amcam register/GenApi functionality.
+- Existing tests for lifecycle, path identity, event handling and buffer layout.
+
+These components must be adapted to the corrected API contract where required; they are not permission to retain duplicate GenTL definitions.
+
+## 8. Current implementation status
+
+The current branch already contains:
+
+- A pinned GenTL 1.6 header and a C ABI target with structure-layout checks.
+- A native CTI loader and a substantial native implementation.
+- An Amcam-backed implementation and a backend router.
+- Lifecycle and buffer/event safeguards described in the package conformance document.
+
+However, the current GenTLAPI package still contains a manually authored Swift protocol, function groups and type definitions. It is GenTL-shaped, but it is not yet a direct binding derived from the imported C declarations. The ABI target is also nested under GenTLNative rather than shared as its own package.
+
+Those two points are the architectural correction addressed by this plan. Documentation changes do not mean the code conversion is already complete.
+
+## 9. Definition of done
+
+The work is complete only when:
+
+- One pinned GenTL header is the authority for all ABI declarations.
+- GenTLAPI is traceably aligned to the imported standard declarations and semantics.
+- GenTLNative invokes actual CTI exports through matching C function-pointer types.
+- AmcamGenTL implements the same contract directly through the Amcam SDK.
+- No Amcam CTI, parallel camera abstraction or duplicated GenTL type system exists.
+- Required and optional functions are classified by the correct GenTL revision.
+- The router preserves backend and handle ownership through normal and failed lifecycles.
+- Shared conformance tests pass for supported operations, and unsupported behavior is explicit.
+- Documentation distinguishes implemented behavior, planned work and formal certification.
+
