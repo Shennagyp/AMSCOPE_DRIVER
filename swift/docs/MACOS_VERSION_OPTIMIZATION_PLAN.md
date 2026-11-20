@@ -286,3 +286,31 @@ This branch is complete when:
 - GitHub commit status currently reports no status checks, and the available workflow-run lookup did not expose a push-triggered run. Therefore the tests are **not yet claimed as passing**.
 - Next implementation gate: obtain a confirmed green hosted run, then add the routed application/session contract tests before changing application ownership from `AmcamCameraDriver` to `GenTLRouter`.
 
+### 2026-11-20 — Typed feature contract and app package boundary
+
+**Production code**
+- Added `GenTLFeatureAccess` beside the unchanged 64-operation `GenTLAPI` contract. It carries typed values, descriptors, availability, access flags, units, numeric ranges and symbolic enumeration values.
+- Added opaque feature-device identity so feature providers do not expose the transitional BackendConvenience handle types to application code.
+- Added routed `GenTLDeviceSession` feature forwarding. Calls remain bound to the backend and device handle that created the session.
+- Implemented the Amcam adapter for `ExposureAuto`, `ExposureTime` and `AmcamAnalogGainPercent`. It delegates to the existing `AmcamCameraSession` setters, so the SDK's validation and readback checks remain authoritative.
+- Exposure time is writable only after automatic exposure is disabled. Amcam gain remains vendor-namespaced and percent-valued; it is not mislabeled as SFNC Gain in dB.
+- The Amcam adapter reports model/runtime capability availability. It does not create register addresses or synthetic GenApi XML.
+- Native CTI backends intentionally do not conform to the feature protocol until a real GenApi XML/port implementation is available.
+
+**Tests added before the Amcam adapter implementation**
+- Feature value kind and numeric-range validation.
+- Descriptor metadata and vendor-specific feature naming.
+- Amcam mock-SDK integration for exposure mode, exposure range, gain range, typed writes and readback.
+- Router session forwarding and device-handle identity.
+
+**Application package boundary**
+- Moved the three imaging application source files into `swift/Apps/AmcamImagingApp`.
+- Removed the app executable target from the Amcam backend package.
+- The new app package depends on GenTLAPI, GenTLRouter and AmcamGenTL, eliminating the SwiftPM dependency-cycle obstacle to routing the application through GenTLRouter.
+- Updated hosted macOS CI to build the standalone app package and to trigger on `swift/Apps/**`.
+
+**Validation**
+- No local Xcode or Swift build/test was run.
+- The GitHub status endpoint currently reports no status checks for the latest workflow commit, and the available workflow-run lookup does not return push-triggered runs. Compilation and tests therefore remain pending hosted macOS CI.
+- The app source has been moved but is not yet migrated: `CameraApplicationModel` still directly creates `AmcamCameraDriver` and `AmcamCameraSession`. The next implementation task is the routed application acquisition/session path, followed by migration of the existing controls to `GenTLDeviceSession` feature access.
+
