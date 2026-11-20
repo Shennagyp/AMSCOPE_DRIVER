@@ -382,7 +382,7 @@ final class CameraApplicationModel: ObservableObject {
         }
         if let feature = capabilityFeature(for: name),
            cameraCapabilities?.availability(of: feature).isUsable != true {
-            errorMessage = "\\(name) is not available under the selected camera's capability and model-profile policy."
+            errorMessage = "\(name) is not available under the selected camera's capability and model-profile policy."
             return
         }
         do {
