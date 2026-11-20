@@ -17,7 +17,7 @@ The repository-level Makefile is the supported command interface:
 - `make run-probe`: build and run the Amcam camera diagnostic locally.
 - `make build-local`: build every Swift library and the imaging app without launching it.
 - `make run-local`: alias for `make run`.
-- `make test-local`: run all six Swift package test suites locally.
+- `make test-local`: run all seven Swift package test suites locally.
 
 The default `make run` path is a source build on the user's Mac. It requires macOS 13 or later, Apple's Swift compiler, the macOS SDK and AppKit. The full Xcode application is not required: the app uses AppKit rather than SwiftUI, so the build does not require the SwiftUI macro plugin. No GitHub Release, Actions artifact, GitHub CLI authentication or downloaded executable is involved. The vendor `libamcam.dylib` remains a separate runtime requirement for camera access.
 
@@ -29,6 +29,7 @@ Keep the dependency direction:
 
 ```text
 AmcamImagingApp
+  -> AmcamImagingCore
   -> AmcamCameraModel
   -> GenTLAPI + GenTLABI
   -> GenTLRouter
@@ -49,6 +50,7 @@ Rules:
 3. Camera-independent contracts remain in GenTLAPI/GenTLABI.
 4. Vendor SDK behavior remains in AmcamGenTL.
 5. Camera UI and model-facing policy remain in AmcamCameraModel and AmcamImagingApp.
+6. Pixel-format validation and backend-neutral image-frame values belong in AmcamImagingCore.
 6. Do not create fake executables for library-only packages. Add a CLI only when it provides a real diagnostic or operational use case.
 
 ## 3. Immediate implementation sequence
@@ -125,12 +127,14 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Keep `NSWindow`, `NSOpenPanel`, `NSImage`, bitmap conversion and full-screen behavior in the AppKit frontend.
 - [x] Remove AppKit types and window/file-panel operations from `CameraApplicationModel`.
 - [x] Pass validated RGB8 frames to the frontend as a value object containing dimensions, row stride, bytes and a sequence number.
+- [x] Extract validated RGB8 frame values and GenTL payload validation into the platform-neutral AmcamImagingCore package.
+- [x] Add deterministic tests for RGB8 format identity, row padding, payload bounds, invalid dimensions and arithmetic overflow.
 - [ ] Move the application state model out of the executable target into a separately testable package with an explicitly chosen observation/event contract.
 - [ ] Define platform-neutral camera application commands and state before adding another frontend.
 - [ ] Evaluate each target OS's GenTL Producer loading, Amcam SDK availability, permissions, packaging and camera-driver support independently.
 - [ ] Add another frontend only after its backend path is proven on that OS.
 
-Do not describe the current application as cross-platform: the state model still uses Combine, the executable package targets macOS, and the current native camera integrations use macOS dynamic libraries. UI separation is progress toward portability, not proof of portable camera access.
+Do not describe the current application as cross-platform: the state model still uses Combine, the executable package targets macOS, and the current native camera integrations use macOS dynamic libraries. AmcamImagingCore itself is Foundation-only and has no macOS platform restriction; this is a portable image-data contract, not a portable camera driver. UI separation is progress toward portability, not proof of portable camera access.
 
 ## 4. Verification policy
 
