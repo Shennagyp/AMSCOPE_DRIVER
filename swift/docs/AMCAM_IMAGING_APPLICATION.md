@@ -179,7 +179,7 @@ Other commands:
 - `make run-probe` — build and run the camera diagnostic from source.
 - `make test-local` — run all six Swift package test suites.
 
-The vendor SDK is proprietary and is not bundled. The app requires a compatible arm64 `libamcam.dylib` version 58.28273.20250415. If automatic discovery fails, use SDK… to select the library. The app is ad-hoc signed for local testing, not notarized.
+The vendor SDK is proprietary and is not bundled. For physical AmScope camera access, place a compatible arm64 `libamcam.dylib` under `vendor/amcam/macos/libamcam.dylib`, or install it in one of the backend's standard per-user/system locations. The build script copies a local vendor SDK into the app bundle; `AMCAM_SDK_SOURCE=/absolute/path/to/libamcam.dylib` can specify a source file at build time. The backend resolves the bundled SDK first. There is no SDK file picker in the UI. Without a compatible SDK, the app can launch but the AmScope provider is unavailable. The app is ad-hoc signed for local testing, not notarized.
 
 ### First physical-camera test
 
@@ -222,7 +222,7 @@ GenTLRouter acquisition tests inject a buffer-revoke failure, verify that the da
 
 ## Triggered acquisition and event timeouts
 
-A GenTL New Buffer event timeout means only that no buffer arrived within the requested wait interval. It is not proof that the camera or acquisition has failed: a camera may be waiting for an external trigger, a software trigger, or simply a longer frame interval. GenTLAcquisitionSession reports this outcome as `eventTimeout`; the app keeps waiting and does not close the device. A stop/close request remains distinct and is reported as `acquisitionStopped`.
+A GenTL New Buffer event timeout means only that no buffer arrived within the requested wait interval. It is not proof that the camera or acquisition has failed: a camera may be waiting for an external trigger, a software trigger, or simply a longer frame interval. GenTLRuntimeAcquisition maps this to the backend-neutral recoverable timeout; CameraSessionLifecycle continues waiting and does not close the device. A stop/close request remains distinct and terminates the capture loop through the normal lifecycle path.
 
 A fake Producer test forces an event timeout, then delivers a valid frame without restarting the acquisition session. This verifies that timeout handling is recoverable rather than a fatal stream transition.
 
