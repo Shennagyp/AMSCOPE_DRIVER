@@ -308,7 +308,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
 
         do {
@@ -341,7 +341,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let session = FakeSession(acquisition: acquisition, closeFailures: 1)
         let lifecycle = CameraSessionLifecycle()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
 
         do {
@@ -373,7 +373,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let frames = await lifecycle.frames()
         var iterator = frames.makeAsyncIterator()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
         acquisition.emit(makeFrame(sequence: 42))
 
@@ -398,7 +398,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let events = await lifecycle.events()
         var eventIterator = events.makeAsyncIterator()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
         try await lifecycle.close()
 
@@ -424,7 +424,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         do {
             try await lifecycle.start()
             XCTFail("Expected the injected acquisition start failure.")
@@ -449,7 +449,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let frames = await lifecycle.frames()
         var iterator = frames.makeAsyncIterator()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
         acquisition.emit(makeFrame(sequence: 73))
 
@@ -469,7 +469,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let events = await lifecycle.events()
         var iterator = events.makeAsyncIterator()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
 
         var reportedFailure: String?
@@ -494,7 +494,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let events = await lifecycle.events()
         var iterator = events.makeAsyncIterator()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
 
         var reportedFailure: String?
@@ -520,7 +520,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
 
-        _ = try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
 
         let firstClose = Task {
