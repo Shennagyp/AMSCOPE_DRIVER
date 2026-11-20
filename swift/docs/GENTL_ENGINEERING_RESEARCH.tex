@@ -524,7 +524,7 @@ The dispatch test invokes 58 operations through an \texttt{any GenTLAPI} value b
 
 The optional-export build variant omits all 17 later-revision exports while retaining the 47 required GenTL 1.0 base exports. The test verifies that a missing optional operation returns \texttt{GC\_ERR\_NOT\_IMPLEMENTED} and does not modify the caller's output sentinel. The required-export negative variant omits \texttt{GCGetInfo} and expects loader rejection.
 
-A source-level audit currently reports 64 header declarations, 64 protocol requirements, 64 mock exports, 60 unique-return dispatch assertions, and four explicit lifecycle assertions. This audit does not establish successful compilation or runtime dispatch. All native test source remains unexecuted until the macOS CI workflow or a local Xcode toolchain runs it.
+A source-level audit currently reports 64 header declarations, 64 protocol requirements, 64 mock exports, 58 unique-return dispatch assertions, two port sentinel tests, and four explicit lifecycle assertions. This audit does not establish successful compilation or runtime dispatch. All native test source remains unexecuted until the macOS CI workflow or a local Xcode toolchain runs it.
 
 
 
