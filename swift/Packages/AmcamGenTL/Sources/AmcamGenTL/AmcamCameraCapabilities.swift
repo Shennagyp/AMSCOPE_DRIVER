@@ -85,15 +85,29 @@ public struct AmcamFeatureAvailability: Codable, Equatable, Sendable, Identifiab
 public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
     public let modelCode: String
     public let displayName: String?
-    public let allowedFeatures: Set<AmcamCameraFeature>
+    public let allowedFeaturesByGroup: [AmcamCameraFeatureGroup: Set<AmcamCameraFeature>]
     public let deniedFeatures: Set<AmcamCameraFeature>
+
+    public var allowedFeatures: Set<AmcamCameraFeature> {
+        allowedFeaturesByGroup.values.reduce(into: Set<AmcamCameraFeature>()) { $0.formUnion($1) }
+    }
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeatures: Set<AmcamCameraFeature>,
                 deniedFeatures: Set<AmcamCameraFeature> = []) {
         self.modelCode = modelCode
         self.displayName = displayName
-        self.allowedFeatures = allowedFeatures
+        self.allowedFeaturesByGroup = Dictionary(grouping: allowedFeatures, by: \.group)
+            .mapValues(Set.init)
+        self.deniedFeatures = deniedFeatures
+    }
+
+    public init(modelCode: String, displayName: String? = nil,
+                allowedFeaturesByGroup: [AmcamCameraFeatureGroup: Set<AmcamCameraFeature>],
+                deniedFeatures: Set<AmcamCameraFeature> = []) {
+        self.modelCode = modelCode
+        self.displayName = displayName
+        self.allowedFeaturesByGroup = allowedFeaturesByGroup
         self.deniedFeatures = deniedFeatures
     }
 }
@@ -161,7 +175,11 @@ public struct AmcamCameraProfileRegistry: Sendable {
                 reason = baseAvailable ? nil : (advertised
                     ? "The model advertises this capability, but the runtime SDK probe did not confirm it."
                     : "The camera model does not advertise this capability.")
-            } else if feature == .resolution || feature == .liveCapture {
+            } else if feature == .resolution {
+                baseAvailable = probe == true
+                evidence = .runtimeProbe
+                reason = baseAvailable ? nil : "The camera does not expose a usable preview resolution configuration."
+            } else if feature == .liveCapture {
                 baseAvailable = true
                 evidence = .implementation
                 reason = nil
