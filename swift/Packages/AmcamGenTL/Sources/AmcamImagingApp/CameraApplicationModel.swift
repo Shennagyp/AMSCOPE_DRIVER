@@ -19,6 +19,7 @@ final class CameraApplicationModel: ObservableObject {
 
     private var driver: AmcamCameraDriver?
     private var session: AmcamCameraSession?
+    private var hasInitialized = false
     private var profileRegistry = AmcamCameraProfileRegistry()
     private var lastFrameHostTime: TimeInterval?
     private var frameIntervals: [TimeInterval] = []
@@ -33,6 +34,8 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func initialize() {
+        guard !hasInitialized else { return }
+        hasInitialized = true
         loadProfileConfiguration()
         if let url = defaultSDKURL() {
             configureSDK(at: url)
@@ -63,6 +66,7 @@ final class CameraApplicationModel: ObservableObject {
             if !found.contains(where: { $0.identifier == selectedDeviceID }) {
                 selectedDeviceID = found.first?.identifier ?? ""
                 closeSession()
+                latestImage = nil
             }
             status = found.isEmpty ? "No AmScope cameras detected" : "\(found.count) camera(s) detected"
             errorMessage = nil
