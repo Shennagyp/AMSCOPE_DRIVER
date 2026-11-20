@@ -1328,7 +1328,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         // so first determine a safe capacity, then perform exactly one retrieval.
         // Do not hold the API lock while waiting: EventKill must be able to
         // interrupt an infinite-timeout read.
-        let maximumSize = try withLock {
+        let (maximumSize, eventType) = try withLock {
             guard let registration = registeredEventsByHandle[event.rawValue] else {
                 throw GC_ERROR.invalidHandle
             }
@@ -1348,7 +1348,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                       value >= 0, value <= 64 * 1024 * 1024 else {
                     throw GC_ERROR.invalidValue
                 }
-                return value
+                return (value, registration.eventType)
             } catch let error as GC_ERROR where error == .invalidParameter {
                 // EVENT_SIZE_MAX (EventGetInfo command 3) was standardized in
                 // GenTL 1.2. GenTL 1.0 defines the New Buffer event payload as
@@ -1359,7 +1359,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 guard registration.eventType == GenTLEventType.newBuffer.rawValue else {
                     throw GC_ERROR.notImplemented
                 }
-                return MemoryLayout<EVENT_NEW_BUFFER_DATA>.size
+                return (MemoryLayout<EVENT_NEW_BUFFER_DATA>.size, registration.eventType)
             }
         }
 
@@ -1378,6 +1378,10 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         }
         try check(result)
         guard actualSize >= 0, actualSize <= allocationSize else {
+            throw GC_ERROR.invalidValue
+        }
+        if eventType == GenTLEventType.newBuffer.rawValue,
+           actualSize != MemoryLayout<EVENT_NEW_BUFFER_DATA>.size {
             throw GC_ERROR.invalidValue
         }
         data.count = actualSize
