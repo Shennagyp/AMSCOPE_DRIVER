@@ -123,7 +123,7 @@ private enum ProbeError: Error, LocalizedError {
 }
 
 @main
-private struct AmcamCameraProbe {
+struct AmcamCameraProbe {
     static func main() {
         if CommandLine.arguments.dropFirst().contains("--help") {
             print(Options.usage)
@@ -147,7 +147,6 @@ private struct AmcamCameraProbe {
         var interface: IF_HANDLE?
         var device: DEV_HANDLE?
         var stream: DS_HANDLE?
-        var event: EVENT_HANDLE?
         var eventRegistered = false
         var acquisitionStarted = false
 
@@ -175,6 +174,8 @@ private struct AmcamCameraProbe {
 
         try backend.swiftGCInitLib()
         initialized = true
+        let sdkVersion = try readString(backend.GCGetInfo(command: GenTLInfoCommand.TransportLayer.version.rawValue))
+        print("SDK version: \(sdkVersion)")
         let systemHandle = try backend.TLOpen()
         system = systemHandle
 
@@ -203,6 +204,21 @@ private struct AmcamCameraProbe {
             interfaceHandle,
             index: UInt32(options.deviceIndex)
         )
+        let modelName = try readString(
+            backend.IFGetDeviceInfo(
+                interfaceHandle,
+                deviceID: deviceID,
+                command: GenTLInfoCommand.Device.model.rawValue
+            )
+        )
+        let displayName = try readString(
+            backend.IFGetDeviceInfo(
+                interfaceHandle,
+                deviceID: deviceID,
+                command: GenTLInfoCommand.Device.displayName.rawValue
+            )
+        )
+        print("Selected camera: \(displayName) (\(modelName))")
         let deviceHandle = try backend.IFOpenDevice(
             interfaceHandle,
             deviceID: deviceID,
@@ -231,7 +247,6 @@ private struct AmcamCameraProbe {
             .dataStream(streamHandle),
             eventType: GenTLEventType.newBuffer.rawValue
         )
-        event = eventHandle
         eventRegistered = true
 
         let bufferHandle = try backend.DSAllocAndAnnounceBuffer(
@@ -255,6 +270,8 @@ private struct AmcamCameraProbe {
 
         var completeFrames = 0
         var incompleteFrames = 0
+        var firstDeviceTimestamp: UInt64?
+        var lastDeviceTimestamp: UInt64?
         var lastPPM: Data?
 
         for frameIndex in 0..<options.frameCount {
@@ -303,6 +320,10 @@ private struct AmcamCameraProbe {
                 backend, stream: streamHandle, buffer: bufferHandle,
                 command: GenTLInfoCommand.Buffer.timestamp.rawValue
             )
+            if timestamp > 0 {
+                if firstDeviceTimestamp == nil { firstDeviceTimestamp = timestamp }
+                lastDeviceTimestamp = timestamp
+            }
 
             guard !isIncomplete else {
                 incompleteFrames += 1
@@ -372,12 +393,28 @@ private struct AmcamCameraProbe {
 
         print(
             "Result: \(completeFrames) complete, \(incompleteFrames) incomplete, " +
-            String(format: "%.2f", Double(completeFrames) / elapsed) + " delivered FPS, " +
+            String(format: "%.2f", Double(completeFrames) / elapsed) + " host-loop FPS, " +
             String(format: "%.3f", elapsed) + " seconds"
         )
+        if let firstDeviceTimestamp, let lastDeviceTimestamp,
+           lastDeviceTimestamp > firstDeviceTimestamp, completeFrames > 1 {
+            let deviceElapsedMicroseconds = lastDeviceTimestamp - firstDeviceTimestamp
+            let deviceFPS = Double(completeFrames - 1) * 1_000_000.0 /
+                Double(deviceElapsedMicroseconds)
+            print("Camera timestamp rate: \(String(format: "%.2f", deviceFPS)) FPS")
+        } else {
+            print("Camera timestamp rate: unavailable")
+        }
         if incompleteFrames > 0 {
             throw ProbeError.incompleteFrame
         }
+    }
+
+    private static func readString(_ value: GenTLInfoValue) throws -> String {
+        guard case .string(let string) = value else {
+            throw ProbeError.invalidInfo("expected string, got \(value)")
+        }
+        return string
     }
 
     private static func readSize(
