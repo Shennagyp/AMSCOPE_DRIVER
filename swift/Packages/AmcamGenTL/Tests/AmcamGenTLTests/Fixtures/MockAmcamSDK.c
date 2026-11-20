@@ -29,6 +29,7 @@ static int32_t auto_exposure = 1;
 static uint32_t exposure_time = 10000;
 static int ignore_exposure_write = 0;
 static uint16_t exposure_gain = 100;
+static int ignore_exposure_gain_write = 0;
 static int32_t precise_frame_rate_tenths = 150;
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
@@ -137,8 +138,11 @@ int32_t Amcam_get_ExpoAGain(void *handle, uint16_t *value) {
 int32_t Amcam_put_ExpoAGain(void *handle, uint16_t value) {
     if (!handle) return -1;
     if (value < 100 || value > 800) return -1;
-    exposure_gain = value;
+    if (!ignore_exposure_gain_write) exposure_gain = value;
     return 0;
+}
+void MockAmcam_SetIgnoreExposureGainWrite(int32_t enabled) {
+    ignore_exposure_gain_write = enabled != 0;
 }
 int32_t Amcam_get_ExpoAGainRange(void *handle, uint16_t *minimum, uint16_t *maximum, uint16_t *default_value) {
     if (!handle || !minimum || !maximum || !default_value) return -1;
