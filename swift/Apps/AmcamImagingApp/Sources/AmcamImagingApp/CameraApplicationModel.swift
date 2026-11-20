@@ -30,18 +30,6 @@ final class CameraApplicationModel: ObservableObject {
     private var profileRegistry = AmcamCameraProfileRegistry()
     private var frameRateEstimator = FrameRateEstimator()
 
-    private let featureNamesByCameraFeature: [AmcamCameraFeature: [String]] = [
-        .resolution: ["AmcamResolutionIndex"],
-        .exposureAuto: ["ExposureAuto"],
-        .exposureManual: ["ExposureTime"],
-        .analogGain: ["AmcamAnalogGainPercent"],
-        .whiteBalance: ["AmcamWhiteBalanceTemperature", "AmcamWhiteBalanceTint", "AmcamWhiteBalanceRGBGain"],
-        .colorCorrection: ["AmcamColorMatrixEnabled"],
-        .pixelFormatSelection: ["AmcamPixelFormat"],
-        .preciseFrameRate: ["AmcamFixedFrameRate"],
-        .discreteFrameSpeed: ["AmcamFrameSpeedLevel"]
-    ]
-
     var selectedDevice: AmcamDevice? {
         devices.first { $0.identifier == selectedDeviceID }
     }
@@ -416,51 +404,17 @@ final class CameraApplicationModel: ObservableObject {
         hasDataStream: Bool
     ) -> AmcamCameraCapabilities? {
         guard let device else { return nil }
-        let descriptorsByName = Dictionary(
-            descriptors.map { ($0.name, $0) },
+        let availabilityByName = Dictionary(
+            descriptors.map { ($0.name, $0.isAvailable) },
             uniquingKeysWith: { _, latest in latest }
         )
-        let profile = profileRegistry.profile(for: device.modelCode)
-
-        let features = AmcamCameraFeature.allCases.map { feature -> AmcamFeatureAvailability in
-            let matchingDescriptors = (featureNamesByCameraFeature[feature] ?? [])
-                .compactMap { descriptorsByName[$0] }
-            let implemented = feature == .liveCapture || !matchingDescriptors.isEmpty
-            let hardwareAvailable = feature == .liveCapture
-                ? hasDataStream
-                : matchingDescriptors.contains(where: \.isAvailable)
-            let profileAllows = profile.map { $0.allowedFeatures.contains(feature) } ?? true
-            let profileDenies = profile?.deniedFeatures.contains(feature) ?? false
-            let available = hardwareAvailable && profileAllows && !profileDenies
-
-            let reason: String?
-            if profileDenies {
-                reason = "Disabled by the explicit model profile."
-            } else if !profileAllows {
-                reason = "Not included in the explicit model profile allow-list."
-            } else if !implemented {
-                reason = "This feature is not yet exposed by the routed GenTL feature provider."
-            } else if !hardwareAvailable {
-                reason = feature == .liveCapture
-                    ? "The opened device does not expose a data stream."
-                    : "The selected camera reports this feature as unavailable."
-            } else {
-                reason = nil
-            }
-
-            return AmcamFeatureAvailability(
-                feature: feature,
-                available: available,
-                implemented: implemented,
-                evidence: implemented ? .implementation : nil,
-                reason: reason
-            )
-        }
-
-        return AmcamCameraCapabilities(
-            modelCode: device.modelCode,
-            modelFlags: device.modelFlags ?? 0,
-            features: features
+        let maximumSpeedLevel = descriptors.first(where: { $0.name == "AmcamFrameSpeedLevel" })?
+            .numericRange.flatMap { Int(exactly: $0.maximum) }
+        return profileRegistry.resolveRuntime(
+            device: device,
+            featureAvailabilityByName: availabilityByName,
+            hasDataStream: hasDataStream,
+            maximumSpeedLevel: maximumSpeedLevel
         )
     }
 
