@@ -27,6 +27,7 @@ static uint32_t stop_count;
 static uint32_t pull_count;
 static int32_t auto_exposure = 1;
 static int exposure_unavailable = 0;
+static int exposure_range_unavailable = 0;
 static uint32_t exposure_time = 10000;
 static int ignore_exposure_write = 0;
 static uint16_t exposure_gain = 100;
@@ -132,8 +133,11 @@ int32_t Amcam_put_ExpoTime(void *handle, uint32_t value) {
     if (!ignore_exposure_write) exposure_time = value;
     return 0;
 }
+void MockAmcam_SetExposureRangeUnavailable(int32_t unavailable) {
+    exposure_range_unavailable = unavailable != 0;
+}
 int32_t Amcam_get_ExpTimeRange(void *handle, uint32_t *minimum, uint32_t *maximum, uint32_t *default_value) {
-    if (!handle || !minimum || !maximum || !default_value || exposure_unavailable) return -1;
+    if (!handle || !minimum || !maximum || !default_value || exposure_unavailable || exposure_range_unavailable) return -1;
     *minimum = 100;
     *maximum = 1000000;
     *default_value = 10000;
