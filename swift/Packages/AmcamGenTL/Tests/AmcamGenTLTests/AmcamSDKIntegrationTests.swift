@@ -210,7 +210,8 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         let streamHandle = DS_HANDLE(rawValue: 0x101)
         let deviceHandle = DEV_HANDLE(rawValue: 0x102)
-        let bufferHandle = BUFFER_HANDLE(rawValue: 0x103)
+        let firstBufferHandle = BUFFER_HANDLE(rawValue: 0x103)
+        let secondBufferHandle = BUFFER_HANDLE(rawValue: 0x105)
         let eventHandle = EVENT_HANDLE(rawValue: 0x104)
         let stream = try AmcamDataStreamRecord(
             handle: streamHandle,
@@ -227,11 +228,16 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         let payloadSize = try XCTUnwrap(
             AmcamRGB24Layout(width: 640, height: 480)
         ).payloadSize
-        let memory = UnsafeMutableRawPointer.allocate(
+        let firstMemory = UnsafeMutableRawPointer.allocate(
             byteCount: payloadSize,
             alignment: 64
         )
-        memory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
+        let secondMemory = UnsafeMutableRawPointer.allocate(
+            byteCount: payloadSize,
+            alignment: 64
+        )
+        firstMemory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
+        secondMemory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
         var cleanupCompleted = false
         defer {
             if !cleanupCompleted {
@@ -239,16 +245,25 @@ final class AmcamSDKIntegrationTests: XCTestCase {
                 try? stream.close()
                 try? session.close()
             }
-            memory.deallocate()
+            firstMemory.deallocate()
+            secondMemory.deallocate()
         }
 
         try stream.announce(
-            handle: bufferHandle,
-            memory: memory,
+            handle: firstBufferHandle,
+            memory: firstMemory,
             size: payloadSize,
             privateData: nil,
             allocatedByProvider: false
         )
+        try stream.announce(
+            handle: secondBufferHandle,
+            memory: secondMemory,
+            size: payloadSize,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+
         let emitterHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
         XCTAssertNotNil(emitterHandle)
         defer { if let emitterHandle { dlclose(emitterHandle) } }
@@ -258,28 +273,67 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         }
         let emitEvent = unsafeBitCast(symbol, to: (@convention(c) (UInt32) -> Void).self)
 
-        try stream.queue(bufferHandle)
+        try stream.queue(firstBufferHandle)
+        try stream.queue(secondBufferHandle)
         try stream.start(numberToAcquire: 3)
 
-        for expectedSequence in UInt64(1)...UInt64(3) {
+        let expectedHandles = [
+            firstBufferHandle.rawValue,
+            secondBufferHandle.rawValue,
+            firstBufferHandle.rawValue
+        ]
+
+        for (index, expectedSequence) in (UInt64(1)...UInt64(3)).enumerated() {
             let eventData = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
             XCTAssertEqual(eventData.count, 2 * MemoryLayout<UInt>.size)
-            let deliveredHandle = eventData.withUnsafeBytes {
-                $0.loadUnaligned(as: UInt.self)
+            let (deliveredHandle, deliveredUserPointer) = eventData.withUnsafeBytes {
+                (
+                    $0.loadUnaligned(as: UInt.self),
+                    $0.loadUnaligned(
+                        fromByteOffset: MemoryLayout<UInt>.size,
+                        as: UInt.self
+                    )
+                )
             }
-            XCTAssertEqual(deliveredHandle, bufferHandle.rawValue)
+            XCTAssertEqual(deliveredHandle, expectedHandles[index])
+            XCTAssertEqual(deliveredUserPointer, 0)
 
-            XCTAssertEqual(memory.load(as: UInt8.self), 0x5a)
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 1), .size(payloadSize))
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 9), .size(payloadSize))
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 10), .size(640))
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 11), .size(480))
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 16), .uint64(expectedSequence))
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 4), .bool8(true))
-            XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 5), .bool8(false))
+            let deliveredBuffer = BUFFER_HANDLE(rawValue: deliveredHandle)
+            let deliveredMemory = deliveredHandle == firstBufferHandle.rawValue
+                ? firstMemory
+                : secondMemory
+            XCTAssertEqual(deliveredMemory.load(as: UInt8.self), 0x5a)
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 1),
+                .size(payloadSize)
+            )
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 9),
+                .size(payloadSize)
+            )
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 10),
+                .size(640)
+            )
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 11),
+                .size(480)
+            )
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 16),
+                .uint64(expectedSequence)
+            )
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 4),
+                .bool8(true)
+            )
+            XCTAssertEqual(
+                try stream.bufferInfo(deliveredBuffer, command: 5),
+                .bool8(false)
+            )
 
             if expectedSequence < 3 {
-                try stream.queue(bufferHandle)
+                try stream.queue(deliveredBuffer)
                 emitEvent(0x0004)
             }
         }
@@ -292,7 +346,6 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         try session.close()
         cleanupCompleted = true
     }
-
 
     func testUndersizedBufferIsReportedWithoutMemoryOverwrite() throws {
         let libraryURL = try buildMockSDK()
