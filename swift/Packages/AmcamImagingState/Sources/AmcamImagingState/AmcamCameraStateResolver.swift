@@ -154,9 +154,12 @@ public struct AmcamCameraStateResolver: Sendable {
         let clamped = Swift.min(Swift.max(value, range.minimum), maximumValidValue)
         let steps = ((clamped - range.minimum) / increment).rounded()
         let normalized = range.minimum + steps * increment
-        guard normalized.isFinite,
-              normalized >= range.minimum,
-              normalized <= maximumValidValue else { return nil }
+        guard normalized.isFinite, normalized >= range.minimum else { return nil }
+        if normalized > maximumValidValue {
+            let endpointTolerance = stepTolerance * increment
+            guard normalized - maximumValidValue <= endpointTolerance else { return nil }
+            return maximumValidValue
+        }
         return normalized
     }
 
