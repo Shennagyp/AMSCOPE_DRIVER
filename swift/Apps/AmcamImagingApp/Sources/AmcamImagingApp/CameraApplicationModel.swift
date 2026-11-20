@@ -22,8 +22,8 @@ final class CameraApplicationModel: ObservableObject {
 
     private var router = GenTLRouter()
     private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
-    /// Borrowed GenTL feature-access handle; AmcamImagingRuntime owns open/close.
-    private var featureSession: any CameraRuntimeSession?
+    /// Borrowed application-facing feature session; AmcamImagingRuntime owns open/close.
+    private var featureSession: (any CameraRuntimeSession)?
     private let cameraLifecycle = CameraSessionLifecycle()
     private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?

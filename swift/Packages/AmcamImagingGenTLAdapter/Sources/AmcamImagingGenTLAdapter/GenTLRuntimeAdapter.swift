@@ -5,17 +5,6 @@ import GenTLRouter
 import GenTLAPI
 import GenTLABI
 
-public enum GenTLRuntimeAdapterError: Error, Equatable, LocalizedError {
-    case unexpectedSessionType
-
-    public var errorDescription: String? {
-        switch self {
-        case .unexpectedSessionType:
-            return "The GenTL backend returned a session that is not owned by the GenTL runtime adapter."
-        }
-    }
-}
-
 /// Opens a discovered GenTL candidate on behalf of the imaging runtime and adapts
 /// the resulting session to the backend-neutral lifecycle contract.
 public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable {
