@@ -287,9 +287,11 @@ public final class AmcamCameraSession: @unchecked Sendable {
             probes[.preciseFrameRate] = false
         }
 
+        probes[.analogGain] = sdk.exposureGainControlAvailable &&
+            (try? sdk.readExposureGain(activeHandle)) != nil
         probes[.resolution] = !resolutions.isEmpty && sdk.resolutionChangeAvailable
         let implemented: Set<AmcamCameraFeature> = [
-            .liveCapture, .resolution, .exposureAuto, .exposureManual,
+            .liveCapture, .resolution, .exposureAuto, .exposureManual, .analogGain,
             .preciseFrameRate, .discreteFrameSpeed
         ]
         return registry.resolve(
@@ -367,6 +369,33 @@ public final class AmcamCameraSession: @unchecked Sendable {
             )
         }
         requestedExposureMicroseconds = microseconds
+        return snapshot
+    }
+
+    public func setExposureGain(percent: UInt16) throws -> AmcamControlSnapshot {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        let activeHandle = try controlHandle()
+        let current = try sdk.readExposureGain(activeHandle)
+        guard percent >= current.minimum, percent <= current.maximum else {
+            throw AmcamCameraError.unsupportedControl(
+                "Requested analog gain \(percent)% is outside the camera range \(current.minimum)…\(current.maximum)%."
+            )
+        }
+        try sdk.setExposureGain(activeHandle, percent: percent)
+        let snapshot = try readControls(
+            using: activeHandle,
+            requestedExposure: requestedExposureMicroseconds,
+            requestedFrameRate: requestedFrameRate,
+            requestedSpeedLevel: requestedSpeedLevel
+        )
+        guard snapshot.gain?.readbackPercent == percent else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "analog gain",
+                requested: "\(percent)%",
+                actual: snapshot.gain.map { "\($0.readbackPercent)%" } ?? "unavailable"
+            )
+        }
         return snapshot
     }
 
@@ -480,6 +509,15 @@ public final class AmcamCameraSession: @unchecked Sendable {
             defaultMicroseconds: exposureReadback.defaultValue,
             requestedMicroseconds: requestedExposure
         )
+        let gainReadback = try? sdk.readExposureGain(handle)
+        let gain = gainReadback.map {
+            AmcamGainControl(
+                readbackPercent: $0.current,
+                minimumPercent: $0.minimum,
+                maximumPercent: $0.maximum,
+                defaultPercent: $0.defaultValue
+            )
+        }
 
         let preciseSupported = modelFlags.map { ($0 & AmcamSDK.preciseFrameRateFlag) != 0 } == true
         var minimumFPS: Double?
@@ -537,7 +575,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             deviceMeasurementWindowMilliseconds: recentRate?.windowMilliseconds,
             deviceTotalFrameCount: recentRate?.totalFrameCount
         )
-        return AmcamControlSnapshot(exposure: exposure, frameRate: frameRate)
+        return AmcamControlSnapshot(exposure: exposure, gain: gain, frameRate: frameRate)
     }
 
     private func handle(event: UInt32) {
