@@ -45,8 +45,6 @@ final class CameraApplicationModel: ObservableObject {
         let panel = NSOpenPanel()
         panel.title = "Select the Amcam SDK"
         panel.message = "Choose the vendor libamcam.dylib"
-        panel.allowedContentTypes = [.unixExecutable, .item]
-        panel.allowsOtherFileTypes = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         if panel.runModal() == .OK, let url = panel.url {
@@ -188,7 +186,6 @@ final class CameraApplicationModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func chooseSDK() { chooseSDK() }
 
     func toggleFullScreen() {
         guard let window = NSApp.keyWindow ?? NSApp.windows.first else { return }
@@ -259,6 +256,9 @@ final class CameraApplicationModel: ObservableObject {
 
     private func defaultSDKURL() -> URL? {
         let candidates = [
+            Bundle.main.bundleURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("vendor/amcam/macos/libamcam.dylib"),
             URL(fileURLWithPath: "vendor/amcam/macos/libamcam.dylib"),
             FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib"),
