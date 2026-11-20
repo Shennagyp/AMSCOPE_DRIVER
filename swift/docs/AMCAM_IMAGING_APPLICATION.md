@@ -6,7 +6,7 @@ A native macOS camera application built on the Amcam SDK backend in this reposit
 
 The target application is a GenTLAPI consumer. GenTLRouter owns backend selection and device-session creation; the selected backend may be a native CTI Producer or the Amcam SDK-backed GenTL implementation. The app must not instantiate AmcamCameraDriver or AmcamCameraSession directly.
 
-**Migration status on `macos-version-optimization`:** the executable has been extracted into `swift/Apps/AmcamImagingApp` so it can depend on GenTLRouter without a SwiftPM package cycle. The current CameraApplicationModel still contains legacy direct Amcam driver/session calls. Those calls are transitional and must be removed by the routed-session migration; the package move alone does not mean the app is already routed.
+**Current routed architecture on `macos-version-optimization`:** CameraApplicationModel discovers and opens devices through GenTLRouter, reads and writes advertised controls through GenTLDeviceSession, and receives frames through GenTLAcquisitionSession. The app package depends on AmcamCameraModel, GenTLABI, GenTLAPI and GenTLRouter; it does not import or depend on AmcamGenTL and does not construct AmcamCameraDriver or AmcamCameraSession. CI enforces this dependency boundary.
 
 ## Architecture
 
@@ -213,3 +213,10 @@ Camera presentation types and model capability/profile policy are defined in the
 ## Package dependency boundary
 
 Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.
+
+
+## Resource cleanup and retry semantics
+
+The application closes resources in dependency order: acquisition session first, device session second. If acquisition cleanup fails (for example, a Producer refuses to revoke an announced buffer), the application retains both the acquisition and device session handles and does not close the parent device. If device close fails, the device session remains retained. The user can retry cleanup by selecting the same camera action again or by shutting down; the app must not discard a still-owned handle and continue as if cleanup succeeded.
+
+The GenTLRouter acquisition tests inject a buffer-revoke failure, verify that the data stream is not closed prematurely, then allow revocation and verify that a second close succeeds. The app follows the same parent/child ownership rule.
