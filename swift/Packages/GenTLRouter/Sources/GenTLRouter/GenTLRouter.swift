@@ -85,6 +85,14 @@ public struct GenTLProducerRegistrationReport: Sendable {
 
 /// A discovered device remains bound to the exact GenTL implementation and
 /// interface handle that discovered it. The application receives the raw GenTL API.
+
+/// Public GenTL device access modes for routed device opening.
+public enum GenTLDeviceAccessMode: Int32, Sendable {
+    case readOnly = 2
+    case control = 3
+    case exclusive = 4
+}
+
 public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let backendID: String
     public let interfaceID: String
@@ -117,6 +125,10 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
         self.systemHandle = context.systemHandle
         self.interfaceHandle = interfaceHandle
         self.context = context
+    }
+
+    public func open(access: GenTLDeviceAccessMode) throws -> GenTLDeviceSession {
+        try open(accessFlags: GenTLABI.DEVICE_ACCESS_FLAGS(access.rawValue))
     }
 
     public func open(accessFlags: GenTLABI.DEVICE_ACCESS_FLAGS) throws -> GenTLDeviceSession {
