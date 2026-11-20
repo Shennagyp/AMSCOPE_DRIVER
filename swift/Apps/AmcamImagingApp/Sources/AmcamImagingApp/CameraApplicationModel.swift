@@ -52,32 +52,8 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func normalizedNumericValue(_ value: Double, for name: String) -> Double? {
-        guard let range = numericRange(for: name),
-              value.isFinite,
-              range.minimum.isFinite,
-              range.maximum.isFinite,
-              range.maximum >= range.minimum else {
-            return nil
-        }
-        guard let increment = range.increment else {
-            return Swift.min(Swift.max(value, range.minimum), range.maximum)
-        }
-        guard increment.isFinite, increment > 0 else { return nil }
-
-        // Snap against the descriptor's origin, but never clamp to a maximum
-        // that is not itself on the advertised increment grid.
-        let maximumSteps = ((range.maximum - range.minimum) / increment).rounded(.down)
-        guard maximumSteps.isFinite, maximumSteps >= 0 else { return nil }
-        let maximumValidValue = range.minimum + maximumSteps * increment
-        guard maximumValidValue.isFinite else { return nil }
-
-        let clamped = Swift.min(Swift.max(value, range.minimum), maximumValidValue)
-        let steps = ((clamped - range.minimum) / increment).rounded()
-        let snapped = range.minimum + steps * increment
-        guard snapped.isFinite,
-              snapped >= range.minimum,
-              snapped <= maximumValidValue else { return nil }
-        return snapped
+        guard let range = numericRange(for: name) else { return nil }
+        return stateResolver.normalizedNumericValue(value, range: range)
     }
 
     func initialize() {
