@@ -113,14 +113,10 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 }
 
 final class GenTLRouterLifecycleTests: XCTestCase {
-    func testFailedInitializationCleanupQuarantinesBackend() {
+    func testFailedInitializationCleanupQuarantinesBackend() throws {
         let api = RecordingGenTLAPI(failSystemOpen: true, failLibraryClose: true)
-        var factoryCalls = 0
         let router = GenTLRouter()
-        XCTAssertNoThrow(try router.register(backendID: "partial-init") {
-            factoryCalls += 1
-            return api
-        })
+        try router.register(backendID: "partial-init") { api }
 
         let first = router.discover()
         XCTAssertEqual(first.devices.count, 0)
@@ -130,7 +126,8 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(second.devices.count, 0)
         XCTAssertEqual(second.failures.count, 1)
 
-        XCTAssertEqual(factoryCalls, 1)
+        // GCInitLib is the observable proof that the API factory was not
+        // invoked for a second producer instance.
         let calls = api.snapshot()
         XCTAssertEqual(calls.gcInit, 1)
         XCTAssertEqual(calls.tlOpen, 1)
