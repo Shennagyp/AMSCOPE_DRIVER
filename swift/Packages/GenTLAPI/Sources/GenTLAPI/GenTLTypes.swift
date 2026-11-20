@@ -329,6 +329,77 @@ public enum GenTLDeviceAccessStatus: Int32, Sendable {
 }
 
 
+/// Character encoding values reported by TL_INFO_CHAR_ENCODING (GenTL 1.4).
+public enum GenTLCharacterEncoding: Int32, Sendable {
+    case ascii = 0
+    case utf8 = 1
+}
+
+/// Standard GenTL payload types.
+public enum GenTLPayloadType: Int32, Sendable {
+    case unknown = 0
+    case image = 1
+    case rawData = 2
+    case file = 3
+    case chunkData = 4 // Deprecated in GenTL 1.5
+    case jpeg = 5
+    case jpeg2000 = 6
+    case h264 = 7
+    case chunkOnly = 8
+    case deviceSpecific = 9
+    case multiPart = 10
+    case genDC = 11 // GenTL 1.6
+}
+
+/// Standard pixel-format namespace identifiers.
+public enum GenTLPixelFormatNamespace: Int32, Sendable {
+    case unknown = 0
+    case gev = 1
+    case iidc = 2
+    case pfnc16Bit = 3 // GenTL 1.4
+    case pfnc32Bit = 4 // GenTL 1.4
+}
+
+/// Standard pixel byte-order values (GenTL 1.4).
+public enum GenTLPixelEndianness: Int32, Sendable {
+    case unknown = 0
+    case little = 1
+    case big = 2
+}
+
+/// Data types used by multipart Buffer Part metadata (GenTL 1.5).
+public enum GenTLPartDataType: Int32, Sendable {
+    case unknown = 0
+    case image2D = 1
+    case plane2DBiPlanar = 2
+    case plane2DTriPlanar = 3
+    case plane2DQuadPlanar = 4
+    case image3D = 5
+    case plane3DBiPlanar = 6
+    case plane3DTriPlanar = 7
+    case plane3DQuadPlanar = 8
+    case confidenceMap = 9
+    case jpeg = 10 // GenTL 1.6
+    case jpeg2000 = 11 // GenTL 1.6
+}
+
+/// Schemes used by URL_INFO_SCHEME (GenTL 1.5).
+public enum GenTLURLScheme: Int32, Sendable {
+    case local = 0
+    case http = 1
+    case file = 2
+}
+
+/// Standard acquisition flags.
+public enum GenTLAcquisitionStartFlag: Int32, Sendable {
+    case normal = 0
+}
+
+public enum GenTLAcquisitionStopFlag: Int32, Sendable {
+    case normal = 0
+    case kill = 1
+}
+
 /// Register-stack read request. Each entry is one independent address/size operation.
 public struct GenTLPortReadRequest: Sendable, Equatable {
     public let address: UInt64
