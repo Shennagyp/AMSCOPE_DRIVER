@@ -10,7 +10,7 @@ import Combine
 final class CameraApplicationModel: ObservableObject {
     @Published private(set) var devices: [AmcamDevice] = []
     @Published var selectedDeviceID = ""
-    @Published private(set) var latestFrame: CameraPreviewFrame?
+    @Published private(set) var latestFrame: RGB8Frame?
     @Published private(set) var isStreaming = false
     @Published private(set) var cameraCapabilities: AmcamCameraCapabilities?
     @Published private(set) var controls: AmcamControlSnapshot?
