@@ -25,6 +25,7 @@ static const uint32_t resolution_heights[] = {1922, 960, 480};
 static uint32_t close_count;
 static uint32_t stop_count;
 static uint32_t pull_count;
+static uint32_t pull_api_version;
 static int32_t auto_exposure = 1;
 static int exposure_unavailable = 0;
 static int exposure_range_unavailable = 0;
@@ -101,6 +102,49 @@ int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameIn
     info->timestamp = (int64_t)(123456789u + pull_count);
     return 0;
 }
+
+int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV3 *info) {
+    if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
+    const uint32_t width = resolution_widths[current_resolution_index];
+    const uint32_t height = resolution_heights[current_resolution_index];
+    memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
+    info->width = width;
+    info->height = height;
+    info->flag = 0x0003;
+    info->seq = ++pull_count;
+    info->timestamp = (int64_t)(123456789u + pull_count);
+    info->shutterseq = 7;
+    info->expotime = 10000;
+    info->expogain = 100;
+    info->blacklevel = 0;
+    pull_api_version = 3;
+    return 0;
+}
+
+int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV4 *info) {
+    if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
+    const uint32_t width = resolution_widths[current_resolution_index];
+    const uint32_t height = resolution_heights[current_resolution_index];
+    memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
+    info->v3.width = width;
+    info->v3.height = height;
+    info->v3.flag = 0x0003;
+    info->v3.seq = ++pull_count;
+    info->v3.timestamp = (int64_t)(123456789u + pull_count);
+    info->v3.shutterseq = 7;
+    info->v3.expotime = 10000;
+    info->v3.expogain = 100;
+    info->v3.blacklevel = 0;
+    info->uLum = 123;
+    info->uFV = 456;
+    info->timecount = 11;
+    info->framecount = 12;
+    info->tricount = 13;
+    pull_api_version = 4;
+    return 0;
+}
+
+uint32_t MockAmcam_PullAPIVersion(void) { return pull_api_version; }
 
 int32_t Amcam_Stop(void *handle) {
     if (!handle) return -1;
@@ -231,6 +275,7 @@ void MockAmcam_Reset(void) {
     close_count = 0;
     stop_count = 0;
     pull_count = 0;
+    pull_api_version = 0;
     current_resolution_index = 2;
     active_callback = 0;
     active_context = 0;
