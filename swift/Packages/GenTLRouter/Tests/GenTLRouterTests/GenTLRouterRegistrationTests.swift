@@ -39,8 +39,10 @@ final class GenTLRouterRegistrationTests: XCTestCase {
 
         XCTAssertEqual(factoryInvocations.value, 1)
         XCTAssertTrue(report.devices.isEmpty)
-        XCTAssertEqual(report.failures.map(\.backendID), ["lazy-backend"])
-        XCTAssertTrue(report.failures[0].message.contains("Expected test factory failure"))
+        let failure = try XCTUnwrap(report.failures.first)
+        XCTAssertEqual(report.failures.count, 1)
+        XCTAssertEqual(failure.backendID, "lazy-backend")
+        XCTAssertTrue(failure.message.contains("Expected test factory failure"))
     }
 
     func testDuplicateBackendIdentifierIsRejectedWithoutReplacingRegistration() throws {
