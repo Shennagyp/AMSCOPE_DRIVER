@@ -252,7 +252,9 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         defer { buffer.deallocate() }
         var info = AmcamFrameInfoV2()
         var metadata: AmcamFrameMetadata?
-        XCTAssertEqual(sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata), 0)
+        var tightlyPackedRows = false
+        XCTAssertEqual(sdk.pullImage(opened.handle, buffer: buffer, frameInfo: &info, metadata: &metadata, tightlyPackedRows: &tightlyPackedRows), 0)
+        XCTAssertTrue(tightlyPackedRows)
         XCTAssertEqual(metadata?.apiVersion, .v2)
         XCTAssertEqual(info.width, 640)
         XCTAssertEqual(info.height, 480)
