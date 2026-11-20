@@ -2,19 +2,22 @@
 
 ## Objective
 
-A native macOS camera application built on the Amcam SDK backend in this repository. The main window is a full-screen-capable live image surface. A hardware dock provides camera selection, refresh, start, stop, settings, SDK selection, and full-screen controls. Camera settings are presented in a separate native window.
+A native macOS camera application built on the Amcam SDK backend in this repository. The main window is a full-screen-capable live image surface. A hardware dock provides camera selection, refresh, start, stop, settings, and full-screen controls. Vendor SDK discovery and loading are library responsibilities; the UI does not select SDK files. Camera settings are presented in a separate native window.
 
-The target application is a GenTLAPI consumer. GenTLRouter owns backend selection and device-session creation; the selected backend may be a native CTI Producer or the Amcam SDK-backed GenTL implementation. The app must not instantiate AmcamCameraDriver or AmcamCameraSession directly.
+The application consumes backend-neutral camera models, feature contracts, lifecycle events and frame values. GenTLRouter owns generic backend registration and discovery. AmcamImagingGenTLAdapter owns AmScope provider registration, discovery mapping, and conversion between GenTL-specific sessions/features and the portable runtime contracts. AmcamImagingRuntime exclusively owns the opened device session, acquisition lifecycle, feature I/O serialization, frame delivery and cleanup. The app sends commands to that runtime and consumes its events and frames; GenTL handles never escape the runtime actor.
 
-**Current routed architecture on `macos-version-optimization`:** CameraApplicationModel discovers and opens devices through GenTLRouter, reads and writes advertised controls through GenTLDeviceSession, and receives frames through GenTLAcquisitionSession. The app package depends on AmcamCameraModel, GenTLABI, GenTLAPI and GenTLRouter; it does not import or depend on AmcamGenTL and does not construct AmcamCameraDriver or AmcamCameraSession. CI enforces this dependency boundary.
+**Current architecture on `macos-version-optimization`:** CameraApplicationModel discovers candidates through AmcamCameraProvider, opens the selected opaque runtime device through CameraSessionLifecycle, and performs typed feature reads/writes through that same lifecycle. The app depends on AmcamCameraModel, AmcamImagingCore, AmcamImagingRuntime, AmcamImagingGenTLAdapter and AmcamImagingState. It does not import GenTLABI, GenTLAPI, GenTLRouter or AmcamGenTL, and it does not construct AmcamCameraDriver, AmcamCameraSession or GenTLDeviceSession. CI enforces this dependency boundary.
 
 ## Architecture
 
-- **GenTLAPI** is the app-facing protocol contract; the app must not depend on the transitional BackendConvenience SPI.
-- **GenTLRouter** registers native CTI and Amcam backends, discovers devices and returns backend-bound device sessions.
-- **GenTLFeatureAccess** exposes typed controls alongside the unchanged GenTL 1.6 operation surface. Amcam maps supported controls to SDK methods; native CTI feature access requires a real GenApi XML/port path.
-- **AmcamGenTL** owns SDK loading, camera enumeration, session lifecycle, frame acquisition, control readback and model capability discovery.
-- **AmcamImagingApp** owns the native macOS AppKit interface and translates backend-neutral frames to display images.
+- **GenTLAPI** is the GenTL 1.6 protocol contract used by backend implementations and the router; it is not imported by the app.
+- **GenTLRouter** registers backends and performs generic device discovery.
+- **AmcamImagingGenTLAdapter** registers the AmScope backend with GenTLRouter, creates opaque runtime-device candidates, and adapts GenTL feature/acquisition types to backend-neutral runtime values.
+- **AmcamImagingRuntime** exclusively owns device sessions and acquisition resources. Its FIFO operation gate serializes open/start/stop/close and feature reads/writes; failed cleanup retains handles for retry.
+- **AmcamImagingState** builds camera control snapshots and current-resolution state from feature descriptors and typed readbacks, without GenTL or AppKit dependencies.
+- **AmcamCameraModel** owns camera model values, feature groups, model profiles and hardware-evidence capability policy.
+- **AmcamGenTL** owns AmScope SDK loading, symbol resolution and vendor-specific SDK behavior behind the adapter.
+- **AmcamImagingApp** owns the native macOS AppKit interface and translates validated backend-neutral RGB8 frames to display images.
 - **amcam-camera-probe** remains a diagnostic executable; **amcam-imaging** is the user-facing application.
 
 Camera identity is deliberately separated:
@@ -141,8 +144,8 @@ Do not add a model profile until the exact SDK model descriptor name and the har
 ## Current implementation boundary
 
 The routed application currently provides:
-- device discovery and opening through GenTLRouter;
-- live image acquisition through GenTLAcquisitionSession and the GenTL New Buffer event;
+- device discovery through AmcamCameraProvider and GenTLRouter;
+- device opening, acquisition start/stop, frame delivery and ordered cleanup through CameraSessionLifecycle;
 - a bounded announced-buffer pool, copy-before-requeue semantics, and ordered stop/flush/revoke/close cleanup;
 - RGB8 (PFNC format 0x02180014, namespace 4) display with row-padding and payload-size validation;
 - ExposureAuto (Off, Once, Continuous), ExposureTime (microseconds), and AmcamAnalogGainPercent (percentage);
@@ -202,19 +205,19 @@ Typed feature access is tested at three layers:
 - GenTLRouter backend-bound feature forwarding and closed-session behavior;
 - Amcam mock-SDK integration for per-camera availability, exposure/gain, color matrix, pixel format, white-balance temperature/tint/RGB vector, fixed frame rate, resolution enumeration, validation and readback.
 
-Camera model/capability policy has its own test target. The complete five-package hosted macOS matrix and standalone app build passed. Historical development was not uniformly test-first: some earlier SDK controls predate their tests. New feature work must continue with failing tests first, implementation, full regression and refactoring.
+Camera model/capability policy has its own test target. Hosted CI is the authority for package and app-build status. The latest branch run must be green before the app is considered ready for local launch; the current source changes include descriptor-gated feature reads and a corrected Swift key-path compile error, and their hosted validation is pending. Physical-camera compatibility remains a separate acceptance gate. Historical development was not uniformly test-first: some earlier SDK controls predate their tests. New feature work must continue with failing tests first, implementation, full regression and refactoring.
 
 ## Package dependency boundary (2026-11-20)
 
-Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on this model package plus GenTLABI, GenTLAPI and GenTLRouter. It does not depend directly on AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.
+Camera presentation types and model capability/profile policy are defined in the independent `AmcamCameraModel` package. The application depends on AmcamCameraModel, AmcamImagingCore, AmcamImagingRuntime, AmcamImagingGenTLAdapter and AmcamImagingState. It does not depend directly on GenTLABI, GenTLAPI, GenTLRouter or AmcamGenTL. The Amcam backend imports and re-exports AmcamCameraModel so existing clients can continue importing AmcamGenTL while accessing the same public camera model types. This is a source-compatibility bridge, not a reason for the app to reference backend implementation types.
 
 
 
 ## Resource cleanup and retry semantics
 
-The application closes resources in dependency order: acquisition session first, device session second. If acquisition cleanup fails (for example, a Producer refuses to revoke an announced buffer), the application retains both the acquisition and device session handles and does not close the parent device. If device close fails, the device session remains retained. The user can retry cleanup by selecting the same camera action again or by shutting down; the app must not discard a still-owned handle and continue as if cleanup succeeded.
+CameraSessionLifecycle owns resources in dependency order: acquisition first, parent device session second. If acquisition cleanup fails (for example, a Producer refuses to revoke an announced buffer), the runtime retains both the acquisition and device session and does not close the parent. If device close fails, the runtime retains the device session. The app receives the cleanup error and does not discard or replace the runtime-owned handle. A later close/shutdown attempt retries the retained resource. The UI never owns or manipulates GenTL handles.
 
-The GenTLRouter acquisition tests inject a buffer-revoke failure, verify that the data stream is not closed prematurely, then allow revocation and verify that a second close succeeds. The app follows the same parent/child ownership rule.
+GenTLRouter acquisition tests inject a buffer-revoke failure, verify that the data stream is not closed prematurely, then allow revocation and verify that a second close succeeds. Runtime lifecycle tests separately verify child-before-parent cleanup and retry behavior.
 
 
 ## Triggered acquisition and event timeouts
