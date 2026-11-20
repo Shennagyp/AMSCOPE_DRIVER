@@ -3,8 +3,8 @@
 public extension GenTLBackendConvenience {
     var genTLVersion: GenTLVersion { .v1_6 }
 
-    func GCInitLib() throws { throw GC_ERROR.notImplemented }
-    func GCCloseLib() throws { throw GC_ERROR.notImplemented }
+    func swiftGCInitLib() throws { throw GC_ERROR.notImplemented }
+    func swiftGCCloseLib() throws { throw GC_ERROR.notImplemented }
     func GCGetInfo(command: Int32) throws -> GenTLInfoValue { throw GC_ERROR.notImplemented }
     func GCGetLastError() -> GenTLErrorInfo {
         GenTLErrorInfo(code: .notImplemented, message: "GCGetLastError is not implemented by this backend.")
