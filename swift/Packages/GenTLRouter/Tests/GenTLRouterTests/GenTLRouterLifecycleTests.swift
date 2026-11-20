@@ -212,7 +212,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
 
         XCTAssertTrue(session.supportsFeatureAccess)
         XCTAssertEqual(
-            try session.featureDescriptors().map(\\.name),
+            try session.featureDescriptors().map(\.name),
             ["MockFeature"]
         )
         XCTAssertEqual(try session.readFeature("MockFeature"), .integer(42))
@@ -221,7 +221,7 @@ final class GenTLRouterLifecycleTests: XCTestCase {
 
         XCTAssertThrowsError(try session.featureDescriptors()) { error in
             guard case GenTLRouterError.deviceSessionClosed("feature-backend") = error else {
-                return XCTFail("Expected a closed-session error, received \\(error)")
+                return XCTFail("Expected a closed-session error, received \(error)")
             }
         }
     }
