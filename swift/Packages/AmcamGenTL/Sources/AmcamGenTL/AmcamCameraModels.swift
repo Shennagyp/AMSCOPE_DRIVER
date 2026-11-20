@@ -65,6 +65,51 @@ public struct AmcamExposureControl: Equatable, Sendable {
     }
 }
 
+public struct AmcamCameraImageControls: Equatable, Sendable {
+    public let colorMatrixEnabled: Bool?
+    public let pixelFormatCode: Int32?
+    public let supportedPixelFormats: [Int32]
+
+    public init(colorMatrixEnabled: Bool?, pixelFormatCode: Int32?, supportedPixelFormats: [Int32]) {
+        self.colorMatrixEnabled = colorMatrixEnabled
+        self.pixelFormatCode = pixelFormatCode
+        self.supportedPixelFormats = supportedPixelFormats
+    }
+}
+
+public enum AmcamPixelFormatCode: Int32, CaseIterable, Sendable, Identifiable {
+    case raw8 = 0
+    case raw10 = 1
+    case raw12 = 2
+    case raw14 = 3
+    case raw16 = 4
+    case yuv411 = 5
+    case vuyy = 6
+    case yuv444 = 7
+    case rgb888 = 8
+    case gmcy8 = 9
+    case gmcy12 = 10
+    case uyvy = 11
+
+    public var id: Int32 { rawValue }
+    public var title: String {
+        switch self {
+        case .raw8: return "RAW 8"
+        case .raw10: return "RAW 10"
+        case .raw12: return "RAW 12"
+        case .raw14: return "RAW 14"
+        case .raw16: return "RAW 16"
+        case .yuv411: return "YUV 411"
+        case .vuyy: return "VUYY"
+        case .yuv444: return "YUV 444"
+        case .rgb888: return "RGB 888"
+        case .gmcy8: return "GMCY 8"
+        case .gmcy12: return "GMCY 12"
+        case .uyvy: return "UYVY"
+        }
+    }
+}
+
 public struct AmcamWhiteBalanceControl: Equatable, Sendable {
     public let temperature: Int32?
     public let tint: Int32?
@@ -133,14 +178,17 @@ public struct AmcamControlSnapshot: Equatable, Sendable {
     public let exposure: AmcamExposureControl?
     public let gain: AmcamGainControl?
     public let whiteBalance: AmcamWhiteBalanceControl?
+    public let image: AmcamCameraImageControls?
     public let frameRate: AmcamFrameRateControl
 
     public init(exposure: AmcamExposureControl? = nil, gain: AmcamGainControl? = nil,
                 whiteBalance: AmcamWhiteBalanceControl? = nil,
+                image: AmcamCameraImageControls? = nil,
                 frameRate: AmcamFrameRateControl) {
         self.exposure = exposure
         self.gain = gain
         self.whiteBalance = whiteBalance
+        self.image = image
         self.frameRate = frameRate
     }
 }
