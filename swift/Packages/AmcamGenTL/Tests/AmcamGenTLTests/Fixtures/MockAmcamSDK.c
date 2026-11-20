@@ -110,7 +110,7 @@ int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bit
     memset(buffer, 0x5a, (size_t)width * (size_t)height * 3u);
     info->width = width;
     info->height = height;
-    info->flag = 0x0003;
+    info->flag = 0x003f;
     info->seq = ++pull_count;
     info->timestamp = (int64_t)(123456789u + pull_count);
     info->shutterseq = 7;
@@ -133,13 +133,19 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     info->v3.timestamp = (int64_t)(123456789u + pull_count);
     info->v3.shutterseq = 7;
     info->v3.expotime = 10000;
-    info->v3.expogain = 100;
-    info->v3.blacklevel = 0;
+    info->v3.expogain = 125;
+    info->v3.blacklevel = 16;
     info->uLum = 123;
-    info->uFV = 456;
-    info->timecount = 11;
+    info->uFV = INT64_C(0x100000001);
+    info->timecount = INT64_C(0x200000002);
     info->framecount = 12;
     info->tricount = 13;
+    info->gps.utcstart = INT64_C(1700000000000000000);
+    info->gps.utcend = INT64_C(1700000000001000000);
+    info->gps.longitude = 31200000;
+    info->gps.latitude = 30000000;
+    info->gps.altitude = 45600;
+    info->gps.satellite = 8;
     pull_api_version = 4;
     return 0;
 }
