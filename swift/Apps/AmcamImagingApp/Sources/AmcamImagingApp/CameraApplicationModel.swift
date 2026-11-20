@@ -1,17 +1,10 @@
 import AmcamCameraModel
+import AmcamImagingCore
 import Foundation
 import GenTLABI
 import GenTLAPI
 import GenTLRouter
 import Combine
-
-struct CameraPreviewFrame {
-    let width: Int
-    let height: Int
-    let bytesPerRow: Int
-    let rgb8Data: Data
-    let sequence: UInt64
-}
 
 @MainActor
 final class CameraApplicationModel: ObservableObject {
@@ -37,7 +30,6 @@ final class CameraApplicationModel: ObservableObject {
     private var profileRegistry = AmcamCameraProfileRegistry()
     private var lastFrameHostTime: TimeInterval?
     private var frameIntervals: [TimeInterval] = []
-    private var frameSequence: UInt64 = 0
 
     private let featureNamesByCameraFeature: [AmcamCameraFeature: [String]] = [
         .resolution: ["AmcamResolutionIndex"],
@@ -732,37 +724,34 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func accept(_ frame: GenTLFrame) {
-        guard frame.pixelFormatNamespace == 4, frame.pixelFormat == 0x02180014 else {
-            errorMessage = String(
-                format: "The display path currently supports PFNC RGB8 only (received format 0x%llX, namespace %llu).",
-                frame.pixelFormat,
-                frame.pixelFormatNamespace
+        do {
+            latestFrame = try RGB8Frame.decode(
+                width: frame.width,
+                height: frame.height,
+                pixelFormat: frame.pixelFormat,
+                pixelFormatNamespace: frame.pixelFormatNamespace,
+                rowPaddingBytes: frame.rowPaddingBytes,
+                sizeFilled: frame.sizeFilled,
+                dataSize: frame.dataSize,
+                sequence: frame.sequence,
+                bytes: frame.bytes
             )
+        } catch let error as RGB8FrameError {
+            switch error {
+            case .unsupportedPixelFormat(let namespace, let format):
+                errorMessage = String(
+                    format: "The display path currently supports PFNC RGB8 only (received format 0x%llX, namespace %llu).",
+                    format,
+                    namespace
+                )
+            case .invalidDimensionsOrStride, .inconsistentPayloadMetadata:
+                errorMessage = "The GenTL frame metadata is inconsistent with its RGB8 payload."
+            }
+            return
+        } catch {
+            errorMessage = error.localizedDescription
             return
         }
-
-        let (packedRowBytes, rowOverflow) = frame.width.multipliedReportingOverflow(by: 3)
-        let (bytesPerRow, paddingOverflow) = packedRowBytes.addingReportingOverflow(frame.rowPaddingBytes)
-        let (requiredBytes, heightOverflow) = bytesPerRow.multipliedReportingOverflow(by: frame.height)
-        let (packedDataSize, packedSizeOverflow) = packedRowBytes.multipliedReportingOverflow(by: frame.height)
-        guard frame.width > 0, frame.height > 0,
-              !rowOverflow, !paddingOverflow, !heightOverflow, !packedSizeOverflow,
-              frame.rowPaddingBytes >= 0,
-              frame.dataSize >= packedDataSize,
-              frame.sizeFilled >= requiredBytes,
-              frame.bytes.count >= requiredBytes else {
-            errorMessage = "The GenTL frame metadata is inconsistent with its RGB8 payload."
-            return
-        }
-
-        frameSequence &+= 1
-        latestFrame = CameraPreviewFrame(
-            width: frame.width,
-            height: frame.height,
-            bytesPerRow: bytesPerRow,
-            rgb8Data: Data(frame.bytes.prefix(requiredBytes)),
-            sequence: frameSequence
-        )
 
         let now = ProcessInfo.processInfo.systemUptime
         if let previous = lastFrameHostTime, now > previous {
