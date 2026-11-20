@@ -51,10 +51,10 @@ final class AmcamEventRecord: @unchecked Sendable {
     // condition lock. This is deliberate: New Buffer event dequeue and output
     // buffer queue ownership are one atomic state transition.
     var dataQueue: [Data] = []
-    var pendingAbortCount = 0
     var isUnregistered = false
     var activeReaders = 0
-    var waitingReaders = 0
+    var waitingReaderIDs: [UUID] = []
+    var cancelledReaderIDs: Set<UUID> = []
     var firedCount: UInt64 = 0
 
     init(handle: EVENT_HANDLE, eventType: Int32, source: EVENTSRC_HANDLE) {
@@ -161,10 +161,13 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         defer { condition.unlock() }
         guard !event.isUnregistered else { throw GC_ERROR.invalidHandle }
 
-        // EventKill aborts one blocked EventGetData call. The waiter count
-        // excludes readers that already dequeued their event data.
-        if event.waitingReaders > event.pendingAbortCount {
-            event.pendingAbortCount += 1
+        // Cancel exactly one currently blocked EventGetData call. Binding the
+        // cancellation to its reader ID prevents a newly arriving read from
+        // consuming an abort intended for an older waiter.
+        if let readerID = event.waitingReaderIDs.first(where: {
+            !event.cancelledReaderIDs.contains($0)
+        }) {
+            event.cancelledReaderIDs.insert(readerID)
             condition.broadcast()
         }
     }
@@ -194,35 +197,29 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
     ) throws -> Data {
         condition.lock()
         event.activeReaders += 1
+
+        let readerID = UUID()
+        var registeredAsWaiting = false
         defer {
+            if registeredAsWaiting {
+                event.waitingReaderIDs.removeAll { $0 == readerID }
+            }
+            event.cancelledReaderIDs.remove(readerID)
             event.activeReaders -= 1
             condition.broadcast()
             condition.unlock()
         }
 
-        if event.pendingAbortCount > 0 {
-            event.pendingAbortCount -= 1
-            throw GC_ERROR.abort
-        }
         guard !event.isUnregistered else { throw GC_ERROR.abort }
 
-        // EventKill targets a read blocked waiting for event data, not a call
-        // that has already dequeued data and is only finishing its return path.
-        var registeredAsWaiting = false
         if event.dataQueue.isEmpty {
-            event.waitingReaders += 1
+            event.waitingReaderIDs.append(readerID)
             registeredAsWaiting = true
-        }
-        defer {
-            if registeredAsWaiting {
-                event.waitingReaders -= 1
-                condition.broadcast()
-            }
         }
 
         if timeoutMilliseconds == GenTLConstants.infiniteTimeout {
             while event.dataQueue.isEmpty &&
-                  event.pendingAbortCount == 0 &&
+                  !event.cancelledReaderIDs.contains(readerID) &&
                   !event.isUnregistered {
                 condition.wait()
             }
@@ -231,23 +228,29 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
                 timeIntervalSinceNow: Double(timeoutMilliseconds) / 1_000.0
             )
             while event.dataQueue.isEmpty &&
-                  event.pendingAbortCount == 0 &&
+                  !event.cancelledReaderIDs.contains(readerID) &&
                   !event.isUnregistered {
                 if !condition.wait(until: deadline),
                    event.dataQueue.isEmpty,
-                   event.pendingAbortCount == 0,
+                   !event.cancelledReaderIDs.contains(readerID),
                    !event.isUnregistered {
                     throw GC_ERROR.timeout
                 }
             }
         }
 
-        if event.pendingAbortCount > 0 {
-            event.pendingAbortCount -= 1
+        if event.cancelledReaderIDs.remove(readerID) != nil {
             throw GC_ERROR.abort
         }
         guard !event.isUnregistered else { throw GC_ERROR.abort }
         guard !event.dataQueue.isEmpty else { throw GC_ERROR.noData }
+
+        // Once data is available to this reader, remove it from the waiter set
+        // before dequeueing. A later EventKill must not cancel its return path.
+        if registeredAsWaiting {
+            event.waitingReaderIDs.removeAll { $0 == readerID }
+            registeredAsWaiting = false
+        }
 
         let payload = event.dataQueue.removeFirst()
         if event.eventType == GenTLEventType.newBuffer.rawValue {
