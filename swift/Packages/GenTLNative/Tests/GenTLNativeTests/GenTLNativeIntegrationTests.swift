@@ -248,18 +248,91 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         }
     }
 
-    func testAbsentLaterRevisionExportReturnsNotImplementedWithoutChangingOutput() throws {
+    func testAllAbsentLaterRevisionExportsReturnNotImplementedAndPreserveOutputs() throws {
         let producerURL = try buildMockProducer(omittingOptionalExports: true)
         let implementation = try GenTLNativeImplementation(ctiURL: producerURL)
         let api: any GenTLAPI = implementation
+        let unsupported = GC_ERR_NOT_IMPLEMENTED
+
         var numberOfURLs: UInt32 = 0xDEADBEEF
-
-        let result = withUnsafeMutablePointer(to: &numberOfURLs) { countPointer in
-            api.GCGetNumPortURLs(nil, countPointer)
-        }
-
-        XCTAssertEqual(result, GC_ERR_NOT_IMPLEMENTED)
+        XCTAssertEqual(api.GCGetNumPortURLs(nil, &numberOfURLs), unsupported)
         XCTAssertEqual(numberOfURLs, 0xDEADBEEF)
-    }
 
+        var infoType: INFO_DATATYPE = 0x1234
+        var infoSize = 0x12345678
+        XCTAssertEqual(
+            api.GCGetPortURLInfo(nil, 0, 0, &infoType, nil, &infoSize),
+            unsupported
+        )
+        XCTAssertEqual(infoType, 0x1234)
+        XCTAssertEqual(infoSize, 0x12345678)
+
+        var stackCount = 0x12345678
+        XCTAssertEqual(api.GCReadPortStacked(nil, nil, &stackCount), unsupported)
+        XCTAssertEqual(stackCount, 0x12345678)
+        XCTAssertEqual(api.GCWritePortStacked(nil, nil, &stackCount), unsupported)
+        XCTAssertEqual(stackCount, 0x12345678)
+
+        var chunkCount = 0x12345678
+        XCTAssertEqual(api.DSGetBufferChunkData(nil, nil, nil, &chunkCount), unsupported)
+        XCTAssertEqual(chunkCount, 0x12345678)
+
+        var systemHandle: TL_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x1111)
+        XCTAssertEqual(api.IFGetParentTL(nil, &systemHandle), unsupported)
+        XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(systemHandle)), 0x1111)
+
+        var interfaceHandle: IF_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x2222)
+        XCTAssertEqual(api.DevGetParentIF(nil, &interfaceHandle), unsupported)
+        XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(interfaceHandle)), 0x2222)
+
+        var deviceHandle: DEV_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x3333)
+        XCTAssertEqual(api.DSGetParentDev(nil, &deviceHandle), unsupported)
+        XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(deviceHandle)), 0x3333)
+
+        var partCount: UInt32 = 0xDEADBEEF
+        XCTAssertEqual(api.DSGetNumBufferParts(nil, nil, &partCount), unsupported)
+        XCTAssertEqual(partCount, 0xDEADBEEF)
+
+        infoType = 0x1234
+        infoSize = 0x12345678
+        XCTAssertEqual(
+            api.DSGetBufferPartInfo(nil, nil, 0, 0, &infoType, nil, &infoSize),
+            unsupported
+        )
+        XCTAssertEqual(infoType, 0x1234)
+        XCTAssertEqual(infoSize, 0x12345678)
+
+        var announcedBuffer: BUFFER_HANDLE = UnsafeMutableRawPointer(bitPattern: 0x4444)
+        XCTAssertEqual(
+            api.DSAnnounceCompositeBuffer(nil, 0, nil, nil, nil, &announcedBuffer),
+            unsupported
+        )
+        XCTAssertEqual(UInt(bitPattern: try XCTUnwrap(announcedBuffer)), 0x4444)
+
+        XCTAssertEqual(api.DSGetBufferInfoStacked(nil, nil, nil, 0), unsupported)
+        XCTAssertEqual(api.DSGetBufferPartInfoStacked(nil, nil, nil, 0), unsupported)
+
+        var flowCount: UInt32 = 0xDEADBEEF
+        XCTAssertEqual(api.DSGetNumFlows(nil, &flowCount), unsupported)
+        XCTAssertEqual(flowCount, 0xDEADBEEF)
+
+        infoType = 0x1234
+        infoSize = 0x12345678
+        XCTAssertEqual(api.DSGetFlowInfo(nil, 0, 0, &infoType, nil, &infoSize), unsupported)
+        XCTAssertEqual(infoType, 0x1234)
+        XCTAssertEqual(infoSize, 0x12345678)
+
+        var segmentCount: UInt32 = 0xDEADBEEF
+        XCTAssertEqual(api.DSGetNumBufferSegments(nil, nil, &segmentCount), unsupported)
+        XCTAssertEqual(segmentCount, 0xDEADBEEF)
+
+        infoType = 0x1234
+        infoSize = 0x12345678
+        XCTAssertEqual(
+            api.DSGetBufferSegmentInfo(nil, nil, 0, 0, &infoType, nil, &infoSize),
+            unsupported
+        )
+        XCTAssertEqual(infoType, 0x1234)
+        XCTAssertEqual(infoSize, 0x12345678)
+    }
 }
