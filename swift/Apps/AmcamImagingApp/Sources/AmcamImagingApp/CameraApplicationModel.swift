@@ -54,7 +54,13 @@ final class CameraApplicationModel: ObservableObject {
     func normalizedNumericValue(_ value: Double, for name: String) -> Double? {
         guard let range = numericRange(for: name),
               value.isFinite,
+              range.minimum.isFinite,
+              range.maximum.isFinite,
               range.maximum > range.minimum else {
+            return nil
+        }
+        if let increment = range.increment,
+           (!increment.isFinite || increment <= 0) {
             return nil
         }
         let clamped = Swift.min(Swift.max(value, range.minimum), range.maximum)
