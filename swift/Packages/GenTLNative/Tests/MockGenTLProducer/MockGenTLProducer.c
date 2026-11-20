@@ -18,7 +18,7 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCGetInfo(
     size_t *size
 ) {
     mock_call_counts[0]++;
-    if (command != (TL_INFO_CMD)0x1234) return (GC_ERROR)-4322;
+    if (command != (TL_INFO_CMD)0x1234) return (GC_ERROR)-11001;
     if (type != NULL) *type = INFO_DATATYPE_UINT32;
     if (size != NULL) {
         if (buffer != NULL && *size >= sizeof(uint32_t)) {
@@ -27,7 +27,7 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCGetInfo(
         }
         *size = sizeof(uint32_t);
     }
-    return (GC_ERROR)-4321;
+    return (GC_ERROR)-11000;
 }
 #endif
 
@@ -71,12 +71,12 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCReadPort(
     if (hPort != (PORT_HANDLE)(uintptr_t)0x1111 ||
         iAddress != UINT64_C(0x1020304050607080) ||
         pBuffer == NULL || piSize == NULL || *piSize < sizeof(uint32_t)) {
-        return (GC_ERROR)-5431;
+        return (GC_ERROR)-11041;
     }
     const uint32_t marker = UINT32_C(0xA1B2C3D4);
     memcpy(pBuffer, &marker, sizeof(marker));
     *piSize = sizeof(marker);
-    return (GC_ERROR)-5432;
+    return (GC_ERROR)-11004;
 }
 GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCWritePort(
     PORT_HANDLE hPort, uint64_t iAddress, const void *pBuffer, size_t *piSize
@@ -87,9 +87,9 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCWritePort(
         iAddress != UINT64_C(0x1020304050607080) ||
         pBuffer == NULL || piSize == NULL || *piSize != sizeof(expected) ||
         memcmp(pBuffer, expected, sizeof(expected)) != 0) {
-        return (GC_ERROR)-5433;
+        return (GC_ERROR)-11051;
     }
-    return (GC_ERROR)-5434;
+    return (GC_ERROR)-11005;
 }
 MOCK_STUB_CODE(6, GCGetPortURL, (PORT_HANDLE hPort, char *sURL, size_t *piSize), -6006)
 MOCK_STUB_CODE(7, GCGetPortInfo, (PORT_HANDLE hPort, PORT_INFO_CMD iInfoCmd, INFO_DATATYPE *piType, void *pBuffer, size_t *piSize), -6007)
