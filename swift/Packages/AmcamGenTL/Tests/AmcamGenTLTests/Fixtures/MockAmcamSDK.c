@@ -26,6 +26,8 @@ static uint32_t close_count;
 static uint32_t stop_count;
 static uint32_t pull_count;
 static uint32_t pull_api_version;
+static uint32_t unsupported_pull_api_version;
+static int32_t pull_api_failure;
 static int32_t auto_exposure = 1;
 static int exposure_unavailable = 0;
 static int exposure_range_unavailable = 0;
@@ -105,6 +107,7 @@ int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameIn
 
 #if !defined(MOCK_DISABLE_ROW_PITCH_V2)
 int32_t Amcam_PullImageWithRowPitchV2(void *handle, void *buffer, int32_t bits, int32_t row_pitch, AmcamFrameInfoV2 *info) {
+    if (unsupported_pull_api_version == 2) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
     const uint32_t height = resolution_heights[current_resolution_index];
@@ -121,6 +124,7 @@ int32_t Amcam_PullImageWithRowPitchV2(void *handle, void *buffer, int32_t bits, 
 
 #if !defined(MOCK_DISABLE_V3)
 int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV3 *info) {
+    if (unsupported_pull_api_version == 3) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
     const uint32_t height = resolution_heights[current_resolution_index];
@@ -142,6 +146,8 @@ int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bit
 
 #if !defined(MOCK_DISABLE_V4)
 int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV4 *info) {
+    if (pull_api_failure != 0) return pull_api_failure;
+    if (unsupported_pull_api_version == 4) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
     const uint32_t height = resolution_heights[current_resolution_index];
@@ -172,6 +178,8 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
 #endif
 
 uint32_t MockAmcam_PullAPIVersion(void) { return pull_api_version; }
+void MockAmcam_SetUnsupportedPullAPIVersion(uint32_t version) { unsupported_pull_api_version = version; }
+void MockAmcam_SetPullFailure(int32_t result) { pull_api_failure = result; }
 
 int32_t Amcam_Stop(void *handle) {
     if (!handle) return -1;
@@ -303,6 +311,8 @@ void MockAmcam_Reset(void) {
     stop_count = 0;
     pull_count = 0;
     pull_api_version = 0;
+    unsupported_pull_api_version = 0;
+    pull_api_failure = 0;
     current_resolution_index = 2;
     active_callback = 0;
     active_context = 0;
