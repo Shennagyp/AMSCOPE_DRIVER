@@ -1,0 +1,487 @@
+% !TEX program = xelatex
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[a4paper,margin=27mm]{geometry}
+\usepackage{fontspec}
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{titlesec}
+
+\setmainfont{Latin Modern Roman}
+\setsansfont{Latin Modern Sans}
+\setmonofont{Latin Modern Mono}
+\onehalfspacing
+\setlist[itemize]{leftmargin=*,itemsep=2pt}
+\setlist[enumerate]{leftmargin=*,itemsep=2pt}
+\hypersetup{colorlinks=true,linkcolor=blue!45!black,urlcolor=blue!55!black,citecolor=blue!45!black}
+\renewcommand{\arraystretch}{1.18}
+\setcounter{tocdepth}{2}
+
+\title{\textbf{GenTL Swift Consumer Architecture}\\
+\large Engineering Research Record, Verification Model, and Test Strategy\\[1em]
+\normalsize Internal research and implementation document}
+\author{AMSCOPE\_DRIVER}
+\date{20 November 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document records the engineering model, architectural decisions, assumptions, verification strategy, known limitations, and acceptance criteria for the Swift GenTL Consumer implementation in AMSCOPE\_DRIVER. It is an internal research and development record, not a publication, certification claim, or assertion of completed conformance.
+
+The central design is one application-facing Swift protocol, \texttt{GenTLAPI}, implemented by two independent backends: a native GenTL Consumer that dynamically loads manufacturer-supplied CTI Producer libraries, and an Amcam SDK adapter that maps the same contract to the Amcam SDK where the SDK provides equivalent capabilities. The native path must cross the actual GenTL C ABI; the Swift protocol is not a Producer and does not replace the CTI.
+
+A physical GenTL-capable camera is not available for current development. This does not prevent rigorous testing of the protocol contract, C ABI declarations, dynamic loading, symbol resolution, dispatch, error propagation, router lifecycle, and a substantial simulated acquisition path. A deterministic native Mock GenTL Producer is therefore specified as a first-class test instrument. Hardware-dependent claims remain explicitly outside the evidence obtainable from the mock.
+\end{abstract}
+
+\tableofcontents
+
+\chapter{Purpose, Scope, and Evidence Discipline}
+
+\section{Purpose}
+The purpose is to establish a stable, testable boundary between application code and camera backends while retaining actual GenTL interoperability. The work must avoid parallel camera abstractions, duplicated ABI declarations, fabricated backend capabilities, and application rewrites caused by backend implementation details.
+
+This record serves four functions:
+\begin{enumerate}
+  \item preserve the decisions and their technical reasons;
+  \item define the evidence required to establish correctness;
+  \item make testing possible without physical GenTL hardware;
+  \item distinguish source-level implementation from compiler, runtime, and hardware verification.
+\end{enumerate}
+
+\section{Scope}
+In scope:
+\begin{itemize}
+  \item the pinned GenTL 1.6 C header and its imported ABI types;
+  \item the 64 GenTL function operations currently represented by \texttt{GenTLAPI};
+  \item native CTI loading and C function-pointer dispatch;
+  \item the Amcam SDK-backed implementation of the same Swift protocol;
+  \item backend selection, discovery, ownership, and lifecycle in \texttt{GenTLRouter};
+  \item deterministic mock Producer design and automated test strategy;
+  \item simulated discovery, device opening, stream, buffer, event, and acquisition behavior.
+\end{itemize}
+
+Out of scope for a claim of completion:
+\begin{itemize}
+  \item GenTL certification;
+  \item universal compatibility with every vendor CTI;
+  \item proof of real transport reliability, sensor timing, trigger behavior, or device firmware behavior without hardware;
+  \item unverified GenApi XML, register maps, chunk data, multipart payloads, or vendor-specific features;
+  \item replacing the existing application-facing Swift protocol or creating a second camera abstraction.
+\end{itemize}
+
+\section{Evidence labels}
+All project reports should use the following evidence distinctions:
+\begin{description}[style=nextline]
+  \item[Source inspected] Code or declarations were reviewed. This does not establish compilation or runtime behavior.
+  \item[Compiled] The relevant package or target compiled with a recorded toolchain and command.
+  \item[Unit tested] A test executed and passed; the exact test target and environment are recorded.
+  \item[Integration tested] Multiple real components interacted in the test environment, for example Swift native loader to a compiled mock CTI.
+  \item[Hardware tested] A named physical device, transport, Producer version, operating system, and test conditions were used.
+  \item[Externally conformant] Only use when a defined external conformance procedure and its evidence support the claim.
+\end{description}
+A source-level signature comparison must never be described as ABI runtime verification. A passing mock test must never be described as hardware validation.
+
+\chapter{System Model and Architectural Boundaries}
+
+\section{System roles}
+The architecture has one shared contract and two interchangeable implementations.
+
+\subsection{\texttt{GenTLABI}}
+A standalone Swift package containing the single authoritative, pinned GenTL C header and ABI layout checks. It is the source of imported C types, constants, enumerations, structures, opaque handles, and native function-pointer typedefs. The header must not be copied into multiple packages.
+
+\subsection{\texttt{GenTLAPI}}
+The only application-facing GenTL contract. It is a Swift protocol that mirrors the GenTL C function surface using imported ABI types, raw pointers, explicit output parameters, and \texttt{GC\_ERROR} return values.
+
+The protocol is not:
+\begin{itemize}
+  \item a C-exporting GenTL Producer;
+  \item a replacement for a vendor CTI;
+  \item a separately invented camera abstraction;
+  \item permission to change GenTL error, handle, or output-parameter semantics.
+\end{itemize}
+
+The currently inspected source declares 64 operations. A source-level comparison against the pinned header reported matching names, parameter types, and return types. Compiler and runtime verification remain separate required gates.
+
+\subsection{\texttt{GenTLNative}}
+A native GenTL Consumer backend. It dynamically loads a manufacturer-provided \texttt{.cti} library and resolves its exported GenTL functions. It calls the actual native function pointers using typedefs imported from \texttt{GenTLABI}. It must not simulate Producer behavior in Swift or manually maintain a divergent function signature table.
+
+\subsection{\texttt{AmcamGenTL}}
+An independent implementation of \texttt{GenTLAPI} that maps supported operations to the Amcam SDK. It does not produce a CTI library and must not impersonate a native GenTL Producer. Unsupported capabilities must return honest GenTL errors. The backend must not invent GenApi XML, register maps, chunk data, multipart payloads, or other unsupported functionality.
+
+\subsection{\texttt{GenTLRouter}}
+Registers and selects backend implementations, owns backend contexts, aggregates discovery, and binds candidates and sessions to the backend that created them. Application code uses the shared contract and must not depend on vendor SDK implementation types.
+
+\section{Call paths}
+The native path is:
+
+\begin{verbatim}
+Application
+  -> GenTLRouter
+      -> GenTLAPI (Swift protocol contract)
+          -> GenTLNativeImplementation
+              -> imported C function-pointer typedef
+                  -> dlopen/dlsym-resolved CTI export
+                      -> vendor GenTL Producer
+                          -> transport / device
+\end{verbatim}
+
+The Amcam path is:
+
+\begin{verbatim}
+Application
+  -> GenTLRouter
+      -> GenTLAPI (same Swift protocol contract)
+          -> AmcamGenTL
+              -> Amcam SDK
+                  -> Amcam camera / driver
+\end{verbatim}
+
+The contract is shared; backend execution mechanisms are not. Native interop is genuine C ABI forwarding. Amcam is a direct SDK mapping.
+
+\section{Package dependency constraints}
+The intended dependency graph is:
+
+\begin{verbatim}
+                 GenTLABI
+                    |
+                 GenTLAPI
+                 /      \
+        GenTLNative    AmcamGenTL
+                 \      /
+                 GenTLRouter
+                      |
+                 Application
+\end{verbatim}
+
+\texttt{GenTLNative} and \texttt{AmcamGenTL} both depend on the same ABI and API packages. The router composes the implementations. There must be one authoritative header, one application-facing contract, and no application dependency on internal migration SPI.
+
+\chapter{Architectural Decisions and Rationale}
+
+\begin{longtable}{p{0.07\textwidth}p{0.27\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ID & Decision & Reason / invariant & Consequence and control \\
+\midrule
+D-01 & Preserve one \texttt{GenTLAPI} Swift protocol. & The application must not be rewritten when selecting a backend; both backends need one observable contract. & Backend-specific implementation remains behind protocol conformance. Avoid introducing another Camera API. \\
+D-02 & Keep native CTI interop real. & GenTL is a C ABI; vendor CTIs provide Producer implementations. & Use \texttt{dlopen}/\texttt{dlsym} and imported C function-pointer typedefs. A Swift simulation cannot substitute for this test. \\
+D-03 & Separate \texttt{GenTLABI}. & ABI declarations are shared by API, native, and Amcam packages. & One header location prevents drift and circular ownership. \\
+D-04 & Preserve C-style results at the raw boundary. & GenTL functions return \texttt{GC\_ERROR} and use output pointers. & Do not replace the contract with throws, result wrappers, or transformed handles. Convenience layers must be separate and thin. \\
+D-05 & Keep Amcam as a direct SDK backend. & Amcam does not supply a CTI in this architecture. & No synthetic CTI and no claim that it is a binary Producer. Unsupported features remain explicitly unsupported. \\
+D-06 & Resolve later-revision exports according to standard revision. & A GenTL 1.6 header does not imply every Producer implements every 1.6 function. & Require the complete GenTL 1.0 base; report absent later functions as not implemented where applicable. \\
+D-07 & Build a compiled native Mock Producer. & No physical CTI-capable camera is available, but loader and ABI paths still require real integration tests. & Test the actual dynamic loader and C dispatch, not only Swift mocks. Mock evidence is not hardware evidence. \\
+D-08 & Use contract tests for both implementations, with capability-aware expectations. & Shared API semantics should not drift; hardware/SDK capability differences are real. & Common tests cover invariant semantics; backend-specific tests cover translation and unsupported behavior. \\
+D-09 & Fault injection is a designed mock capability. & Cleanup and error paths are difficult to reproduce with hardware and timing-dependent failures. & Deterministic failure modes allow lifecycle, rollback, and recovery assertions. \\
+D-10 & Keep transitional \texttt{BackendConvenience} SPI internal during migration. & Existing backend lifecycle code still depends on typed handles and throwing helpers. & Do not expose it to applications. Remove only after dependencies are migrated and tests cover equivalent behavior. \\
+D-11 & Separate simulated and hardware acceptance. & A mock cannot establish physical transport, firmware, or timing correctness. & Report mock conformance and hardware validation as different milestones. \\
+\bottomrule
+\end{longtable}
+
+\section{Function revision policy}
+The pinned header and applicable GenTL revision inventory determine symbol classification. The current implementation plan records the GenTL 1.0 base set as required, with \texttt{EventGetDataInfo} included. Later-revision additions are resolved according to their introduction:
+\begin{itemize}
+  \item GenTL 1.1: port URL enumeration and stacked port register operations;
+  \item GenTL 1.3: buffer chunk data;
+  \item GenTL 1.4: parent-module queries;
+  \item GenTL 1.5: buffer-part enumeration and information;
+  \item GenTL 1.6: composite buffers, stacked buffer information, flows, and buffer segments.
+\end{itemize}
+The precise export inventory must be mechanically checked against the pinned header and standard revision before the mock fixture encodes it. No symbol should be marked optional merely because it is inconvenient to implement.
+
+\chapter{Testing Research: Why Hardware Is Not a Prerequisite}
+
+\section{Verification decomposition}
+The test strategy separates concerns that are often incorrectly collapsed into a single camera test.
+
+\begin{longtable}{p{0.25\textwidth}p{0.34\textwidth}p{0.31\textwidth}}
+\toprule
+Layer & Primary evidence & Requires physical camera? \\
+\midrule
+Swift protocol surface & Conformance, argument/output behavior, default unsupported results & No \\
+Imported ABI declarations & Header-derived types, layout checks, compile-time type checking & No \\
+Native dynamic loader & Library loading, symbol lookup, required/optional symbol policy & No \\
+Native dispatch & Correct C function called with exact arguments and output behavior & No \\
+Router & Registration, discovery, ownership, lifecycle, rollback, concurrency & No \\
+Simulated stream & Buffer queues, events, frame metadata, deterministic payloads & No \\
+Amcam translation & SDK seam behavior, mapping, unsupported capability handling & No for injected tests; yes for actual SDK/hardware validation \\
+Vendor CTI compatibility & Vendor-specific behavior and interpretation & A vendor CTI is required; physical device may not be required for every Producer function \\
+Physical transport & Actual link, sensor, trigger, timing, firmware, and image delivery & Yes \\
+\bottomrule
+\end{longtable}
+
+A CTI library and a physical camera are distinct dependencies. A vendor CTI can often be loaded and queried without a connected camera. A mock CTI can be built without either. Tests must state which dependency they exercise.
+
+\section{Why a Swift-only mock is insufficient}
+A Swift fake conforming to \texttt{GenTLAPI} is useful for router unit tests, but it bypasses:
+\begin{itemize}
+  \item the dynamic loader;
+  \item symbol names and export visibility;
+  \item C calling convention and function-pointer typedefs;
+  \item ABI-level pointer and structure interactions;
+  \item native library lifetime and unload behavior.
+\end{itemize}
+Therefore it cannot be the only test double for \texttt{GenTLNative}. A compiled C shared library exporting GenTL functions is required for the native integration boundary.
+
+\section{Mock Producer design}
+The Mock Producer is a deterministic C shared library compiled as a dynamic library and loaded by the production \texttt{GenTLNative} loader. On macOS it may be emitted as a \texttt{.dylib}; the loader-facing path/name must match the package's actual CTI acceptance rules. Naming a library \texttt{.cti} does not itself make it conformant: it must export the correct ABI and behave according to the tested GenTL subset.
+
+The fixture must:
+\begin{enumerate}
+  \item include the same pinned GenTL header through the shared ABI target or a controlled C fixture include path;
+  \item export the required GenTL 1.0 base symbols with exact prototypes and calling conventions;
+  \item expose a deterministic system, interface, device, and stream topology;
+  \item implement enough standard behavior for discovery, device open/close, stream setup, buffer queueing, acquisition, and event delivery;
+  \item expose test-only control functions for fault injection and call recording, isolated from the GenTL export surface;
+  \item offer build variants with selected missing required or optional symbols;
+  \item provide deterministic reset and cleanup behavior between test cases.
+\end{enumerate}
+
+Test-only control exports must use a separate prefix (for example \texttt{MockCTI\_*}) and must not be mistaken for GenTL API functions.
+
+\section{Deterministic simulated device}
+The baseline simulated topology is one Producer, one System, one Interface, one Device, and one Data Stream. The fixture should support configuration for multiple devices and streams once the basic path is stable.
+
+The initial image generator should produce a deterministic byte pattern derived from frame sequence and byte offset. This permits exact payload assertions without requiring image-processing libraries. Metadata should include stable frame IDs, dimensions, pixel format, payload size, timestamps with defined mock semantics, and buffer completeness status.
+
+Do not pretend mock timestamps reproduce hardware clocks. They are controlled test values.
+
+\section{Native dispatch proof}
+The mock records, for each GenTL operation:
+\begin{itemize}
+  \item operation identifier;
+  \item invocation count;
+  \item scalar arguments and handle identities;
+  \item input buffer bytes where the operation contract makes them readable;
+  \item output values written;
+  \item configured return code;
+  \item optional delay or synchronization barrier for concurrency tests.
+\end{itemize}
+
+Tests call through \texttt{any GenTLAPI} backed by \texttt{GenTLNativeImplementation}, then inspect the mock's test-control interface. This establishes that a Swift protocol call reached the expected native C export with the expected arguments. Avoid reading memory beyond sizes explicitly supplied by the caller.
+
+\chapter{Test Catalogue and Coverage Model}
+
+\section{Protocol contract suite}
+All 64 operations require an explicit test disposition. For each operation, record:
+\begin{itemize}
+  \item operation name and owning GenTL module;
+  \item introduction revision;
+  \item required/optional export classification;
+  \item argument forwarding assertion;
+  \item output parameter assertion;
+  \item return-code assertion;
+  \item null/invalid-input behavior where defined;
+  \item buffer sizing and retry behavior where applicable;
+  \item backend capability disposition.
+\end{itemize}
+
+A test disposition may be: implemented-and-tested, explicitly unsupported, not applicable to the backend, or blocked pending a mock capability. It must not be silently omitted.
+
+\section{API default behavior}
+The default protocol implementations are expected to return \texttt{GC\_ERR\_NOT\_IMPLEMENTED} for operations not implemented by a conformer. Tests must verify:
+\begin{itemize}
+  \item each default returns the exact error constant;
+  \item output parameters are not falsely reported as valid data;
+  \item implementing one operation does not change defaults for another;
+  \item protocol extension dispatch does not accidentally bypass the concrete implementation.
+\end{itemize}
+
+\section{Native loader and ABI tests}
+Required cases:
+\begin{enumerate}
+  \item valid mock with all required exports loads and initializes;
+  \item each required export missing individually causes deterministic rejection;
+  \item multiple missing required exports produce a useful diagnostic;
+  \item optional later-revision export absent does not reject a valid base Producer;
+  \item invoking an absent optional operation returns the documented not-implemented status;
+  \item invalid file path, non-library file, incompatible architecture, and failed symbol lookup are reported safely;
+  \item repeated load/close cycles do not leak library handles;
+  \item failed initialization attempts perform the correct rollback;
+  \item function-pointer table entries correspond to the correct symbols and imported typedefs.
+\end{enumerate}
+
+\section{Argument and output semantics}
+For every function, use distinct sentinel values where possible so argument swaps are detectable. For output parameters, initialize storage to sentinel values and assert the Producer writes only the expected output. Test nullability only where the C contract permits null. Test buffer-too-small behavior with exact required-size reporting where specified. Avoid assumptions that every GenTL function uses identical string or buffer conventions.
+
+\section{Router tests}
+Router tests should cover:
+\begin{itemize}
+  \item duplicate and malformed backend identifiers;
+  \item repeated discovery and refresh;
+  \item multiple registered native Producers;
+  \item mixed native and Amcam registrations;
+  \item candidates remaining bound to their originating context;
+  \item open session surviving a discovery refresh;
+  \item close ordering and idempotency;
+  \item initialization rollback;
+  \item failed close/quarantine behavior;
+  \item concurrent discovery and independent session operations;
+  \item no use-after-close or accidental backend cross-routing.
+\end{itemize}
+
+\section{Acquisition integration tests}
+The mock-backed end-to-end path should cover:
+\begin{enumerate}
+  \item initialize Producer and enumerate System;
+  \item enumerate and open Interface;
+  \item enumerate and open Device;
+  \item obtain the remote Port and Data Stream identifiers;
+  \item open Data Stream;
+  \item allocate/announce buffers and verify ownership;
+  \item queue buffers and start acquisition;
+  \item receive an event and retrieve event data;
+  \item verify frame metadata, payload size, deterministic payload bytes, and completeness;
+  \item requeue buffers and acquire multiple frames;
+  \item stop acquisition and flush queues;
+  \item revoke buffers and verify returned user/private pointers;
+  \item close stream, device, interface, System, and Producer in valid order.
+\end{enumerate}
+
+Tests must include invalid ordering and failure at every lifecycle boundary. The expected cleanup sequence must be explicit; a failed close must not lead to unsafe library unloading while live native handles may still reference Producer code.
+
+\section{Fault injection matrix}
+The Mock Producer should support deterministic fault injection for at least:
+\begin{longtable}{p{0.34\textwidth}p{0.30\textwidth}p{0.26\textwidth}}
+\toprule
+Failure point & Expected assertion & Primary owner \\
+\midrule
+Producer init & Error preserved; no false initialized state & Native / Router \\
+System open & Output handle and rollback are correct & Native / Router \\
+Interface enumeration & Error and partial results handled deterministically & Router \\
+Interface open & No leaked System/Interface resources & Router \\
+Device open & No candidate/session state corruption & Router \\
+Stream open & Device remains closable & Router / Application \\
+Buffer announce/allocate & No orphaned buffer registration & Native / Application \\
+Queue buffer & Ownership state remains consistent & Producer / Application \\
+Start acquisition & No false running state & Producer / Application \\
+Event wait & Timeout distinguished from other errors & Native / Application \\
+Event payload & Buffer-too-small retry and size semantics preserved & Native / Application \\
+Incomplete frame & Status and metadata remain observable & Application \\
+Stop acquisition & Cleanup can continue or quarantine safely & Application / Router \\
+Revoke buffer & Returned pointers and ownership are correct & Producer / Application \\
+Close stream/device/interface & Failed cleanup never unloads live code & Router / Native \\
+Library close & Backend cannot be reinitialized unsafely & Router \\
+\bottomrule
+\end{longtable}
+
+\section{Stress and concurrency}
+Stress suites should be separate from deterministic unit tests so failures remain diagnosable. Start with bounded, repeatable loops, then scale:
+\begin{itemize}
+  \item repeated init/terminate and load/unload;
+  \item repeated discovery and open/close;
+  \item multiple devices and streams;
+  \item concurrent calls on independent sessions;
+  \item concurrent discovery while sessions remain open;
+  \item event timeout and cancellation races;
+  \item buffer queue/requeue under sustained acquisition;
+  \item failure injection during cleanup;
+  \item sanitizer-enabled C fixture builds where supported.
+\end{itemize}
+Concurrency tests must not assert undocumented thread safety from the GenTL standard. They should verify the synchronization guarantees the implementation itself promises and serialize calls where the Producer contract requires it.
+
+\chapter{Amcam Backend Verification}
+
+\section{Contract equivalence without false capability equivalence}
+Both backends implement the same protocol, but they do not necessarily support the same feature set. Tests must separate:
+\begin{itemize}
+  \item shared contract invariants: error model, output parameter discipline, handle validity, lifecycle behavior;
+  \item Amcam mapping: a GenTL operation maps to a documented SDK operation with correct units, ranges, and ownership;
+  \item unsupported behavior: unsupported GenTL features return the selected precise error and are not fabricated;
+  \item hardware behavior: actual SDK calls and device behavior require an Amcam SDK environment and, for device-specific behavior, hardware.
+\end{itemize}
+
+\section{Recommended test seam}
+Where the current implementation directly loads or calls the Amcam SDK, introduce a narrow internal injectable boundary around the SDK function table only if required to make deterministic unit tests possible. This seam must not become a second public camera API and must not alter the application-facing \texttt{GenTLAPI}. The production implementation must still call the real Amcam SDK.
+
+Tests should validate handle-token lifecycle, buffer layout, event payload retry semantics, acquisition state transitions, error translation, and unsupported capability reporting. Existing source-level tests for frame layout and lifecycle should be preserved and expanded rather than duplicated.
+
+\chapter{Risks, Limits, and Controls}
+
+\begin{longtable}{p{0.25\textwidth}p{0.38\textwidth}p{0.27\textwidth}}
+\toprule
+Risk & Why it matters & Control \\
+\midrule
+Mock accidentally diverges from standard & Passing tests could validate a fictional Producer. & Compile fixture against the same pinned header; review each behavior against standard semantics. \\
+Mock tests bypass actual loader & Native ABI bugs remain undetected. & Load the compiled shared library through production \texttt{GenTLNative}. \\
+Only happy paths are tested & Resource leaks and stale handles appear under failure. & Fault injection at every lifecycle transition. \\
+Protocol tests are name-only & Argument order, output pointers, and errors may still be wrong. & Per-operation sentinel forwarding and output assertions. \\
+False Amcam feature parity & Application may rely on nonexistent camera functionality. & Capability-aware test matrix and honest unsupported results. \\
+Mock success interpreted as hardware success & Physical transport, firmware, and timing remain untested. & Evidence labels and separate hardware acceptance. \\
+Unsafe unload after failed close & Native function pointers or handles may refer to unloaded code. & Retain/quarantine provider lifetime on uncertain cleanup. \\
+Test fixture overfits one device topology & Router assumptions may fail with real multi-device Producers. & Configurable topology and later multi-interface/multi-device tests. \\
+\bottomrule
+\end{longtable}
+
+\chapter{Current State and Verification Record}
+
+\section{Source-inspection baseline}
+At the time this document is created, the repository source and documentation indicate:
+\begin{itemize}
+  \item standalone \texttt{GenTLABI} exists and is shared by the packages;
+  \item \texttt{GenTLAPI} declares 64 operations using imported ABI types and C-style results;
+  \item a source-level comparison against the pinned header reports matching operation names, parameter types, and return types;
+  \item \texttt{GenTLNative} contains implementations and a dynamic function table based on imported C function-pointer typedefs;
+  \item \texttt{AmcamGenTL} implements the common protocol and explicitly rejects unsupported capabilities;
+  \item \texttt{GenTLRouter} exposes candidates and sessions bound to backend contexts;
+  \item transitional \texttt{BackendConvenience} SPI remains for internal migration;
+  \item a default unsupported-operation test and earlier lifecycle/frame-layout tests are documented in the implementation record.
+\end{itemize}
+
+\section{What is not established}
+No claim is made here that the current branch has been built, that its tests have passed, that a compiled Mock Producer exists, or that any real Producer or physical camera has been exercised. The source-level inventory is a starting point for test implementation, not a completed verification report.
+
+\section{Verification ledger}
+Update this table only with executed evidence:
+\begin{longtable}{p{0.34\textwidth}p{0.19\textwidth}p{0.37\textwidth}}
+\toprule
+Verification item & Status at record creation & Evidence to record \\
+\midrule
+Header provenance/hash and revision inventory & Source/document review required & Header path, upstream source, license, SHA-256, revision map \\
+64-operation signature audit & Source inspected & Audit script/output and pinned header hash \\
+Swift package compilation & Not verified & Xcode/Swift version, OS, command, result \\
+ABI layout/runtime checks & Not verified & Test output and platform \\
+Mock Producer compilation & Not implemented / not verified & Compiler command, artifact architecture, exported symbol list \\
+Native loader integration & Not verified & Test report with mock fixture version \\
+64-operation native dispatch coverage & Not verified & Per-operation test matrix and results \\
+Router lifecycle/fault tests & Not verified as a complete suite & Test output and coverage report \\
+Simulated acquisition & Not verified & Captured frame assertions and logs \\
+Amcam SDK-injected tests & Not verified as complete & SDK seam, test output, unsupported-operation matrix \\
+Physical GenTL camera & Unavailable in current environment & Device/CTI/transport/version and test report when available \\
+\bottomrule
+\end{longtable}
+
+\chapter{Definition of Done}
+
+The engineering milestone is complete only when all applicable criteria below are evidenced:
+\begin{enumerate}
+  \item One pinned header is the sole ABI authority and its provenance is recorded.
+  \item The 64-operation Swift contract compiles against imported C declarations.
+  \item ABI layout checks pass on supported build platforms.
+  \item Required and optional symbols are classified by the correct GenTL revision.
+  \item The production native loader loads the compiled Mock Producer.
+  \item Every required native dispatch path has argument, output, and return-code assertions.
+  \item Missing required symbols reject the mock; absent optional symbols follow the defined policy.
+  \item Protocol default behavior is tested for all defaulted operations.
+  \item Router registration, discovery, ownership, close, rollback, and quarantine tests pass.
+  \item Simulated acquisition and deterministic payload verification pass.
+  \item Fault injection covers lifecycle and acquisition failure boundaries.
+  \item Stress tests and supported sanitizers report no known leaks or invalid memory behavior within the tested scope.
+  \item Amcam mapping and unsupported behavior have explicit tests; real SDK/hardware evidence is reported separately.
+  \item The sample application can discover, open, acquire from, and close the simulated device.
+  \item No application-visible duplicate camera abstraction or fabricated capability remains.
+  \item Hardware compatibility limitations are stated accurately.
+\end{enumerate}
+
+\chapter{Closing Engineering Position}
+The absence of a physical GenTL camera is a limitation on hardware validation, not a reason to defer rigorous engineering tests. The correct response is to construct a native, ABI-accurate, deterministic Mock Producer and use it to exercise the production dynamic-loading and dispatch path. Swift fakes remain useful for isolated router tests, but they cannot replace the compiled mock at the native boundary.
+
+The strongest defensible outcome before hardware access is: compiler-verified contract, ABI-checked declarations, native mock integration, exhaustive dispatch and lifecycle tests, deterministic simulated acquisition, and clearly bounded claims. Vendor and physical-camera validation then become an additional compatibility layer rather than the first opportunity to discover fundamental interface defects.
+
+\end{document}
