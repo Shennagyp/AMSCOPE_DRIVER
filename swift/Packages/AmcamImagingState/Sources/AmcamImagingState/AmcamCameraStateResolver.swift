@@ -167,13 +167,13 @@ public struct AmcamCameraStateResolver: Sendable {
         }
 
         let whiteTemperature = await readIntegerFeature(
-            "AmcamWhiteBalanceTemperature", readFeature: readFeature
+            "AmcamWhiteBalanceTemperature", readFeature: safeReadFeature
         ).flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
         let whiteTint = await readIntegerFeature(
-            "AmcamWhiteBalanceTint", readFeature: readFeature
+            "AmcamWhiteBalanceTint", readFeature: safeReadFeature
         ).flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
         let whiteRGB = await readIntegerVectorFeature(
-            "AmcamWhiteBalanceRGBGain", readFeature: readFeature
+            "AmcamWhiteBalanceRGBGain", readFeature: safeReadFeature
         ).flatMap { values -> [Int32]? in
             guard values.count == 3 else { return nil }
             let converted = values.compactMap { Int32(exactly: $0) }
@@ -194,7 +194,7 @@ public struct AmcamCameraStateResolver: Sendable {
             colorMatrix = nil
         }
         let pixelFormat = await readEnumerationFeature(
-            "AmcamPixelFormat", readFeature: readFeature
+            "AmcamPixelFormat", readFeature: safeReadFeature
         ).flatMap(Int32.init)
         let supportedPixelFormats = descriptorsByName["AmcamPixelFormat"]?
             .enumerationValues.compactMap(Int32.init) ?? []
@@ -209,10 +209,10 @@ public struct AmcamCameraStateResolver: Sendable {
         let fixedRateDescriptor = descriptorsByName["AmcamFixedFrameRate"]
         let speedDescriptor = descriptorsByName["AmcamFrameSpeedLevel"]
         let fixedRateReadback = await readFloatingPointFeature(
-            "AmcamFixedFrameRate", readFeature: readFeature
+            "AmcamFixedFrameRate", readFeature: safeReadFeature
         )
         let currentSpeed = await readIntegerFeature(
-            "AmcamFrameSpeedLevel", readFeature: readFeature
+            "AmcamFrameSpeedLevel", readFeature: safeReadFeature
         ).flatMap(Int.init(exactly:))
         let frameRate = AmcamFrameRateControl(
             supported: fixedRateDescriptor?.isAvailable == true,
