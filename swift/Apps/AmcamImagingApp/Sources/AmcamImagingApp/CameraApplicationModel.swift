@@ -1,6 +1,10 @@
 import AppKit
 import AmcamGenTL
+import Darwin
 import Foundation
+import GenTLABI
+import GenTLAPI
+import GenTLRouter
 import SwiftUI
 
 @MainActor
@@ -17,21 +21,31 @@ final class CameraApplicationModel: ObservableObject {
     @Published private(set) var framesPerSecond = 0.0
     @Published private(set) var sdkPath: String?
 
-    private var driver: AmcamCameraDriver?
-    private var session: AmcamCameraSession?
+    private var router = GenTLRouter()
+    private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
+    private var deviceSession: GenTLDeviceSession?
+    private var acquisition: GenTLAcquisitionSession?
+    private var captureTask: Task<Void, Never>?
+    private var featureDescriptors: [GenTLFeatureDescriptor] = []
     private var hasInitialized = false
     private var profileRegistry = AmcamCameraProfileRegistry()
     private var lastFrameHostTime: TimeInterval?
     private var frameIntervals: [TimeInterval] = []
     private(set) var isFullScreen = false
 
+    private let featureNameByCameraFeature: [AmcamCameraFeature: String] = [
+        .exposureAuto: "ExposureAuto",
+        .exposureManual: "ExposureTime",
+        .analogGain: "AmcamAnalogGainPercent"
+    ]
+
     var selectedDevice: AmcamDevice? {
         devices.first { $0.identifier == selectedDeviceID }
     }
 
-    var currentResolution: AmcamResolution? {
-        session?.currentResolution()
-    }
+    /// Resolution selection is intentionally unavailable until Width/Height or
+    /// a verified discrete-resolution feature is exposed through GenTLFeatureAccess.
+    var currentResolution: AmcamResolution? { nil }
 
     func initialize() {
         guard !hasInitialized else { return }
@@ -56,26 +70,65 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshDevices() {
-        guard let driver else {
+        guard sdkPath != nil else {
             chooseSDK()
             return
         }
-        do {
-            let found = try driver.discover()
-            devices = found
-            if !found.contains(where: { $0.identifier == selectedDeviceID }) {
-                selectedDeviceID = found.first?.identifier ?? ""
-                closeSession()
-                latestImage = nil
-            }
-            status = found.isEmpty ? "No AmScope cameras detected" : "\(found.count) camera(s) detected"
-            errorMessage = nil
-            if session == nil, selectedDevice != nil {
-                prepareSelectedCamera()
-            }
-        } catch {
-            status = "Camera discovery failed"
-            errorMessage = error.localizedDescription
+
+        let report = router.discover()
+        var discoveredDevices: [AmcamDevice] = []
+        var discoveredCandidates: [String: GenTLDeviceCandidate] = [:]
+
+        for candidate in report.devices {
+            let displayName = (try? readDeviceString(
+                candidate,
+                command: Int32(GenTLABI.DEVICE_INFO_DISPLAYNAME.rawValue)
+            )).flatMap { $0.isEmpty ? nil : $0 } ?? candidate.deviceID
+            let modelName = try? readDeviceString(
+                candidate,
+                command: Int32(GenTLABI.DEVICE_INFO_MODEL.rawValue)
+            )
+
+            discoveredDevices.append(
+                AmcamDevice(
+                    identifier: candidate.id,
+                    displayName: displayName,
+                    modelName: modelName,
+                    modelFlags: nil,
+                    maximumSpeedLevel: nil,
+                    sensorPixelSizeMicrometers: nil,
+                    previewResolutions: []
+                )
+            )
+            discoveredCandidates[candidate.id] = candidate
+        }
+
+        devices = discoveredDevices
+        candidatesByID = discoveredCandidates
+
+        if !discoveredDevices.contains(where: { $0.identifier == selectedDeviceID }) {
+            closeSession()
+            selectedDeviceID = discoveredDevices.first?.identifier ?? ""
+            latestImage = nil
+        }
+
+        if discoveredDevices.isEmpty {
+            status = report.failures.isEmpty
+                ? "No AmScope cameras detected"
+                : "GenTL camera discovery failed"
+            errorMessage = report.failures
+                .map { "\($0.backendID): \($0.message)" }
+                .joined(separator: "\n")
+            return
+        }
+
+        status = "\(discoveredDevices.count) camera(s) detected through GenTLRouter"
+        errorMessage = report.failures.isEmpty
+            ? nil
+            : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
+
+        if deviceSession == nil, selectedDevice != nil {
+            prepareSelectedCamera()
         }
     }
 
@@ -86,46 +139,63 @@ final class CameraApplicationModel: ObservableObject {
         latestImage = nil
         cameraCapabilities = nil
         controls = nil
+        featureDescriptors = []
         status = selectedDevice.map { "Ready: \($0.displayName)" } ?? "No camera selected"
         prepareSelectedCamera()
     }
 
     func start() {
-        guard driver != nil, let device = selectedDevice else {
+        guard let deviceSession, let device = selectedDevice else {
             errorMessage = "Select a camera and configure the Amcam SDK first."
             return
         }
         guard cameraCapabilities?.availability(of: .liveCapture).isUsable == true else {
-            errorMessage = "Live capture is disabled by this camera's capability profile or is not available."
+            errorMessage = "This device does not currently expose a usable GenTL data stream."
             return
         }
+
         do {
-            if session == nil {
-                prepareSelectedCamera()
+            if let existing = acquisition {
+                try existing.close()
+                acquisition = nil
             }
-            guard let session else { return }
-            cameraCapabilities = try session.cameraCapabilities(using: profileRegistry)
-            controls = try? session.readControls()
+
+            let newAcquisition = try GenTLAcquisitionSession(device: deviceSession)
+            try newAcquisition.start()
+            acquisition = newAcquisition
+
             latestImage = nil
             frameIntervals.removeAll(keepingCapacity: true)
             lastFrameHostTime = nil
-            try session.start { [weak self] result in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    switch result {
-                    case .success(let frame):
-                        self.accept(frame)
-                    case .failure(let error):
-                        self.isStreaming = false
-                        self.status = "Camera stopped — session cleanup"
-                        self.errorMessage = error.localizedDescription
-                        self.closeSession()
-                    }
-                }
-            }
+            framesPerSecond = 0
             isStreaming = true
             status = "Live — \(device.displayName)"
             errorMessage = nil
+
+            captureTask = Task.detached(priority: .userInitiated) { [weak self, newAcquisition] in
+                while !Task.isCancelled {
+                    do {
+                        let frame = try newAcquisition.nextFrame(timeoutMilliseconds: 5_000)
+                        guard !frame.isIncomplete else { continue }
+                        await MainActor.run {
+                            self?.accept(frame)
+                        }
+                    } catch let error as GenTLAcquisitionError {
+                        if case .acquisitionStopped = error {
+                            break
+                        }
+                        await MainActor.run {
+                            self?.handleCaptureFailure(error)
+                        }
+                        break
+                    } catch {
+                        await MainActor.run {
+                            self?.handleCaptureFailure(error)
+                        }
+                        break
+                    }
+                }
+            }
         } catch {
             isStreaming = false
             status = "Unable to start camera"
@@ -134,9 +204,11 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func stop() {
-        guard let session, isStreaming else { return }
+        guard let acquisition, isStreaming else { return }
         do {
-            try session.stop()
+            try acquisition.stop()
+            captureTask?.cancel()
+            captureTask = nil
             isStreaming = false
             status = "Stopped — \(selectedDevice?.displayName ?? "camera")"
         } catch {
@@ -150,95 +222,68 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshControls() {
-        guard let session else { return }
-        controls = try? session.readControls()
-        if let capabilities = try? session.cameraCapabilities(using: profileRegistry) {
-            cameraCapabilities = capabilities
-        }
+        guard let deviceSession else { return }
+        featureDescriptors = (try? deviceSession.featureDescriptors()) ?? []
+        cameraCapabilities = makeCapabilities(
+            for: selectedDevice,
+            descriptors: featureDescriptors,
+            hasDataStream: deviceHasDataStream(deviceSession)
+        )
+        controls = makeControlSnapshot(deviceSession, descriptors: featureDescriptors)
     }
 
     func setAutoExposureMode(_ mode: AmcamAutoExposureMode) {
-        guard let session else { return }
-        do {
-            controls = try session.setAutoExposureMode(mode)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        let symbol: String
+        switch mode {
+        case .manual: symbol = "Off"
+        case .once: symbol = "Once"
+        case .continuous: symbol = "Continuous"
+        }
+        writeFeature(.enumeration(symbol), named: "ExposureAuto")
     }
 
     func setExposureTime(_ microseconds: UInt32) {
-        guard let session else { return }
-        do {
-            controls = try session.setExposureTime(microseconds: microseconds)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
-    }
-
-    func setColorMatrixEnabled(_ enabled: Bool) {
-        guard let session else { return }
-        do {
-            controls = try session.setColorMatrixEnabled(enabled)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
-    }
-
-    func setPixelFormat(_ code: Int32) {
-        guard let session, !isStreaming else { return }
-        do {
-            controls = try session.setPixelFormat(code: code)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
-    }
-
-    func setWhiteBalanceRGBGain(_ values: [Int32]) {
-        guard let session else { return }
-        do {
-            controls = try session.setWhiteBalanceRGBGain(values)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
-    }
-
-    func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
-        guard let session else { return }
-        do {
-            controls = try session.setWhiteBalanceTemperatureTint(temperature: temperature, tint: tint)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        writeFeature(.integer(Int64(microseconds)), named: "ExposureTime")
     }
 
     func setExposureGain(_ percent: UInt16) {
-        guard let session else { return }
-        do {
-            controls = try session.setExposureGain(percent: percent)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        writeFeature(.integer(Int64(percent)), named: "AmcamAnalogGainPercent")
+    }
+
+    // These controls remain hidden unless the selected backend advertises a
+    // corresponding typed feature descriptor. They never fall back to direct
+    // Amcam SDK calls from the application.
+    func setColorMatrixEnabled(_ enabled: Bool) {
+        writeFeature(.boolean(enabled), named: "AmcamColorMatrixEnabled")
+    }
+
+    func setPixelFormat(_ code: Int32) {
+        writeFeature(.integer(Int64(code)), named: "PixelFormat")
+    }
+
+    func setWhiteBalanceRGBGain(_ values: [Int32]) {
+        guard values.count == 3 else {
+            errorMessage = "White-balance RGB gain requires exactly three channel values."
+            return
+        }
+        errorMessage = "RGB white-balance controls are not yet exposed by the routed feature provider."
+    }
+
+    func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
+        errorMessage = "White-balance temperature/tint controls are not yet exposed by the routed feature provider."
     }
 
     func setFixedFrameRate(_ framesPerSecond: Double) {
-        guard let session else { return }
-        do {
-            controls = try session.setFixedFrameRate(framesPerSecond: framesPerSecond)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        errorMessage = "Fixed frame-rate control is not yet exposed by the routed feature provider."
     }
 
     func setFrameSpeedLevel(_ level: Int) {
-        guard let session else { return }
-        do {
-            controls = try session.setFrameRateSpeedLevel(level)
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        errorMessage = "Frame-speed control is not yet exposed by the routed feature provider."
     }
 
     func setResolution(_ index: Int) {
-        guard let session, !isStreaming else { return }
-        do {
-            _ = try session.setResolution(index: index)
-            refreshControls()
-            latestImage = nil
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        errorMessage = "Discrete resolution selection is not yet exposed by the routed feature provider."
     }
-
 
     func enterFullScreen() {
         DispatchQueue.main.async { [weak self] in
@@ -258,52 +303,333 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func prepareSelectedCamera() {
-        guard let driver, let device = selectedDevice else { return }
+        guard deviceSession == nil,
+              let candidate = candidatesByID[selectedDeviceID],
+              let device = selectedDevice else { return }
+
         do {
-            if session == nil {
-                session = try driver.open(deviceIdentifier: device.identifier)
-            }
-            guard let session else { return }
-            cameraCapabilities = try session.cameraCapabilities(using: profileRegistry)
-            controls = try? session.readControls()
+            let openedSession = try candidate.open(access: .exclusive)
+            deviceSession = openedSession
+            featureDescriptors = (try? openedSession.featureDescriptors()) ?? []
+            let hasDataStream = deviceHasDataStream(openedSession)
+            cameraCapabilities = makeCapabilities(
+                for: device,
+                descriptors: featureDescriptors,
+                hasDataStream: hasDataStream
+            )
+            controls = makeControlSnapshot(openedSession, descriptors: featureDescriptors)
             status = "Ready — \(device.displayName)"
-            errorMessage = nil
+            if featureDescriptors.isEmpty {
+                errorMessage = "The backend opened the device but did not expose typed feature access."
+            } else {
+                errorMessage = nil
+            }
         } catch {
-            session = nil
-            cameraCapabilities = nil
-            controls = nil
-            status = "Unable to open camera"
+            closeSession()
+            status = "Unable to open camera through GenTLRouter"
             errorMessage = error.localizedDescription
         }
     }
 
     private func configureSDK(at url: URL) {
+        closeSession()
+        router = GenTLRouter()
+        candidatesByID.removeAll()
+        devices.removeAll()
+        selectedDeviceID = ""
+
         do {
-            let newDriver = try AmcamCameraDriver(libraryURL: url)
-            driver = newDriver
+            try router.registerAmcam(backendID: "amcam-sdk", sdkLibraryURL: url)
             sdkPath = url.path
             refreshDevices()
-            errorMessage = nil
         } catch {
-            driver = nil
             sdkPath = url.path
-            status = "Amcam SDK could not be loaded"
+            status = "Amcam GenTL backend could not be registered"
             errorMessage = error.localizedDescription
         }
     }
 
     private func closeSession() {
-        if let session {
-            if isStreaming { try? session.stop() }
-            try? session.close()
+        captureTask?.cancel()
+        captureTask = nil
+
+        if let acquisition {
+            do {
+                try acquisition.close()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
-        session = nil
+        acquisition = nil
+
+        if let deviceSession {
+            do {
+                try deviceSession.close()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+        deviceSession = nil
+
         isStreaming = false
         cameraCapabilities = nil
         controls = nil
+        featureDescriptors = []
     }
 
-    private func accept(_ frame: AmcamFrame) {
+    private func writeFeature(_ value: GenTLFeatureValue, named name: String) {
+        guard let deviceSession else {
+            errorMessage = "Open a camera before changing its features."
+            return
+        }
+        do {
+            try deviceSession.writeFeature(value, named: name)
+            refreshControls()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func handleCaptureFailure(_ error: Error) {
+        guard isStreaming else { return }
+        isStreaming = false
+        status = "Camera stopped — acquisition error"
+        errorMessage = error.localizedDescription
+        closeSession()
+    }
+
+    private func deviceHasDataStream(_ session: GenTLDeviceSession) -> Bool {
+        var count: UInt32 = 0
+        let status = session.api.DevGetNumDataStreams(session.deviceHandle, &count)
+        return status == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) && count > 0
+    }
+
+    private func makeCapabilities(
+        for device: AmcamDevice?,
+        descriptors: [GenTLFeatureDescriptor],
+        hasDataStream: Bool
+    ) -> AmcamCameraCapabilities? {
+        guard let device else { return nil }
+        let descriptorsByName = Dictionary(
+            descriptors.map { ($0.name, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        let profile = profileRegistry.profile(for: device.modelCode)
+
+        let features = AmcamCameraFeature.allCases.map { feature -> AmcamFeatureAvailability in
+            let descriptor = featureNameByCameraFeature[feature].flatMap { descriptorsByName[$0] }
+            let implemented = feature == .liveCapture || descriptor != nil
+            let hardwareAvailable = feature == .liveCapture
+                ? hasDataStream
+                : (descriptor?.isAvailable ?? false)
+            let profileAllows = profile.map { $0.allowedFeatures.contains(feature) } ?? true
+            let profileDenies = profile?.deniedFeatures.contains(feature) ?? false
+            let available = hardwareAvailable && profileAllows && !profileDenies
+
+            let reason: String?
+            if profileDenies {
+                reason = "Disabled by the explicit model profile."
+            } else if !profileAllows {
+                reason = "Not included in the explicit model profile allow-list."
+            } else if !implemented {
+                reason = "This feature is not yet exposed by the routed GenTL feature provider."
+            } else if !hardwareAvailable {
+                reason = feature == .liveCapture
+                    ? "The opened device does not expose a data stream."
+                    : "The selected camera reports this feature as unavailable."
+            } else {
+                reason = nil
+            }
+
+            return AmcamFeatureAvailability(
+                feature: feature,
+                available: available,
+                implemented: implemented,
+                evidence: implemented ? .implementation : nil,
+                reason: reason
+            )
+        }
+
+        return AmcamCameraCapabilities(
+            modelCode: device.modelCode,
+            modelFlags: device.modelFlags ?? 0,
+            features: features
+        )
+    }
+
+    private func makeControlSnapshot(
+        _ session: GenTLDeviceSession,
+        descriptors: [GenTLFeatureDescriptor]
+    ) -> AmcamControlSnapshot {
+        let descriptorsByName = Dictionary(
+            descriptors.map { ($0.name, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+
+        let autoMode: AmcamAutoExposureMode?
+        if case .enumeration(let symbol)? = try? session.readFeature("ExposureAuto") {
+            switch symbol {
+            case "Off": autoMode = .manual
+            case "Once": autoMode = .once
+            case "Continuous": autoMode = .continuous
+            default: autoMode = nil
+            }
+        } else {
+            autoMode = nil
+        }
+
+        let exposureDescriptor = descriptorsByName["ExposureTime"]
+        let exposureValue = readIntegerFeature("ExposureTime", from: session)
+        let exposure = exposureDescriptor.map { descriptor in
+            AmcamExposureControl(
+                autoMode: autoMode,
+                readbackMicroseconds: unsigned32(exposureValue),
+                minimumMicroseconds: unsigned32(descriptor.numericRange?.minimum),
+                maximumMicroseconds: unsigned32(descriptor.numericRange?.maximum),
+                defaultMicroseconds: nil
+            )
+        }
+
+        let gainDescriptor = descriptorsByName["AmcamAnalogGainPercent"]
+        let gainValue = readIntegerFeature("AmcamAnalogGainPercent", from: session)
+        let gain: AmcamGainControl?
+        if let gainDescriptor,
+           let current = unsigned16(gainValue),
+           let minimum = unsigned16(gainDescriptor.numericRange?.minimum),
+           let maximum = unsigned16(gainDescriptor.numericRange?.maximum) {
+            gain = AmcamGainControl(
+                readbackPercent: current,
+                minimumPercent: minimum,
+                maximumPercent: maximum,
+                defaultPercent: minimum
+            )
+        } else {
+            gain = nil
+        }
+
+        return AmcamControlSnapshot(
+            exposure: exposure,
+            gain: gain,
+            whiteBalance: nil,
+            image: nil,
+            frameRate: AmcamFrameRateControl(
+                supported: false,
+                unsupportedReason: "Frame-rate features are not yet exposed by the routed feature provider."
+            )
+        )
+    }
+
+    private func readIntegerFeature(
+        _ name: String,
+        from session: GenTLDeviceSession
+    ) -> Int64? {
+        guard case .integer(let value)? = try? session.readFeature(name) else {
+            return nil
+        }
+        return value
+    }
+
+    private func unsigned32(_ value: Int64?) -> UInt32? {
+        guard let value, value >= 0, value <= Int64(UInt32.max) else { return nil }
+        return UInt32(value)
+    }
+
+    private func unsigned32(_ value: Double?) -> UInt32? {
+        guard let value, value.isFinite, value >= 0, value <= Double(UInt32.max) else {
+            return nil
+        }
+        return UInt32(value.rounded(.towardZero))
+    }
+
+    private func unsigned16(_ value: Int64?) -> UInt16? {
+        guard let value, value >= 0, value <= Int64(UInt16.max) else { return nil }
+        return UInt16(value)
+    }
+
+    private func unsigned16(_ value: Double?) -> UInt16? {
+        guard let value, value.isFinite, value >= 0, value <= Double(UInt16.max) else {
+            return nil
+        }
+        return UInt16(value.rounded(.towardZero))
+    }
+
+    private func readDeviceString(
+        _ candidate: GenTLDeviceCandidate,
+        command: Int32
+    ) throws -> String {
+        var dataType: GenTLABI.INFO_DATATYPE = 0
+        var requiredSize = 0
+        let queryStatus = candidate.api.IFGetDeviceInfo(
+            candidate.interfaceHandle,
+            candidate.deviceID.withCString { $0 },
+            command,
+            &dataType,
+            nil,
+            &requiredSize
+        )
+        let success = GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+        let bufferTooSmall = GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_BUFFER_TOO_SMALL)
+        guard queryStatus == success || queryStatus == bufferTooSmall else {
+            throw GenTLAcquisitionError.genTLCallFailed(
+                operation: "IFGetDeviceInfo(size)",
+                code: Int32(queryStatus)
+            )
+        }
+        guard requiredSize > 1, requiredSize <= 1_048_576 else {
+            throw GenTLAcquisitionError.invalidDataStreamID
+        }
+
+        var bytes = [CChar](repeating: 0, count: requiredSize)
+        var capacity = requiredSize
+        let status = bytes.withUnsafeMutableBufferPointer { buffer in
+            candidate.api.IFGetDeviceInfo(
+                candidate.interfaceHandle,
+                candidate.deviceID.withCString { $0 },
+                command,
+                &dataType,
+                buffer.baseAddress,
+                &capacity
+            )
+        }
+        guard status == success else {
+            throw GenTLAcquisitionError.genTLCallFailed(
+                operation: "IFGetDeviceInfo",
+                code: Int32(status)
+            )
+        }
+        guard dataType == Int32(GenTLABI.INFO_DATATYPE_STRING.rawValue),
+              capacity > 0, capacity <= bytes.count else {
+            throw GenTLAcquisitionError.invalidDataStreamID
+        }
+
+        bytes[min(capacity, bytes.count) - 1] = 0
+        return String(cString: bytes)
+    }
+
+    private func accept(_ frame: GenTLFrame) {
+        guard frame.pixelFormatNamespace == 4, frame.pixelFormat == 0x02180014 else {
+            errorMessage = String(
+                format: "The display path currently supports PFNC RGB8 only (received format 0x%llX, namespace %llu).",
+                frame.pixelFormat,
+                frame.pixelFormatNamespace
+            )
+            return
+        }
+
+        let (packedRowBytes, rowOverflow) = frame.width.multipliedReportingOverflow(by: 3)
+        let (bytesPerRow, paddingOverflow) = packedRowBytes.addingReportingOverflow(frame.rowPaddingBytes)
+        let (requiredBytes, heightOverflow) = bytesPerRow.multipliedReportingOverflow(by: frame.height)
+        guard frame.width > 0, frame.height > 0,
+              !rowOverflow, !paddingOverflow, !heightOverflow,
+              frame.rowPaddingBytes >= 0,
+              frame.dataSize >= requiredBytes,
+              frame.sizeFilled >= requiredBytes,
+              frame.bytes.count >= requiredBytes else {
+            errorMessage = "The GenTL frame metadata is inconsistent with its RGB8 payload."
+            return
+        }
+
         guard let representation = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: frame.width,
@@ -313,7 +639,7 @@ final class CameraApplicationModel: ObservableObject {
             hasAlpha: false,
             isPlanar: false,
             colorSpaceName: .deviceRGB,
-            bytesPerRow: frame.bytesPerRow,
+            bytesPerRow: bytesPerRow,
             bitsPerPixel: 24
         ), let destination = representation.bitmapData else {
             errorMessage = "Unable to allocate the live-frame display buffer."
@@ -322,7 +648,7 @@ final class CameraApplicationModel: ObservableObject {
 
         frame.bytes.withUnsafeBytes { source in
             guard let baseAddress = source.baseAddress else { return }
-            memcpy(destination, baseAddress, min(frame.bytes.count, representation.bytesPerRow * frame.height))
+            memcpy(destination, baseAddress, requiredBytes)
         }
         let image = NSImage(size: NSSize(width: frame.width, height: frame.height))
         image.addRepresentation(representation)
@@ -331,7 +657,9 @@ final class CameraApplicationModel: ObservableObject {
         let now = ProcessInfo.processInfo.systemUptime
         if let previous = lastFrameHostTime, now > previous {
             frameIntervals.append(now - previous)
-            if frameIntervals.count > 30 { frameIntervals.removeFirst(frameIntervals.count - 30) }
+            if frameIntervals.count > 30 {
+                frameIntervals.removeFirst(frameIntervals.count - 30)
+            }
             let mean = frameIntervals.reduce(0, +) / Double(frameIntervals.count)
             if mean > 0 { framesPerSecond = 1.0 / mean }
         }
