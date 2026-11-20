@@ -317,15 +317,18 @@ final class AmcamSDK: @unchecked Sendable {
         return resolution
     }
 
-    func readAutoExposure(_ handle: UnsafeMutableRawPointer) throws -> Bool {
+    func readAutoExposureMode(_ handle: UnsafeMutableRawPointer) throws -> AmcamAutoExposureMode {
         var value: Int32 = 0
         let result = api.getAutoExposure(handle, &value)
         try checkControlResult("Amcam_get_AutoExpoEnable", result)
-        return value != 0
+        guard let mode = AmcamAutoExposureMode(rawValue: value) else {
+            throw AmcamCameraError.unsupportedControl("The camera returned unknown auto-exposure mode \\(value).")
+        }
+        return mode
     }
 
-    func setAutoExposure(_ handle: UnsafeMutableRawPointer, enabled: Bool) throws {
-        let result = api.setAutoExposure(handle, enabled ? 1 : 0)
+    func setAutoExposureMode(_ handle: UnsafeMutableRawPointer, mode: AmcamAutoExposureMode) throws {
+        let result = api.setAutoExposure(handle, Int32(mode.rawValue))
         try checkControlResult("Amcam_put_AutoExpoEnable", result)
     }
 
