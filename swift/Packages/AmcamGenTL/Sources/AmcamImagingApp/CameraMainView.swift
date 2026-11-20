@@ -214,11 +214,11 @@ private struct CameraSettingsView: View {
             }
         }
         .onAppear {
-            exposureDraft = Double(controls?.exposure.readbackMicroseconds ?? 10_000)
+            exposureDraft = Double(controls?.exposure?.readbackMicroseconds ?? 10_000)
             gainDraft = Double(controls?.gain?.readbackPercent ?? 100)
             frameRateDraft = controls?.frameRate.readbackFramesPerSecond ?? 15
         }
-        .onChange(of: controls?.exposure.readbackMicroseconds) { value in
+        .onChange(of: controls?.exposure?.readbackMicroseconds) { value in
             if let value { exposureDraft = Double(value) }
         }
         .onChange(of: controls?.gain?.readbackPercent) { value in
