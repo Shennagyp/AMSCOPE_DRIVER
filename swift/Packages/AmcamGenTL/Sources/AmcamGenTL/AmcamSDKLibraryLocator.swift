@@ -16,7 +16,7 @@ public enum AmcamSDKLibraryLocator {
             return match.standardizedFileURL.resolvingSymlinksInPath()
         }
         throw AmcamCameraError.libraryNotFound(
-            candidates.map(\\.path).joined(separator: " or ")
+            candidates.map(\.path).joined(separator: " or ")
         )
     }
 
