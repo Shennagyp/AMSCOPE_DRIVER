@@ -1,5 +1,4 @@
-@_spi(BackendConvenience)
-import GenTLAPI
+import GenTLABI
 
 public extension GenTLAPI {
     // Unsupported operations must return the standard GenTL error rather than
