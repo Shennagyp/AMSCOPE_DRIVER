@@ -501,7 +501,10 @@ final class CameraSettingsViewController: NSViewController {
             frameRateSlider?.maxValue = frameRateRange.maximum
         }
 
-        if controls.frameRate.speedLevelSupported,
+        // Fixed FPS and discrete speed are alternative SDK control modes;
+        // prefer precise FPS when it is writable, otherwise expose the level control.
+        if !canWriteFrameRate,
+           controls.frameRate.speedLevelSupported,
            let currentLevel = controls.frameRate.currentSpeedLevel,
            let speedRange = model.numericRange(for: "AmcamFrameSpeedLevel"),
            capabilities.availability(of: .discreteFrameSpeed).isUsable,
