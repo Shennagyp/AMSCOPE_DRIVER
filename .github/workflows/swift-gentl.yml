@@ -79,14 +79,6 @@ jobs:
           file "$bin_path/amcam-camera-probe"
           "$bin_path/amcam-camera-probe" --help
 
-      - name: Upload macOS camera probe
-        if: matrix.package == 'AmcamGenTL'
-        uses: actions/upload-artifact@v4
-        with:
-          name: amcam-camera-probe-macos-arm64
-          path: ${{ runner.temp }}/amcam-camera-probe/
-          retention-days: 14
-
       - name: Enforce routed application dependency boundary
         if: matrix.package == 'AmcamGenTL'
         shell: bash
@@ -132,65 +124,3 @@ jobs:
           codesign --force --deep --sign - "$app_bundle"
           codesign --verify --deep --strict "$app_bundle"
           file "$app_bundle/Contents/MacOS/amcam-imaging" | grep -q "Mach-O 64-bit executable arm64"
-          ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$app_root/Amcam-Imaging-macos-arm64.zip"
-          cat > "$app_root/RUN-THIS-TODAY.txt" <<'README'
-          AmScope Imaging — Apple Silicon
-          
-          1. Extract Amcam-Imaging-macos-arm64.zip.
-          2. Open Amcam Imaging.app.
-          3. Use SDK… in the camera dock to choose your vendor libamcam.dylib if it is not found automatically.
-          4. Select your camera and press Start.
-          5. Open Settings to see the controls confirmed for that exact camera.
-          
-          The vendor SDK is not bundled. Use the Amcam SDK version 58.28273.20250415.
-          This application is ad-hoc signed for local testing and is not notarized.
-          README
-
-      - name: Upload macOS imaging application
-        if: matrix.package == 'AmcamGenTL'
-        uses: actions/upload-artifact@v4
-        with:
-          name: amcam-imaging-macos-arm64
-          path: |
-            ${{ runner.temp }}/amcam-imaging/Amcam-Imaging-macos-arm64.zip
-            ${{ runner.temp }}/amcam-imaging/RUN-THIS-TODAY.txt
-          retention-days: 14
-
-  publish-release:
-    name: Publish public macOS release
-    needs: package-tests
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/macos-version-optimization'
-    runs-on: macos-15
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - name: Download imaging application package
-        uses: actions/download-artifact@v4
-        with:
-          name: amcam-imaging-macos-arm64
-          path: ${{ runner.temp }}/release/app
-
-      - name: Download camera probe package
-        uses: actions/download-artifact@v4
-        with:
-          name: amcam-camera-probe-macos-arm64
-          path: ${{ runner.temp }}/release/probe
-
-      - name: Package camera probe for public distribution
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/release/probe" "$RUNNER_TEMP/release/amcam-camera-probe-macos-arm64.zip"
-
-      - name: Publish public macOS release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: macos-build-${{ github.run_number }}-${{ github.run_attempt }}
-          name: macOS build ${{ github.run_number }}.${{ github.run_attempt }}
-          prerelease: true
-          make_latest: false
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: |
-            ${{ runner.temp }}/release/app/Amcam-Imaging-macos-arm64.zip
-            ${{ runner.temp }}/release/app/RUN-THIS-TODAY.txt
-            ${{ runner.temp }}/release/amcam-camera-probe-macos-arm64.zip
