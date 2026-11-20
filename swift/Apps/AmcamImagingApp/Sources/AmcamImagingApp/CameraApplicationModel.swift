@@ -20,7 +20,6 @@ final class CameraApplicationModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var isSettingsPresented = false
     @Published private(set) var framesPerSecond = 0.0
-    @Published private(set) var sdkPath: String?
 
     private var router = GenTLRouter()
     private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
@@ -64,11 +63,7 @@ final class CameraApplicationModel: ObservableObject {
         guard !hasInitialized else { return }
         hasInitialized = true
         loadProfileConfiguration()
-        if let url = defaultSDKURL() {
-            configureSDK(at: url)
-        } else {
-            status = "Amcam SDK not found — choose libamcam.dylib"
-        }
+        configureSDK()
     }
 
     func refreshDevices() {
@@ -76,11 +71,6 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func refreshDevicesOwned() async {
-        guard sdkPath != nil else {
-            status = "Select the Amcam SDK before refreshing cameras"
-            return
-        }
-
         let report = router.discover()
         var discoveredDevices: [AmcamDevice] = []
         var discoveredCandidates: [String: GenTLDeviceCandidate] = [:]
@@ -357,11 +347,11 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    func configureSDK(at url: URL) {
-        Task { await configureSDKOwned(at: url) }
+    private func configureSDK() {
+        Task { await configureSDKOwned() }
     }
 
-    private func configureSDKOwned(at url: URL) async {
+    private func configureSDKOwned() async {
         guard await closeSession() else { return }
         router = GenTLRouter()
         candidatesByID.removeAll()
@@ -369,12 +359,10 @@ final class CameraApplicationModel: ObservableObject {
         selectedDeviceID = ""
 
         do {
-            try router.registerAmcam(backendID: "amcam-sdk", sdkLibraryURL: url)
-            sdkPath = url.path
+            try router.registerAmcam(backendID: "amcam-sdk")
             await refreshDevicesOwned()
         } catch {
-            sdkPath = url.path
-            status = "Amcam GenTL backend could not be registered"
+            status = "AmScope camera provider is unavailable"
             errorMessage = error.localizedDescription
         }
     }
@@ -771,22 +759,6 @@ final class CameraApplicationModel: ObservableObject {
         if let estimate = frameRateEstimator.record(timestamp: now) {
             framesPerSecond = estimate
         }
-    }
-
-    private func defaultSDKURL() -> URL? {
-        let candidates = [
-            Bundle.main.bundleURL
-                .deletingLastPathComponent()
-                .appendingPathComponent("vendor/amcam/macos/libamcam.dylib"),
-            URL(fileURLWithPath: "vendor/amcam/macos/libamcam.dylib"),
-            FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib"),
-            URL(fileURLWithPath: "/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib"),
-            URL(fileURLWithPath: "/Library/Frameworks/libamcam.dylib"),
-            URL(fileURLWithPath: "/usr/local/lib/libamcam.dylib"),
-            URL(fileURLWithPath: "/opt/homebrew/lib/libamcam.dylib")
-        ]
-        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     private func loadProfileConfiguration() {
