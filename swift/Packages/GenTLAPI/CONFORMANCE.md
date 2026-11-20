@@ -24,6 +24,7 @@ The Swift `genTLVersion` property identifies the revision represented by this AP
 - An absent optional function returns `GC_ERR_NOT_IMPLEMENTED`.
 - `EVENT_SIZE_MAX` is a GenTL 1.2 `EventGetInfo` command. When a GenTL 1.0 Producer rejects that command, the native Consumer can still receive the standard fixed-size New Buffer event structure (two pointers). It does not guess a maximum for variable Error-event payloads and returns `GC_ERR_NOT_IMPLEMENTED` for that legacy case.
 - Producer handles remain opaque; this implementation does not synthesize handle IDs.
+- If the native implementation is deallocated before a successful `GCCloseLib`, its `.cti` library is retained for process lifetime rather than unloaded with potentially live Producer state.
 - The pinned GenTL 1.6 header is compiled into the ABI target, with layout checks for the packed GenTL structures used by this consumer.
 
 Actual camera capability and compatibility still depend on the selected `.cti` Producer, its macOS architecture and its implementation of the standard.
