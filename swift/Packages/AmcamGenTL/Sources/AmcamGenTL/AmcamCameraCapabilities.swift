@@ -154,9 +154,13 @@ public struct AmcamCameraProfileRegistry: Sendable {
             let reason: String?
 
             if let flag {
-                baseAvailable = (modelFlags & flag) != 0
-                evidence = .modelFlag
-                reason = baseAvailable ? nil : "The camera model does not advertise this capability."
+                let advertised = (modelFlags & flag) != 0
+                let probeRequired = feature == .preciseFrameRate
+                baseAvailable = advertised && (!probeRequired || probe == true) && probe != false
+                evidence = probeRequired && probe == true ? .runtimeProbe : .modelFlag
+                reason = baseAvailable ? nil : (advertised
+                    ? "The model advertises this capability, but the runtime SDK probe did not confirm it."
+                    : "The camera model does not advertise this capability.")
             } else if feature == .resolution || feature == .liveCapture {
                 baseAvailable = true
                 evidence = .implementation
