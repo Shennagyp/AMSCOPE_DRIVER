@@ -2118,6 +2118,10 @@ extension AmcamGenTLImplementation: GenTLAPI {
     public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
         guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
         let key = UInt(bitPattern: hEvent)
+        lock.lock()
+        let isRegistered = events[key] != nil
+        lock.unlock()
+        guard isRegistered else { return GenTLABI.GC_ERR_INVALID_HANDLE }
         eventReadCondition.lock()
         eventKillGeneration[key, default: 0] &+= 1
         eventReadCondition.broadcast()
