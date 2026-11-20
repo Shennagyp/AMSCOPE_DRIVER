@@ -146,6 +146,31 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(controls.gain?.readbackPercent, 250)
         XCTAssertThrowsError(try session.setExposureGain(percent: 801))
 
+        let gainFixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(gainFixtureHandle)
+        defer { if let gainFixtureHandle { dlclose(gainFixtureHandle) } }
+        guard let ignoreGainSymbol = dlsym(gainFixtureHandle, "MockAmcam_SetIgnoreExposureGainWrite") else {
+            XCTFail("Mock SDK is missing MockAmcam_SetIgnoreExposureGainWrite")
+            return
+        }
+        let setIgnoreGainWrite = unsafeBitCast(
+            ignoreGainSymbol,
+            to: (@convention(c) (Int32) -> Void).self
+        )
+        setIgnoreGainWrite(1)
+        defer { setIgnoreGainWrite(0) }
+        XCTAssertThrowsError(try session.setExposureGain(percent: 300)) { error in
+            guard let cameraError = error as? AmcamCameraError,
+                  case .controlReadbackMismatch(
+                    control: "analog gain",
+                    requested: "300%",
+                    actual: "250%"
+                  ) = cameraError else {
+                XCTFail("Expected analog gain readback mismatch, got: \(error)")
+                return
+            }
+        }
+
         let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
         XCTAssertNotNil(fixtureHandle)
         defer { if let fixtureHandle { dlclose(fixtureHandle) } }
