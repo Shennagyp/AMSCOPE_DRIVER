@@ -8,6 +8,7 @@ let package = Package(
         .executable(name: "amcam-imaging", targets: ["AmcamImagingApp"])
     ],
     dependencies: [
+        .package(path: "../../Packages/GenTLABI"),
         .package(path: "../../Packages/GenTLAPI"),
         .package(path: "../../Packages/GenTLRouter"),
         .package(path: "../../Packages/AmcamGenTL")
@@ -16,6 +17,7 @@ let package = Package(
         .executableTarget(
             name: "AmcamImagingApp",
             dependencies: [
+                .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLAPI", package: "GenTLAPI"),
                 .product(name: "GenTLRouter", package: "GenTLRouter"),
                 .product(name: "AmcamGenTL", package: "AmcamGenTL")
