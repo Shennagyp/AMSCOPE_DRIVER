@@ -109,8 +109,9 @@ final class CameraApplicationModel: ObservableObject {
                         self.accept(frame)
                     case .failure(let error):
                         self.isStreaming = false
-                        self.status = "Camera stopped"
+                        self.status = "Camera stopped — session cleanup"
                         self.errorMessage = error.localizedDescription
+                        self.closeSession()
                     }
                 }
             }
