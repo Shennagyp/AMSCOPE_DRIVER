@@ -289,8 +289,11 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         probes[.analogGain] = sdk.exposureGainControlAvailable &&
             (try? sdk.readExposureGain(activeHandle)) != nil
-        probes[.whiteBalance] = sdk.whiteBalanceControlAvailable &&
+        let temperatureTintAvailable = sdk.whiteBalanceControlAvailable &&
             (try? sdk.readTemperatureTint(activeHandle)) != nil
+        let rgbGainAvailable = sdk.whiteBalanceControlAvailable &&
+            (try? sdk.readWhiteBalanceGain(activeHandle))?.count == 3
+        probes[.whiteBalance] = temperatureTintAvailable || rgbGainAvailable
         probes[.colorCorrection] =
             (try? sdk.readOption(activeHandle, option: AmcamSDK.optionColorMatrix)) != nil
         let pixelFormatFlags: UInt64 =
@@ -406,6 +409,30 @@ public final class AmcamCameraSession: @unchecked Sendable {
                 control: "white balance temperature/tint",
                 requested: "\(temperature) K / \(tint)",
                 actual: snapshot.whiteBalance.map { "\($0.temperature) K / \($0.tint)" } ?? "unavailable"
+            )
+        }
+        return snapshot
+    }
+
+    public func setWhiteBalanceRGBGain(_ values: [Int32]) throws -> AmcamControlSnapshot {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        let activeHandle = try controlHandle()
+        guard values.count == 3 else {
+            throw AmcamCameraError.unsupportedControl("RGB white balance requires exactly three values.")
+        }
+        try sdk.setWhiteBalanceGain(activeHandle, values: values)
+        let snapshot = try readControls(
+            using: activeHandle,
+            requestedExposure: requestedExposureMicroseconds,
+            requestedFrameRate: requestedFrameRate,
+            requestedSpeedLevel: requestedSpeedLevel
+        )
+        guard snapshot.whiteBalance?.rgbGain == values else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "RGB white-balance gain",
+                requested: values.map(String.init).joined(separator: ","),
+                actual: snapshot.whiteBalance?.rgbGain.map { $0.map(String.init).joined(separator: ",") } ?? "unavailable"
             )
         }
         return snapshot
@@ -553,8 +580,15 @@ public final class AmcamCameraSession: @unchecked Sendable {
             exposure = nil
         }
         let whiteBalanceReadback = try? sdk.readTemperatureTint(handle)
+        let whiteBalanceRGBGain = try? sdk.readWhiteBalanceGain(handle)
         let whiteBalance = whiteBalanceReadback.map {
-            AmcamWhiteBalanceControl(temperature: $0.temperature, tint: $0.tint)
+            AmcamWhiteBalanceControl(
+                temperature: $0.temperature,
+                tint: $0.tint,
+                rgbGain: whiteBalanceRGBGain?.count == 3 ? whiteBalanceRGBGain : nil
+            )
+        } ?? whiteBalanceRGBGain.map {
+            AmcamWhiteBalanceControl(temperature: 6_503, tint: 1_000, rgbGain: $0)
         }
         let gainReadback = try? sdk.readExposureGain(handle)
         let gain = gainReadback.map {
