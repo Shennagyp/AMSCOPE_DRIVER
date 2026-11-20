@@ -1,39 +1,56 @@
 # GenTLAPI
 
-The public Swift API follows the EMVA GenTL 1.6 function model and module boundaries:
+GenTLAPI is the single application-facing GenTL contract shared by the native CTI backend and the Amcam SDK backend.
+
+## Authority
+
+The pinned EMVA GenTL 1.6 C header imported by GenTLABI is the authority for ABI declarations: function names and signatures, types, constants, enumerations, structures, packing and handle definitions. The GenTL specification defines the behavioral semantics that the header cannot express.
+
+GenTLAPI must not maintain a parallel, independently authored copy of these declarations. Its operations must preserve GenTL function meaning, module ownership, output-parameter behavior, error results and lifecycle semantics. Any Swift-safe convenience API must remain a thin layer over the standard contract.
+
+**Transition status:** the current GenTLAPI source still contains a manually authored Swift protocol, function groups and type definitions. It is GenTL-shaped, but is not yet a direct binding aligned to imported GenTL C declarations. The implementation plan tracks the correction. Do not treat documentation of the target architecture as proof that this conversion is already complete.
+
+## Implementations
+
+1. **GenTLNative** loads a manufacturer-supplied .cti Producer, resolves its GenTL C exports and forwards operations through the actual C ABI. The native backend must use function-pointer declarations that match the pinned header.
+2. **AmcamGenTL** implements the same GenTL contract by mapping supported operations to the Amcam SDK. It does not create an AmScope .cti file and is not a binary GenTL Producer.
+
+The application uses GenTLAPI. It does not call Amcam SDK types directly or maintain a second camera abstraction.
+
+## Standard module groups
+
+The shared contract follows the GenTL module structure:
 
 - Library
 - System
 - Interface
 - Device
 - Data Stream and Buffer
-- Port (including GenTL 1.1 stacked register operations)
-- Data Stream extensions (chunk, multipart, stacked buffer info, flows and segments)
-- Signaling / Events
+- Port
+- Signaling and Events
+- Versioned Data Stream and Port extensions
 
-This is the sole application-facing camera API. It is not a second vendor-neutral abstraction.
+Function ownership and revision must follow the standard. For example, stacked port register operations belong to Port, while chunk, multipart, flow and segment operations belong to the relevant Data Stream extensions.
 
-## Two implementations
+## Backend rules
 
-1. **GenTLNative** forwards operations to third-party `.cti` GenTL Producers through the GenTL C ABI.
-2. **AmcamGenTL** maps the same Swift function surface to the Amcam SDK where equivalent operations exist. It does not create an AmScope `.cti`. Its raw camera driver, session, frame, control and error types are module-internal; only the GenTL implementation is exported from the package.
+- GenTLNative requires the complete GenTL 1.0 base export set. EventGetDataInfo is part of GenTL 1.0 and is required.
+- Functions introduced in later revisions are resolved according to the revision in which the standard defines them. A missing optional later-revision export returns the corresponding not-implemented error.
+- The API revision does not prove that every loaded Producer implements every function in that revision. Query the Producer's own reported GenTL version and capabilities.
+- AmcamGenTL maps only behavior supported by verified Amcam SDK functionality. Unsupported operations return an honest GenTL error.
+- The current Amcam integration has no verified remote register map or GenApi XML port. Register and GenApi URL operations remain unsupported; feature getters/setters exposed by the SDK are not automatically equivalent to GenApi node access.
+- Backends must not fabricate register behavior, serial numbers, timestamp validity, chunks, multipart data, flows, segments or other capabilities.
 
-The Swift surface uses typed opaque handles and Swift values while preserving GenTL function names, module ownership, error codes and lifecycle semantics. It is not itself a C ABI and is not a GenTL Producer.
+## Router and lifecycle
 
-## Router lifecycle
+GenTLRouter creates one initialized System context per registered backend and reuses it across discovery refreshes. Interface handles are opened once per interface and retained with the context.
 
-`GenTLRouter` creates one initialized GenTL System context per registered backend and reuses it across discovery refreshes. Interface handles are opened once per interface ID and retained with the context, so a refresh does not reload the same `.cti` or reopen a Producer's module hierarchy while earlier candidates or sessions still exist.
+Candidates and opened device sessions retain their originating backend context. Device sessions close child modules before the final context release closes Interfaces, System and the native library. If a child handle cannot be closed, the Producer library is retained rather than unloaded beneath live native handles or callbacks.
 
-Candidates and opened device sessions retain their provider context. Device sessions close their Device modules before the final context release closes Interfaces, the System, and the GenTL library. If a child handle cannot be closed, the Producer library is deliberately retained rather than unloaded underneath live native handles. Direct use of `GenTLNativeImplementation` has the same safety rule: releasing it before a successful `GCCloseLib` retains its `.cti` library for process lifetime.
+Manual registration canonicalizes CTI and Amcam SDK paths so aliases cannot register the same library more than once. Router cleanup failures quarantine the affected backend context rather than risking unsafe reinitialization.
 
-Manual registration also canonicalizes CTI and Amcam SDK paths. The same library cannot be registered twice under different backend IDs through the native/Amcam registration methods.
+## Conformance boundary
 
-## Compatibility rules
+The Swift GenTLAPI contract is not itself a GenTL Producer and does not export the GenTL C ABI. Only GenTLNative invokes the binary C API exported by third-party CTI Producers. AmcamGenTL is an SDK-backed implementation of the shared contract.
 
-- The API surface follows the GenTL 1.6 header.
-- The native implementation resolves functions introduced in later GenTL revisions when the producer exports them. Missing versioned extensions return `GC_ERR_NOT_IMPLEMENTED`.
-- The Amcam implementation maps only behavior the Amcam SDK can provide. Unsupported operations return the appropriate GenTL error, normally `GC_ERR_NOT_IMPLEMENTED` or `GC_ERR_NOT_AVAILABLE`.
-- The Amcam SDK exposes feature getters/setters but no documented remote register map or GenApi XML port in the current implementation. Register and GenApi URL operations therefore remain unsupported.
-- Backends must not fabricate capabilities, register behavior, chunks, flows or payload features.
-
-The interface is GenTL-shaped at the Swift API level; it is not a drop-in binary implementation of the GenTL C ABI.
+Neither backend is claimed to be formally certified. See CONFORMANCE.md for current capability mapping and limitations, and the repository-level GenTL implementation plan for the target architecture and remaining phases.
