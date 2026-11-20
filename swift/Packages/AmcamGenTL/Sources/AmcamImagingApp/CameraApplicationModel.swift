@@ -164,6 +164,14 @@ final class CameraApplicationModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func setExposureGain(_ percent: UInt16) {
+        guard let session else { return }
+        do {
+            controls = try session.setExposureGain(percent: percent)
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func setFixedFrameRate(_ framesPerSecond: Double) {
         guard let session else { return }
         do {
