@@ -139,12 +139,22 @@ final class CameraApplicationModel: ObservableObject {
 
     /// UI command. The imaging library owns the session and acquisition lifecycle.
     func start() {
-        Task { await startOwned() }
+        let operation = cameraSelectionGeneration
+        let deviceID = selectedDeviceID
+        Task { await startOwned(expectedGeneration: operation, expectedDeviceID: deviceID) }
     }
 
-    private func startOwned() async {
-        guard (await cameraLifecycle.snapshot()).hasSession, let device = selectedDevice else {
-            errorMessage = "Select a camera and configure the Amcam SDK first."
+    private func startOwned(expectedGeneration operation: UInt64, expectedDeviceID: String) async {
+        guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else { return }
+        guard (await cameraLifecycle.snapshot()).hasSession,
+              isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID,
+              let device = selectedDevice else {
+            if isCurrentCameraSelectionOperation(operation),
+               selectedDeviceID == expectedDeviceID {
+                errorMessage = "Select a camera and configure the Amcam SDK first."
+            }
             return
         }
         guard cameraCapabilities?.availability(of: .liveCapture).isUsable == true else {
@@ -153,19 +163,29 @@ final class CameraApplicationModel: ObservableObject {
         }
 
         let events = await cameraLifecycle.events()
+        guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else { return }
         lifecycleEventTask?.cancel()
         lifecycleEventTask = Task { [weak self] in
             for await event in events {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled,
+                      let self,
+                      self.isCurrentCameraSelectionOperation(operation),
+                      self.selectedDeviceID == expectedDeviceID else { return }
                 self.handleLifecycleEvent(event)
             }
         }
 
         let frames = await cameraLifecycle.frames()
+        guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else { return }
         frameConsumerTask?.cancel()
         frameConsumerTask = Task { [weak self] in
             for await frame in frames {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled,
+                      let self,
+                      self.isCurrentCameraSelectionOperation(operation),
+                      self.selectedDeviceID == expectedDeviceID else { return }
                 self.accept(frame)
             }
         }
@@ -176,10 +196,14 @@ final class CameraApplicationModel: ObservableObject {
 
         do {
             try await cameraLifecycle.start()
+            guard isCurrentCameraSelectionOperation(operation),
+                  selectedDeviceID == expectedDeviceID else { return }
             isStreaming = true
             status = "Live — \(device.displayName)"
             errorMessage = nil
         } catch {
+            guard isCurrentCameraSelectionOperation(operation),
+                  selectedDeviceID == expectedDeviceID else { return }
             frameConsumerTask?.cancel()
             frameConsumerTask = nil
             lifecycleEventTask?.cancel()
