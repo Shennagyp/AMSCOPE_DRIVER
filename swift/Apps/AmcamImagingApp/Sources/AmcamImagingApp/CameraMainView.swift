@@ -438,7 +438,7 @@ final class CameraSettingsViewController: NSViewController {
             if let temperature = white.temperature {
                 temperatureSlider?.doubleValue = Double(temperature)
                 let temperatureRange = model.numericRange(for: "AmcamWhiteBalanceTemperature")
-                if let temperatureRange {
+                if let temperatureRange, temperatureRange.maximum > temperatureRange.minimum {
                     temperatureSlider?.minValue = temperatureRange.minimum
                     temperatureSlider?.maxValue = temperatureRange.maximum
                 }
@@ -451,7 +451,7 @@ final class CameraSettingsViewController: NSViewController {
             if let tint = white.tint {
                 tintSlider?.doubleValue = Double(tint)
                 let tintRange = model.numericRange(for: "AmcamWhiteBalanceTint")
-                if let tintRange {
+                if let tintRange, tintRange.maximum > tintRange.minimum {
                     tintSlider?.minValue = tintRange.minimum
                     tintSlider?.maxValue = tintRange.maximum
                 }
@@ -498,7 +498,7 @@ final class CameraSettingsViewController: NSViewController {
             && model.isFeatureWritable("AmcamFixedFrameRate")
             && frameRateRange.map { $0.maximum > $0.minimum } == true
         frameRateSlider?.isHidden = !canWriteFrameRate
-        if let frameRateRange {
+        if canWriteFrameRate, let frameRateRange {
             frameRateSlider?.minValue = frameRateRange.minimum
             frameRateSlider?.maxValue = frameRateRange.maximum
         }
