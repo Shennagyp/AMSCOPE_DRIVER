@@ -2144,7 +2144,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
 // MARK: Typed feature access
 
 extension AmcamGenTLImplementation: GenTLFeatureAccess {
-    public func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor] {
+    public func featureDescriptors(for device: GenTLFeatureDeviceHandle) throws -> [GenTLFeatureDescriptor] {
         let record = try featureDeviceRecord(device)
         let capabilities = try record.session.cameraCapabilities()
         let controls = try record.session.readControls()
@@ -2209,7 +2209,7 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
         ]
     }
 
-    public func readFeature(_ name: String, from device: DEV_HANDLE) throws -> GenTLFeatureValue {
+    public func readFeature(_ name: String, from device: GenTLFeatureDeviceHandle) throws -> GenTLFeatureValue {
         let descriptor = try requireFeatureDescriptor(name, device: device)
         guard descriptor.isAvailable else {
             throw GenTLFeatureAccessError.featureUnavailable(name)
@@ -2245,7 +2245,7 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
     public func writeFeature(
         _ value: GenTLFeatureValue,
         named name: String,
-        to device: DEV_HANDLE
+        to device: GenTLFeatureDeviceHandle
     ) throws {
         let descriptor = try requireFeatureDescriptor(name, device: device)
         guard descriptor.isAvailable else {
@@ -2297,15 +2297,15 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
         }
     }
 
-    private func featureDeviceRecord(_ device: DEV_HANDLE) throws -> AmcamOpenDeviceRecord {
+    private func featureDeviceRecord(_ device: GenTLFeatureDeviceHandle) throws -> AmcamOpenDeviceRecord {
         lock.lock()
         defer { lock.unlock() }
-        return try deviceRecord(device)
+        return try deviceRecord(DEV_HANDLE(rawValue: device.rawValue))
     }
 
     private func requireFeatureDescriptor(
         _ name: String,
-        device: DEV_HANDLE
+        device: GenTLFeatureDeviceHandle
     ) throws -> GenTLFeatureDescriptor {
         guard let descriptor = try featureDescriptors(for: device).first(where: { $0.name == name }) else {
             throw GenTLFeatureAccessError.featureNotFound(name)
