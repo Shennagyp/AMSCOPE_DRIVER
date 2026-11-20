@@ -29,42 +29,39 @@ Current dependency direction:
 
 ```text
 AmcamImagingApp
-  -> AmcamCameraModel
-  -> AmcamImagingCore
-  -> AmcamImagingRuntime
-  -> AmcamImagingGenTLAdapter
-  -> AmcamImagingState
-
-AmcamImagingState
-  -> AmcamCameraModel
-  -> AmcamImagingRuntime
+  ├── AmcamCameraModel
+  ├── AmcamImagingCore
+  ├── AmcamImagingRuntime
+  ├── AmcamImagingGenTLAdapter
+  └── AmcamImagingState
+        ├── AmcamCameraModel
+        └── AmcamImagingRuntime
 
 AmcamImagingGenTLAdapter
-  -> AmcamCameraModel
-  -> AmcamImagingCore
-  -> AmcamImagingRuntime
-  -> GenTLRouter
-       -> GenTLNative
-       -> AmcamGenTL
-            -> GenTLAPI + GenTLABI
-       -> GenTLAPI + GenTLABI
+  ├── AmcamCameraModel
+  ├── AmcamImagingCore
+  ├── AmcamImagingRuntime
+  └── GenTLRouter
+        ├── GenTLNative
+        ├── AmcamGenTL
+        │     └── GenTLAPI + GenTLABI
+        └── GenTLAPI + GenTLABI
 
 amcam-camera-probe
-  -> AmcamGenTL
-  -> GenTLAPI + GenTLABI
+  └── AmcamGenTL
+        └── GenTLAPI + GenTLABI
 ```
 
 Library-owned camera lifecycle and discovery boundary:
 
 ```text
 AmcamImagingApp
-  -> CameraSessionLifecycle (AmcamImagingRuntime)
-       <- GenTLRuntimeDevice (AmcamImagingGenTLAdapter)
-
-AmcamImagingApp
-  -> AmcamCameraProvider (AmcamImagingGenTLAdapter)
-       -> GenTLRouter
-            -> AmcamGenTL
+  ├── CameraSessionLifecycle (AmcamImagingRuntime)
+  │     ▲
+  │     └── GenTLRuntimeDevice (AmcamImagingGenTLAdapter)
+  └── AmcamCameraProvider (AmcamImagingGenTLAdapter)
+        └── GenTLRouter
+              └── AmcamGenTL
 ```
 
 Rules:
