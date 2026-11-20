@@ -68,6 +68,8 @@ The SDK wrapper now preserves all three values instead of collapsing every nonze
 
 This is distinct from analog gain. Gain is a separate control with its own API and range query; it must not be inferred from exposure support. The Swift implementation loads gain functions as optional symbols, requires the complete get/set/range API, probes the current camera, validates the model-reported range, and verifies exact readback after a write. The mock integration suite also injects a successful-but-ignored gain write and requires a readback-mismatch error.
 
+White balance is also independent of exposure and gain. The app probes the two modes separately: temperature/tint and RGB channel gains. It shows only the mode whose getter and setter symbols are both present and whose read-only query succeeds. Temperature and tint use the documented ranges 2000–15000 K and 200–2500. RGB gains are sent as three integer values and accepted only after exact readback; no undocumented min/max range is invented.
+
 ## Model profile configuration
 
 The app reads optional model profiles from:
@@ -105,10 +107,11 @@ The first application slice exposes:
 - manual/fixed, continuous-auto, and one-shot-auto exposure modes;
 - exposure-time range and exact readback;
 - analog gain range, setter, and exact readback when the SDK symbols and camera queries are available;
+- temperature/tint and RGB-channel white-balance modes, each gated independently by its SDK symbols and runtime query;
 - precise fixed frame rate when both model flag and runtime option probes succeed;
 - discrete sensor speed when model speed range and SDK get/set symbols are usable.
 
-Other Amcam feature groups are capability-described from the model flags, but controls not yet wired into the Swift backend are labelled as pending. They are not falsely exposed as editable settings. The next control integrations should follow the supplied wrapper's feature semantics and add readback plus model-specific tests before UI activation.
+Color correction and pixel-format support are also runtime-probed and surfaced in the corresponding settings group. Other Amcam feature groups are capability-described from the model flags, but controls not yet wired into the Swift backend are labelled as pending. They are not falsely exposed as editable settings. The next control integrations should follow the supplied wrapper's feature semantics and add readback plus model-specific tests before UI activation.
 
 ## Build and run
 
