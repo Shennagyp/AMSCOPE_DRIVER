@@ -332,6 +332,15 @@ private struct FeatureGroupView: View {
         if capability?.availability(of: .binningAndSkipping).available == true {
             featureStatus(.binningAndSkipping)
         }
+        if capability?.availability(of: .monochromeOutput).available == true {
+            featureStatus(.monochromeOutput)
+        }
+        if capability?.availability(of: .frameBuffer).available == true {
+            featureStatus(.frameBuffer)
+        }
+        if capability?.availability(of: .ddrFrameBuffer).available == true {
+            featureStatus(.ddrFrameBuffer)
+        }
         if capability?.availability(of: .pixelFormatSelection).isUsable == true,
            let image = controls?.image,
            let pixelFormat = image.pixelFormatCode,
