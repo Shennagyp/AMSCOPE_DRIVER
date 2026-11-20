@@ -1761,9 +1761,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ pBuffer: UnsafeMutableRawPointer?,
         _ piSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
-        guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
-        }
+        let event = rawEventHandle(hEvent)
         lock.lock()
         defer { lock.unlock() }
         do {
@@ -1776,9 +1774,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     }
 
     public func EventFlush(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
-        guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
-        }
+        let event = rawEventHandle(hEvent)
         lock.lock()
         defer { lock.unlock() }
         do {
@@ -1790,9 +1786,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     }
 
     public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
-        guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
-        }
+        let event = rawEventHandle(hEvent)
         lock.lock()
         defer { lock.unlock() }
         do {
