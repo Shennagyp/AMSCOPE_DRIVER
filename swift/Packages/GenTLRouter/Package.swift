@@ -9,6 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../GenTLAPI"),
+        .package(path: "../GenTLABI"),
         .package(path: "../GenTLNative"),
         .package(path: "../AmcamGenTL")
     ],
@@ -17,6 +18,7 @@ let package = Package(
             name: "GenTLRouter",
             dependencies: [
                 .product(name: "GenTLAPI", package: "GenTLAPI"),
+                .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLNative", package: "GenTLNative"),
                 .product(name: "AmcamGenTL", package: "AmcamGenTL")
             ]
