@@ -573,4 +573,12 @@ The loader unit suite now distinguishes three filesystem/load boundaries: missin
 
 The latest test workflow attempt is run \texttt{44674821941} for commit \texttt{4c108885fb95c4bf7912da5997d0e42db2d33f43}. All five jobs (four macOS package jobs and one Ubuntu ABI/API job) again terminated with runner ID zero and no executed steps. The latest source additions therefore remain uncompiled and unexecuted.
 
+
+\section{CI evidence update --- 2026-11-20}
+Hosted runners are now being allocated and workflow steps execute. The Ubuntu 24.04 ABI/API job in run \texttt{44676082932} (commit \texttt{430ccf9da3b098cedb79fd932874c031943317cd}) completed successfully. It built the pinned GenTL ABI package and ran the GenTLAPI contract suite: all 9 tests passed, including the test invoking all 64 protocol default operations. This verifies the Linux C ABI module build and portable Swift API contract on Ubuntu 24.04; it does not verify the native dynamic-library loader.
+
+The CI compiler exposed two distinct test-contract defects after the typed \texttt{GC_ERROR} correction: tests compared the imported \texttt{GC_ERROR_LIST} enum against \texttt{GC_ERROR}, and passed \texttt{nil} to non-optional raw handle parameters. The test suite now uses the C ABI shim's correctly typed not-implemented status and non-null opaque handle sentinels while preserving nullability for optional output pointers. Native integration dispatch tests received the same opaque-handle correction.
+
+The latest source commit is \texttt{8b34d21787069109027c1e8665acad01709ac3b9}. Its workflow run \texttt{44676161807} is pending/in progress; macOS package jobs have not yet produced a verified result. The native mock-producer test still compiles with \texttt{xcrun} on macOS. Linux/Windows native-loader validation and cross-platform mock compilation remain future work. No all-platform support claim is made.
+
 \end{document}
