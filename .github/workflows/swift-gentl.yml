@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 # Keep only the newest pending validation run for this branch. A currently
 # running run is allowed to finish; superseded queued runs are replaced.
@@ -156,13 +156,32 @@ jobs:
             ${{ runner.temp }}/amcam-imaging/RUN-THIS-TODAY.txt
           retention-days: 14
 
+  publish-release:
+    name: Publish public macOS release
+    needs: package-tests
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/macos-version-optimization'
+    runs-on: macos-15
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download imaging application package
+        uses: actions/download-artifact@v4
+        with:
+          name: amcam-imaging-macos-arm64
+          path: ${{ runner.temp }}/release/app
+
+      - name: Download camera probe package
+        uses: actions/download-artifact@v4
+        with:
+          name: amcam-camera-probe-macos-arm64
+          path: ${{ runner.temp }}/release/probe
+
       - name: Package camera probe for public distribution
-        if: matrix.package == 'AmcamGenTL'
         run: |
-          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/amcam-camera-probe" "$RUNNER_TEMP/amcam-camera-probe-macos-arm64.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/release/probe" "$RUNNER_TEMP/release/amcam-camera-probe-macos-arm64.zip"
 
       - name: Publish public macOS release assets
-        if: matrix.package == 'AmcamGenTL' && github.event_name != 'pull_request' && github.ref == 'refs/heads/macos-version-optimization'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: macos-build-${{ github.run_number }}-${{ github.run_attempt }}
@@ -172,7 +191,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            ${{ runner.temp }}/amcam-imaging/Amcam-Imaging-macos-arm64.zip
-            ${{ runner.temp }}/amcam-imaging/RUN-THIS-TODAY.txt
-            ${{ runner.temp }}/amcam-camera-probe-macos-arm64.zip
-
+            ${{ runner.temp }}/release/app/Amcam-Imaging-macos-arm64.zip
+            ${{ runner.temp }}/release/app/RUN-THIS-TODAY.txt
+            ${{ runner.temp }}/release/amcam-camera-probe-macos-arm64.zip
