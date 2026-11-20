@@ -184,7 +184,7 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
     /// EventGetData can block until its timeout (or indefinitely). It must not
     /// hold the API-wide lock, but GCCloseLib must not run while a read is active.
     private struct RegisteredEvent {
-        let source: EVENTSRC_HANDLE
+        let sourcePointer: UnsafeMutableRawPointer?
         let eventType: Int32
     }
 
@@ -1174,26 +1174,27 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
         _ source: EVENTSRC_HANDLE,
         eventType: Int32
     ) throws -> EVENT_HANDLE {
-        try withLock {
+        let sourcePointer = try eventSourcePointer(source)
+        return try withLock {
             guard !registeredEventsByHandle.values.contains(where: {
-                $0.source == source && $0.eventType == eventType
+                $0.sourcePointer == sourcePointer && $0.eventType == eventType
             }) else {
                 throw GC_ERROR.resourceInUse
             }
 
             var event: UnsafeMutableRawPointer?
-            try check(functions.gcRegisterEvent(try eventSourcePointer(source), eventType, &event))
+            try check(functions.gcRegisterEvent(sourcePointer, eventType, &event))
             guard let event else { throw GC_ERROR.invalidHandle }
             let handle = EVENT_HANDLE(rawValue: UInt(bitPattern: event))
             guard registeredEventsByHandle[handle.rawValue] == nil else {
                 // A Producer returning an already-live event handle violates
                 // handle uniqueness. Undo the just-issued registration before
                 // reporting the invalid Producer behavior.
-                try? functions.gcUnregisterEvent(try eventSourcePointer(source), eventType)
+                try? functions.gcUnregisterEvent(sourcePointer, eventType)
                 throw GC_ERROR.resourceInUse
             }
             registeredEventsByHandle[handle.rawValue] = RegisteredEvent(
-                source: source,
+                sourcePointer: sourcePointer,
                 eventType: eventType
             )
             return handle
@@ -1204,9 +1205,16 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
         _ source: EVENTSRC_HANDLE,
         eventType: Int32
     ) throws {
+        try unregisterEvent(sourcePointer: eventSourcePointer(source), eventType: eventType)
+    }
+
+    private func unregisterEvent(
+        sourcePointer: UnsafeMutableRawPointer?,
+        eventType: Int32
+    ) throws {
         let handles = try withLock { () throws -> [UInt] in
             let matchingHandles = registeredEventsByHandle.compactMap { handle, record in
-                record.source == source && record.eventType == eventType ? handle : nil
+                record.sourcePointer == sourcePointer && record.eventType == eventType ? handle : nil
             }
             guard !matchingHandles.isEmpty else { throw GC_ERROR.invalidHandle }
             guard matchingHandles.allSatisfy({
@@ -1215,9 +1223,6 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
                 throw GC_ERROR.resourceInUse
             }
 
-            // Resolve the native pointers before blocking new calls. EventKill
-            // terminates waiting EventGetData operations; GCUnregisterEvent
-            // itself only removes the registration.
             let eventPointers = try matchingHandles.map {
                 try pointer(EVENT_HANDLE(rawValue: $0))
             }
@@ -1233,9 +1238,6 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
             return matchingHandles
         }
 
-        // Drain all Swift calls before asking the Producer to destroy its event
-        // objects. The unregistering marker prevents new calls entering while
-        // this wait is in progress.
         eventReadCondition.lock()
         while handles.contains(where: {
             activeEventDataReadsByHandle[$0, default: 0] > 0
@@ -1246,18 +1248,13 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
 
         do {
             try withLock {
-                try check(functions.gcUnregisterEvent(
-                    try eventSourcePointer(source),
-                    eventType
-                ))
+                try check(functions.gcUnregisterEvent(sourcePointer, eventType))
                 for handle in handles {
                     registeredEventsByHandle.removeValue(forKey: handle)
                     unregisteringEventHandles.remove(handle)
                 }
             }
         } catch {
-            // A failed unregister leaves the native event registered. Reopen
-            // the Swift admission path so the caller can retry or kill it.
             lock.lock()
             unregisteringEventHandles.subtract(handles)
             lock.unlock()
