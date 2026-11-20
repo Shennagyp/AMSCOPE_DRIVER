@@ -757,7 +757,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             guard result >= 0 else {
                 streaming = false
                 lock.unlock()
-                handler(.failure(.cameraReadbackFailed(operation: "Amcam_PullImageV2", code: result)))
+                handler(.failure(.cameraReadbackFailed(operation: sdk.pullImageOperationName, code: result)))
                 return
             }
             let frameWidth = Int(info.width)
