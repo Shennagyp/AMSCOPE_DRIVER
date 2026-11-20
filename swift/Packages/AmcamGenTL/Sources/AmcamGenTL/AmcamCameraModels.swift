@@ -23,8 +23,8 @@ public struct AmcamDevice: Hashable, Sendable, Identifiable {
     public let sensorPixelSizeMicrometers: (x: Double, y: Double)?
     public let previewResolutions: [AmcamResolution]
 
-    static func == (lhs: AmcamDevice, rhs: AmcamDevice) -> Bool { lhs.identifier == rhs.identifier }
-    func hash(into hasher: inout Hasher) { hasher.combine(identifier) }
+    public static func == (lhs: AmcamDevice, rhs: AmcamDevice) -> Bool { lhs.identifier == rhs.identifier }
+    public func hash(into hasher: inout Hasher) { hasher.combine(identifier) }
 
     public init(identifier: String, displayName: String, modelName: String?, modelFlags: UInt64?, maximumSpeedLevel: Int?, sensorPixelSizeMicrometers: (x: Double, y: Double)?, previewResolutions: [AmcamResolution]) {
         self.identifier = identifier
