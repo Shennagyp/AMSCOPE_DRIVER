@@ -60,7 +60,7 @@ final class CameraApplicationModel: ObservableObject {
         guard !hasInitialized else { return }
         hasInitialized = true
         loadProfileConfiguration()
-        configureSDK()
+        initializeCameraProvider()
     }
 
     func refreshDevices() {
@@ -153,7 +153,7 @@ final class CameraApplicationModel: ObservableObject {
               let device = selectedDevice else {
             if isCurrentCameraSelectionOperation(operation),
                selectedDeviceID == expectedDeviceID {
-                errorMessage = "Select a camera and configure the Amcam SDK first."
+                errorMessage = "Open a camera before starting acquisition."
             }
             return
         }
@@ -397,12 +397,12 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    private func configureSDK() {
+    private func initializeCameraProvider() {
         let operation = beginCameraSelectionOperation()
-        Task { await configureSDKOwned(operation: operation) }
+        Task { await initializeCameraProviderOwned(operation: operation) }
     }
 
-    private func configureSDKOwned(operation: UInt64) async {
+    private func initializeCameraProviderOwned(operation: UInt64) async {
         guard isCurrentCameraSelectionOperation(operation) else { return }
         guard await closeSession(expectedGeneration: operation),
               isCurrentCameraSelectionOperation(operation) else { return }
