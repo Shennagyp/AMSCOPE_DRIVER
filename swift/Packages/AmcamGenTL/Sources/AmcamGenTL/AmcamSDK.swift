@@ -58,6 +58,15 @@ final class AmcamSDK: @unchecked Sendable {
     static let disconnectedEvent: UInt32 = 0x0081
     static let frameSequenceFlag: UInt32 = 0x0001
     static let frameTimestampFlag: UInt32 = 0x0002
+    static let frameExposureTimeFlag: UInt32 = 0x0004
+    static let frameExposureGainFlag: UInt32 = 0x0008
+    static let frameBlackLevelFlag: UInt32 = 0x0010
+    static let frameShutterSequenceFlag: UInt32 = 0x0020
+    static let frameGPSFlag: UInt32 = 0x0040
+    static let frameAutofocusFlag: UInt32 = 0x0080
+    static let frameCountFlag: UInt32 = 0x0100
+    static let frameMechanicalShutterFlag: UInt32 = 0x0200
+    static let frameConversionGainFlag: UInt32 = 0x0001_0000
     static let requestedPullBits: Int32 = 24
     static let preciseFrameRateFlag: UInt64 = 0x0000004000000000
     static let optionMaximumPreciseFrameRate: UInt32 = 0x2c
@@ -556,34 +565,96 @@ final class AmcamSDK: @unchecked Sendable {
         return "Amcam_PullImageV2"
     }
 
-    func pullImage(_ handle: UnsafeMutableRawPointer, buffer: UnsafeMutableRawPointer, frameInfo: UnsafeMutablePointer<AmcamFrameInfoV2>) -> Int32 {
-        // A negative row pitch explicitly requests tightly packed rows. This matches
-        // Amcam's documented RGB24 layout (width * 3) and avoids DIB row padding.
+    func pullImage(
+        _ handle: UnsafeMutableRawPointer,
+        buffer: UnsafeMutableRawPointer,
+        frameInfo: UnsafeMutablePointer<AmcamFrameInfoV2>,
+        metadata: UnsafeMutablePointer<AmcamFrameMetadata?>? = nil
+    ) -> Int32 {
+        // Amcam documents rowPitch = -1 as zero padding (tightly packed rows).
+        // For RGB24 that means exactly width * 3 bytes per row.
         if let pullV4 = api.pullImageV4 {
             var info = AmcamFrameInfoV4()
             let result = pullV4(handle, buffer, 0, Self.requestedPullBits, -1, &info)
-            frameInfo.pointee.width = info.v3.width
-            frameInfo.pointee.height = info.v3.height
-            frameInfo.pointee.flag = info.v3.flag
-            frameInfo.pointee.seq = info.v3.seq
-            frameInfo.pointee.timestamp = info.v3.timestamp
+            guard result >= 0 else { return result }
+            copy(info.v3, to: frameInfo)
+            metadata?.pointee = Self.metadata(from: info)
             return result
         }
         if let pullV3 = api.pullImageV3 {
             var info = AmcamFrameInfoV3()
             let result = pullV3(handle, buffer, 0, Self.requestedPullBits, -1, &info)
-            frameInfo.pointee.width = info.width
-            frameInfo.pointee.height = info.height
-            frameInfo.pointee.flag = info.flag
-            frameInfo.pointee.seq = info.seq
-            frameInfo.pointee.timestamp = info.timestamp
+            guard result >= 0 else { return result }
+            copy(info, to: frameInfo)
+            metadata?.pointee = Self.metadata(from: info)
             return result
         }
         if let pullWithPitch = api.pullImageWithRowPitchV2 {
-            return pullWithPitch(handle, buffer, Self.requestedPullBits, -1, frameInfo)
+            let result = pullWithPitch(handle, buffer, Self.requestedPullBits, -1, frameInfo)
+            if result >= 0 {
+                metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
+            }
+            return result
         }
         guard let pullV2 = api.pullImage else { return -1 }
-        return pullV2(handle, buffer, Self.requestedPullBits, frameInfo)
+        let result = pullV2(handle, buffer, Self.requestedPullBits, frameInfo)
+        if result >= 0 {
+            metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
+        }
+        return result
+    }
+
+    private func copy(_ source: AmcamFrameInfoV3, to destination: UnsafeMutablePointer<AmcamFrameInfoV2>) {
+        destination.pointee.width = source.width
+        destination.pointee.height = source.height
+        destination.pointee.flag = source.flag
+        destination.pointee.seq = source.seq
+        destination.pointee.timestamp = source.timestamp
+    }
+
+    private static func metadata(from info: AmcamFrameInfoV3) -> AmcamFrameMetadata {
+        let flags = info.flag
+        return AmcamFrameMetadata(
+            apiVersion: .v3,
+            validityFlags: flags,
+            shutterSequence: flags & frameShutterSequenceFlag != 0 ? info.shutterseq : nil,
+            exposureTimeMicroseconds: flags & frameExposureTimeFlag != 0 ? info.expotime : nil,
+            exposureGain: flags & frameExposureGainFlag != 0 ? info.expogain : nil,
+            blackLevel: flags & frameBlackLevelFlag != 0 ? info.blacklevel : nil,
+            mechanicalShutterClosed: flags & frameMechanicalShutterFlag != 0 ? true : nil,
+            conversionGainHigh: flags & frameConversionGainFlag != 0 ? true : nil
+        )
+    }
+
+    private static func metadata(from info: AmcamFrameInfoV4) -> AmcamFrameMetadata {
+        let base = metadata(from: info.v3)
+        let flags = info.v3.flag
+        let gps = flags & frameGPSFlag != 0
+            ? AmcamFrameGPSMetadata(
+                exposureStartUnixNanoseconds: info.gps.utcstart,
+                exposureEndUnixNanoseconds: info.gps.utcend,
+                longitudeMicrodegrees: info.gps.longitude,
+                latitudeMicrodegrees: info.gps.latitude,
+                altitudeMillimetres: info.gps.altitude,
+                satelliteCount: info.gps.satellite
+            )
+            : nil
+        return AmcamFrameMetadata(
+            apiVersion: .v4,
+            validityFlags: flags,
+            shutterSequence: base.shutterSequence,
+            exposureTimeMicroseconds: base.exposureTimeMicroseconds,
+            exposureGain: base.exposureGain,
+            blackLevel: base.blackLevel,
+            luminance: flags & frameAutofocusFlag != 0 ? info.uLum : nil,
+            focusValue: flags & frameAutofocusFlag != 0 ? info.uFV : nil,
+            timeCount: flags & frameCountFlag != 0 ? info.timecount : nil,
+            frameCount: flags & frameCountFlag != 0 ? info.framecount : nil,
+            triggerCount: flags & frameCountFlag != 0 ? info.tricount : nil,
+            gps: gps,
+            mechanicalShutterClosed: base.mechanicalShutterClosed,
+            conversionGainHigh: base.conversionGainHigh
+        )
     }
     func stop(_ handle: UnsafeMutableRawPointer) -> Int32 { api.stop(handle) }
 }
