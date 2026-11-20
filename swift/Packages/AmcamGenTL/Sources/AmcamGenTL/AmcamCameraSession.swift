@@ -302,12 +302,13 @@ public final class AmcamCameraSession: @unchecked Sendable {
             0x0000000008000000 | 0x0000000010000000 | 0x0000000020000000 |
             0x0000000100000000 | 0x0000000200000000 | 0x0000000400000000
         probes[.pixelFormatSelection] =
-            (modelFlags.map { ($0 & pixelFormatFlags) != 0 } ?? false) ||
-            (try? sdk.readOption(activeHandle, option: AmcamSDK.optionPixelFormat)) != nil
+            (modelFlags.map { ($0 & pixelFormatFlags) != 0 } ?? false) &&
+            (try? sdk.readOption(activeHandle, option: AmcamSDK.optionPixelFormat)) != nil &&
+            (try? sdk.readSupportedPixelFormats(activeHandle).isEmpty) == false
         probes[.resolution] = !resolutions.isEmpty && sdk.resolutionChangeAvailable
         let implemented: Set<AmcamCameraFeature> = [
             .liveCapture, .resolution, .exposureAuto, .exposureManual, .analogGain, .whiteBalance,
-            .preciseFrameRate, .discreteFrameSpeed
+            .preciseFrameRate, .discreteFrameSpeed, .colorCorrection, .pixelFormatSelection
         ]
         return registry.resolve(
             modelCode: modelCode,
@@ -381,6 +382,58 @@ public final class AmcamCameraSession: @unchecked Sendable {
             )
         }
         requestedExposureMicroseconds = microseconds
+        return snapshot
+    }
+
+    public func setColorMatrixEnabled(_ enabled: Bool) throws -> AmcamControlSnapshot {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        let activeHandle = try controlHandle()
+        try sdk.setOption(activeHandle, option: AmcamSDK.optionColorMatrix, value: enabled ? 1 : 0)
+        let snapshot = try readControls(
+            using: activeHandle,
+            requestedExposure: requestedExposureMicroseconds,
+            requestedFrameRate: requestedFrameRate,
+            requestedSpeedLevel: requestedSpeedLevel
+        )
+        guard snapshot.image?.colorMatrixEnabled == enabled else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "color matrix",
+                requested: enabled ? "enabled" : "disabled",
+                actual: snapshot.image?.colorMatrixEnabled.map { $0 ? "enabled" : "disabled" } ?? "unavailable"
+            )
+        }
+        return snapshot
+    }
+
+    public func setPixelFormat(code: Int32) throws -> AmcamControlSnapshot {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        let activeHandle = try controlHandle()
+        lock.lock()
+        let running = starting || streaming || stopping
+        lock.unlock()
+        guard !running else {
+            throw AmcamCameraError.unsupportedControl("Pixel format can only be changed while acquisition is stopped.")
+        }
+        let supported = try sdk.readSupportedPixelFormats(activeHandle)
+        guard supported.contains(code) else {
+            throw AmcamCameraError.unsupportedControl("Pixel format code \(code) is not supported by this camera.")
+        }
+        try sdk.setOption(activeHandle, option: AmcamSDK.optionPixelFormat, value: code)
+        let snapshot = try readControls(
+            using: activeHandle,
+            requestedExposure: requestedExposureMicroseconds,
+            requestedFrameRate: requestedFrameRate,
+            requestedSpeedLevel: requestedSpeedLevel
+        )
+        guard snapshot.image?.pixelFormatCode == code else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "pixel format",
+                requested: String(code),
+                actual: snapshot.image?.pixelFormatCode.map(String.init) ?? "unavailable"
+            )
+        }
         return snapshot
     }
 
@@ -595,6 +648,16 @@ public final class AmcamCameraSession: @unchecked Sendable {
         } else {
             whiteBalance = nil
         }
+        let colorMatrix = try? sdk.readOption(handle, option: AmcamSDK.optionColorMatrix)
+        let currentPixelFormat = try? sdk.readOption(handle, option: AmcamSDK.optionPixelFormat)
+        let supportedPixelFormats = (try? sdk.readSupportedPixelFormats(handle)) ?? []
+        let imageControls = (colorMatrix != nil || currentPixelFormat != nil || !supportedPixelFormats.isEmpty)
+            ? AmcamCameraImageControls(
+                colorMatrixEnabled: colorMatrix.map { $0 != 0 },
+                pixelFormatCode: currentPixelFormat,
+                supportedPixelFormats: supportedPixelFormats
+            )
+            : nil
         let gainReadback = try? sdk.readExposureGain(handle)
         let gain = gainReadback.map {
             AmcamGainControl(
@@ -661,7 +724,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             deviceMeasurementWindowMilliseconds: recentRate?.windowMilliseconds,
             deviceTotalFrameCount: recentRate?.totalFrameCount
         )
-        return AmcamControlSnapshot(exposure: exposure, gain: gain, whiteBalance: whiteBalance, frameRate: frameRate)
+        return AmcamControlSnapshot(exposure: exposure, gain: gain, whiteBalance: whiteBalance, image: imageControls, frameRate: frameRate)
     }
 
     private func handle(event: UInt32) {
