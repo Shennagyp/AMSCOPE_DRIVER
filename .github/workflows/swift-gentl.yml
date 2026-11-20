@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - swift-gentl-api
+      - amcam-multiplatform
     paths:
       - "swift/Packages/**"
       - ".github/workflows/swift-gentl.yml"
