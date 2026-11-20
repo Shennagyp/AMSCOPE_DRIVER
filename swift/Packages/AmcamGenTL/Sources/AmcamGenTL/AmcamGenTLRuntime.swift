@@ -654,14 +654,14 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 16: return .uint64(buffer.sequence)
         case 17: return .bool8(buffer.sizeFilled > 0)
         case 18: return .size(0)
-        case 19: return .size(1) // IMAGE payload type
+        case 19: return .size(Int(GenTLPayloadType.image.rawValue))
         case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
-        case 21: return .uint64(4) // PFNC 32-bit namespace.
+        case 21: return .uint64(UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue))
         case 22: return .size(buffer.height)
         case 23: return .size(0) // No chunk payload.
         case 24: return .uint64(0) // No chunk layout identifier.
         case 25: return .string("") // Not a file payload.
-        case 26: return .int32(0) // Pixel endianness is not applicable to RGB8.
+        case 26: return .int32(GenTLPixelEndianness.unknown.rawValue)
         case 27: return .size(buffer.dataSize) // DATA_SIZE.
         case 28:
             let (nanoseconds, overflow) =
@@ -694,9 +694,9 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         switch command {
         case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
         case 1: return .size(buffer.sizeFilled) // DATA_SIZE
-        case 2: return .size(1) // PARTDATATYPE_2D_IMAGE is SIZET
+        case 2: return .size(Int(GenTLPartDataType.image2D.rawValue))
         case 3: return .uint64(0x02180014) // PFNC RGB8 packed
-        case 4: return .uint64(4) // PFNC 32-bit namespace
+        case 4: return .uint64(UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue))
         case 5: return .size(buffer.width)
         case 6: return .size(buffer.height)
         case 7, 8, 9: return .size(0) // Part XPADDING is expressed in pixels.
