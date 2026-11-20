@@ -4,7 +4,7 @@ import XCTest
 
 final class RGB8FrameTests: XCTestCase {
     func testDecodesPackedRGB8Frame() throws {
-        let payload = Data(0..<18)
+        let payload = Data((0..<18).map(UInt8.init))
         let frame = try RGB8Frame.decode(
             width: 3,
             height: 2,
@@ -25,7 +25,7 @@ final class RGB8FrameTests: XCTestCase {
     }
 
     func testPreservesRowPaddingAndTrimsTrailingBufferBytes() throws {
-        let payload = Data(0..<24)
+        let payload = Data((0..<24).map(UInt8.init))
         let frame = try RGB8Frame.decode(
             width: 2,
             height: 2,
@@ -40,7 +40,7 @@ final class RGB8FrameTests: XCTestCase {
 
         XCTAssertEqual(frame.bytesPerRow, 8)
         XCTAssertEqual(frame.data.count, 16)
-        XCTAssertEqual(frame.data, Data(0..<16))
+        XCTAssertEqual(frame.data, Data((0..<16).map(UInt8.init)))
     }
 
     func testRejectsUnsupportedPixelFormat() {
