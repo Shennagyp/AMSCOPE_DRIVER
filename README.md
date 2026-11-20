@@ -39,9 +39,10 @@ See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for p
 - **AmcamCameraModel** — SDK-independent camera value types, capability descriptors, control snapshots and model-profile policy.
 - **AmcamImagingCore** — platform-neutral RGB8 frames, generic camera payload values and frame-rate estimation; Foundation-only, with Linux CI coverage.
 - **AmcamImagingApplicationCore** — backend-neutral async camera session/acquisition lifecycle with ordered cleanup, retryable ownership and stale-frame rejection; no AppKit, Combine, GenTL handles or vendor SDK dependency.
+- **AmcamImagingGenTLAdapter** — macOS GenTLRouter adapter implementing the portable lifecycle contracts; blocking GenTL reads execute away from Swift's cooperative executor so stop/close can interrupt them concurrently.
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract; it re-exports AmcamCameraModel for source compatibility.
 - **GenTLRouter** — backend registration, discovery aggregation, backend-bound sessions, typed feature forwarding and generic GenTL data-stream acquisition.
-- **AmcamImagingApp** — standalone macOS AppKit executable under `swift/Apps/AmcamImagingApp`; depends on AmcamCameraModel + GenTLABI + GenTLAPI + GenTLRouter, never on AmcamGenTL.
+- **AmcamImagingApp** — standalone macOS AppKit executable under `swift/Apps/AmcamImagingApp`; depends on AmcamCameraModel + GenTLABI + GenTLAPI + GenTLRouter + AmcamImagingApplicationCore + AmcamImagingGenTLAdapter, never on AmcamGenTL.
 
 The shared GenTLABI package is extracted. GenTLAPI declares all 64 GenTL 1.6 operations as a Swift protocol using imported C ABI types and raw GenTL-style return codes. GenTLNative forwards those calls to the actual C function pointers exported by dynamically loaded .cti Producers. GenTLRouter and application code call the Swift protocol; they do not call C function pointers directly. Both backends implement the same contract. A source-level prototype comparison found exact signature matches; build, runtime and device verification remain pending. Older typed-handle and throwing convenience helpers remain internal behind BackendConvenience SPI.
 
