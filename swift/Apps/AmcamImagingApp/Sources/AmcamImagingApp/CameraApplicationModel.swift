@@ -197,9 +197,7 @@ final class CameraApplicationModel: ObservableObject {
                         await self?.handleCaptureFailure(error)
                         break
                     } catch {
-                        await MainActor.run {
-                            self?.handleCaptureFailure(error)
-                        }
+                        await self?.handleCaptureFailure(error)
                         break
                     }
                 }
