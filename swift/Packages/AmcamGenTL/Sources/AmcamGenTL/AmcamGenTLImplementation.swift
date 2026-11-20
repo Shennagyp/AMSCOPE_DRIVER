@@ -416,12 +416,18 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         guard record.dataStreamHandle == nil else { try fail(.resourceInUse) }
 
         let handle = DS_HANDLE(rawValue: allocateHandle())
-        let stream = try recordErrors {
-            try AmcamDataStreamRecord(
-                handle: handle,
-                deviceHandle: hDevice,
-                session: record.session
-            )
+        let stream: AmcamDataStreamRecord
+        do {
+            stream = try recordErrors {
+                try AmcamDataStreamRecord(
+                    handle: handle,
+                    deviceHandle: hDevice,
+                    session: record.session
+                )
+            }
+        } catch {
+            retireHandle(handle.rawValue)
+            throw error
         }
         dataStreams[handle.rawValue] = stream
         bufferHandlesByStream[handle.rawValue] = []
@@ -472,14 +478,19 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         defer { lock.unlock() }
         let stream = try recordErrors { try streamRecord(hDS) }
         let handle = BUFFER_HANDLE(rawValue: allocateHandle())
-        try recordErrors {
-            try stream.announce(
-                handle: handle,
-                memory: memory.baseAddress,
-                size: memory.size,
-                privateData: privateData,
-                allocatedByProvider: false
-            )
+        do {
+            try recordErrors {
+                try stream.announce(
+                    handle: handle,
+                    memory: memory.baseAddress,
+                    size: memory.size,
+                    privateData: privateData,
+                    allocatedByProvider: false
+                )
+            }
+        } catch {
+            retireHandle(handle.rawValue)
+            throw error
         }
         bufferHandlesByStream[hDS.rawValue, default: []].insert(handle.rawValue)
         return handle
@@ -510,6 +521,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
             }
         } catch {
             pointer.deallocate()
+            retireHandle(handle.rawValue)
             throw error
         }
         bufferHandlesByStream[hDS.rawValue, default: []].insert(handle.rawValue)
