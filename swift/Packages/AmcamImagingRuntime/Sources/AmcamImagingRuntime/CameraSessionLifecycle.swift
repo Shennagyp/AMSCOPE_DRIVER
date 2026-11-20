@@ -9,6 +9,7 @@ import AmcamImagingCore
 /// frames already in flight when stop or close begins.
 public actor CameraSessionLifecycle {
     private var session: (any CameraRuntimeSession)?
+    private var sessionIdentifier: String?
     private var acquisition: (any CameraRuntimeAcquisition)?
     private var captureTask: Task<Void, Never>?
     private var isStreaming = false
@@ -64,16 +65,28 @@ public actor CameraSessionLifecycle {
 
     /// Opens and adopts a device as one atomic library-owned lifecycle operation.
     /// The backend session never escapes this actor.
-    public func open(_ device: any CameraRuntimeDevice) async throws {
+    public func open(
+        _ device: any CameraRuntimeDevice,
+        identifier: String? = nil
+    ) async throws {
         await acquireLifecycleOperation()
         defer { releaseLifecycleOperation() }
 
-        guard session == nil, acquisition == nil, captureTask == nil else {
+        if session != nil {
+            // Repeated preparation for the same physical device is idempotent.
+            // A different device must first pass through ordered close().
+            if let identifier, identifier == sessionIdentifier {
+                return
+            }
+            throw CameraSessionLifecycleError.sessionAlreadyAttached
+        }
+        guard acquisition == nil, captureTask == nil else {
             throw CameraSessionLifecycleError.sessionAlreadyAttached
         }
 
         let openedSession = try await device.open()
         session = openedSession
+        sessionIdentifier = identifier
         lastDeliveredFrameSequence = nil
     }
 
@@ -204,6 +217,7 @@ public actor CameraSessionLifecycle {
         if let session {
             try await session.close()
             self.session = nil
+            sessionIdentifier = nil
         }
 
         publish(.closed)
