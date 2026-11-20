@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 import GenTLABI
-import GenTLAPI
+@_spi(BackendConvenience) import GenTLAPI
 
 enum GenTLProducerLibraryError: Error, LocalizedError, Sendable {
     case fileNotFound(String)
