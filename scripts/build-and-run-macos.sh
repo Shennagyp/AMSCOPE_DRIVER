@@ -37,6 +37,7 @@ packages=(
   "AmcamImagingCore"
   "AmcamImagingRuntime"
   "AmcamImagingGenTLAdapter"
+  "AmcamImagingState"
   "AmcamGenTL"
   "GenTLRouter"
 )
