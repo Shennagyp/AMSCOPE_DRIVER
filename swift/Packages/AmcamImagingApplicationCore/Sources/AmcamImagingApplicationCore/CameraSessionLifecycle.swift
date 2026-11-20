@@ -199,6 +199,7 @@ public actor CameraSessionLifecycle {
                 case .timeout:
                     continue
                 case .stopped:
+                    reportUnexpectedStop(generation: activeGeneration)
                     return
                 case .failed(let message):
                     await reportFailure(message, from: acquisition, generation: activeGeneration)
@@ -209,6 +210,14 @@ public actor CameraSessionLifecycle {
                 return
             }
         }
+    }
+
+    private func reportUnexpectedStop(generation activeGeneration: UInt64) {
+        guard activeGeneration == generation, isStreaming else { return }
+        generation &+= 1
+        isStreaming = false
+        publish(.streamingChanged(false))
+        publish(.failure("The camera acquisition stopped without a stop request."))
     }
 
     private func reportFailure(
