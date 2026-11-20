@@ -440,3 +440,17 @@ The mock fixture now supports a compile-time omission flag for each required Gen
 ### ABI version/layout runtime assertion
 
 Added a native integration test asserting the compiled header version code is GenTL 1.6.0 and `GenTLABI_LayoutValid()` succeeds. The ABI C target also contains compile-time `_Static_assert` checks for the packed event, register-stack, chunk, and GenTL 1.6 stacked-info structures. The runtime assertion ensures the layout-validation function is actually linked and callable.
+
+
+### CI execution attempt and infrastructure blocker
+
+The workflow was triggered by push (run 54, commit `8512306e3c8d0cbc731fe32869bae82fb0f3278a`). All four matrix jobs were marked failed within seconds. The job records show `runner_id: 0`, empty `steps` arrays, and no runner logs (the log endpoint returned BlobNotFound). Rerunning failed jobs produced the same result. Therefore the Swift build/test commands did **not** execute; this is not evidence of source compilation failure or test assertion failure.
+
+The repository's GitHub Actions/macOS runner availability must be enabled or repaired before CI can provide code evidence. In the meantime, the exact local commands remain:
+```sh
+swift test --package-path swift/Packages/GenTLNative
+swift test --package-path swift/Packages/GenTLAPI
+swift test --package-path swift/Packages/AmcamGenTL
+swift test --package-path swift/Packages/GenTLRouter
+```
+Run them on macOS with Xcode command-line tools and record toolchain details. Do not treat the current red workflow state as a code regression because no job step ran.
