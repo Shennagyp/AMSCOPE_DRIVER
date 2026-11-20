@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import AmcamCameraModel
 import Combine
 
@@ -41,6 +42,7 @@ final class CameraMainViewController: NSViewController {
     private let startButton = NSButton(title: "Start", target: nil, action: nil)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
     private var settingsWindow: NSWindow?
+    private var displayedFrameSequence: UInt64?
 
     init(model: CameraApplicationModel) {
         self.model = model
@@ -129,7 +131,15 @@ final class CameraMainViewController: NSViewController {
         liveLabel.stringValue = model.isStreaming
             ? String(format: "● LIVE   %.1f FPS", model.framesPerSecond)
             : ""
-        preview.image = model.latestImage
+        if let frame = model.latestFrame {
+            if frame.sequence != displayedFrameSequence {
+                preview.image = makePreviewImage(from: frame)
+                displayedFrameSequence = frame.sequence
+            }
+        } else {
+            preview.image = nil
+            displayedFrameSequence = nil
+        }
 
         let selectedID = model.selectedDeviceID
         cameraPicker.removeAllItems()
@@ -152,15 +162,52 @@ final class CameraMainViewController: NSViewController {
         stopButton.isEnabled = model.isStreaming
     }
 
+    private func makePreviewImage(from frame: CameraPreviewFrame) -> NSImage? {
+        guard let representation = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: frame.width,
+            pixelsHigh: frame.height,
+            bitsPerSample: 8,
+            samplesPerPixel: 3,
+            hasAlpha: false,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: frame.bytesPerRow,
+            bitsPerPixel: 24
+        ), let destination = representation.bitmapData else {
+            return nil
+        }
+
+        frame.rgb8Data.withUnsafeBytes { source in
+            guard let baseAddress = source.baseAddress else { return }
+            memcpy(destination, baseAddress, frame.rgb8Data.count)
+        }
+
+        let image = NSImage(size: NSSize(width: frame.width, height: frame.height))
+        image.addRepresentation(representation)
+        return image
+    }
+
     @objc private func cameraChanged() {
         guard let identifier = cameraPicker.selectedItem?.representedObject as? String else { return }
         model.selectDevice(identifier)
     }
-    @objc private func refreshCameras() { model.refreshDevices() }
+    @objc private func refreshCameras() {
+        if model.sdkPath == nil { chooseSDK() } else { model.refreshDevices() }
+    }
     @objc private func startCapture() { model.start() }
     @objc private func stopCapture() { model.stop() }
-    @objc private func chooseSDK() { model.chooseSDK() }
-    @objc private func toggleFullScreen() { model.toggleFullScreen() }
+    @objc private func chooseSDK() {
+        let panel = NSOpenPanel()
+        panel.title = "Select the Amcam SDK"
+        panel.message = "Choose the vendor libamcam.dylib"
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        if panel.runModal() == .OK, let url = panel.url {
+            model.configureSDK(at: url)
+        }
+    }
+    @objc private func toggleFullScreen() { view.window?.toggleFullScreen(nil) }
 
     @objc private func showSettings() {
         model.refreshControls()
