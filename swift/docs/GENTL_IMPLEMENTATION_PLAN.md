@@ -276,3 +276,10 @@ Proceed with T0 in `GENTL_TEST_DEVELOPMENT_PLAN.md`: inspect the actual source a
 The native package now contains a C Mock Producer fixture and integration tests that compile it as a macOS dynamic library at test runtime, load it through the production `GenTLNativeImplementation`, and call it through `GenTLAPI`. The initial tests cover a distinctive `GCGetInfo` return code plus output pointer writes, rejection of a CTI missing required `GCGetInfo`, and safe handling of an absent optional GenTL 1.1 export. The fixture currently exports the 47 names in the loader's required-symbol list; most are stubs, so discovery and acquisition simulation are not implemented yet.
 
 See `GENTL_TEST_DEVELOPMENT_PLAN.md` and `GENTL_ENGINEERING_RESEARCH.tex` for the detailed work log. These tests have not been compiled or executed. Source-level inventory comparison is not test-pass evidence.
+
+
+### Exhaustive native dispatch source coverage (2026-11-20)
+
+The C Mock Producer now exports all 64 pinned GenTL functions. The native integration test invokes 60 operations through `any GenTLAPI` and asserts unique per-export return codes and native call counts; the four lifecycle operations (init, close, event register, event unregister) are exercised explicitly. The fixture supports variants that omit the required `GCGetInfo` symbol or all 17 optional later-revision symbols. A separate output-pointer test checks `GCGetInfo` writes and error propagation.
+
+Static source comparison confirms 64 header declarations, 64 protocol requirements, 64 mock exports, and complete dispatch-test enumeration. These are not compiler or runtime results. Execution is still pending on macOS/Xcode.
