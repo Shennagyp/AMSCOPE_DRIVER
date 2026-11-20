@@ -16,7 +16,7 @@ public final class AmcamCameraDriver: @unchecked Sendable {
             handle: opened.handle,
             width: opened.width,
             height: opened.height,
-            modelCode: device.modelCode,
+            modelCode: opened.modelName ?? "Unknown",
             modelFlags: opened.modelFlags,
             maximumSpeedLevel: opened.maximumSpeedLevel,
             resolutions: opened.resolutions,
