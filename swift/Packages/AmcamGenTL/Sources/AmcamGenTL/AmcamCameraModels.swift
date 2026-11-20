@@ -65,6 +65,16 @@ public struct AmcamExposureControl: Equatable, Sendable {
     }
 }
 
+public struct AmcamWhiteBalanceControl: Equatable, Sendable {
+    public let temperature: Int32
+    public let tint: Int32
+
+    public init(temperature: Int32, tint: Int32) {
+        self.temperature = temperature
+        self.tint = tint
+    }
+}
+
 public struct AmcamGainControl: Equatable, Sendable {
     public let readbackPercent: UInt16
     public let minimumPercent: UInt16
@@ -120,12 +130,15 @@ public struct AmcamFrameRateControl: Equatable, Sendable {
 public struct AmcamControlSnapshot: Equatable, Sendable {
     public let exposure: AmcamExposureControl?
     public let gain: AmcamGainControl?
+    public let whiteBalance: AmcamWhiteBalanceControl?
     public let frameRate: AmcamFrameRateControl
 
     public init(exposure: AmcamExposureControl? = nil, gain: AmcamGainControl? = nil,
+                whiteBalance: AmcamWhiteBalanceControl? = nil,
                 frameRate: AmcamFrameRateControl) {
         self.exposure = exposure
         self.gain = gain
+        self.whiteBalance = whiteBalance
         self.frameRate = frameRate
     }
 }
