@@ -14,7 +14,7 @@ The application uses one GenTL API contract with two interchangeable implementat
 ## Packages
 
 - **GenTLABI** — shared imported C declarations from the pinned EMVA GenTL header, including ABI structure-layout checks. This is the single ABI source of truth.
-- **GenTLAPI** — the one application-facing GenTL contract, aligned to the imported declarations and GenTL semantics.
+- **GenTLAPI** — the one application-facing GenTL contract; conversion of its current Swift wrapper to the imported GenTL declarations is in progress.
 - **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
 - **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions.
