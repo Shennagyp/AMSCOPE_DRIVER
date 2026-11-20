@@ -36,12 +36,14 @@ AmcamImagingApp
   -> AmcamImagingState
        -> AmcamCameraModel
        -> AmcamImagingRuntime
+
+AmcamImagingGenTLAdapter
   -> AmcamCameraModel
-       -> AmcamImagingRuntime
-       -> GenTLRouter
-            -> GenTLNative
-            -> AmcamGenTL
-                 -> GenTLAPI + GenTLABI
+  -> AmcamImagingCore
+  -> AmcamImagingRuntime
+  -> GenTLRouter
+       -> GenTLNative
+       -> AmcamGenTL
             -> GenTLAPI + GenTLABI
        -> GenTLAPI + GenTLABI
 
