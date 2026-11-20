@@ -547,4 +547,9 @@ The missing-optional-export build variant now exercises all 17 later-revision Sw
 \section{Required-symbol rejection matrix}
 The fixture supports an independent compile-time omission switch for every one of the 47 required GenTL 1.0 entry points. The native test iterates the loader's authoritative \texttt{requiredEntryPoints} inventory, builds a variant with one required export absent, and asserts that the loader rejects that exact library with a \texttt{missingRequiredSymbol} error naming the omitted export. This is stronger than a single malformed-library test because it exercises every required-symbol lookup branch. These variants are source-authored and still require macOS execution.
 
+
+
+\section{Pinned ABI version and layout gate}
+The native integration suite now asserts the compiled header version code is \texttt{0x01060000} (GenTL 1.6.0) and that \texttt{GenTLABI\_LayoutValid()} returns success. The ABI C target also contains compile-time \texttt{\_Static\_assert} checks for packed event data, port register stack entries, chunk metadata, and GenTL 1.6 stacked buffer information structures. The runtime test verifies that the linked validation entry point is callable in the test process.
+
 \end{document}
