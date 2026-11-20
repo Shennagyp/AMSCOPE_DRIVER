@@ -117,6 +117,12 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         }
         let attemptedReads = await recorder.recordedNames()
         XCTAssertTrue(attemptedReads.isEmpty)
+        let snapshot = await resolver.controlSnapshot(descriptors: descriptors) { name in
+            throw CameraFeatureAccessError.featureUnavailable(name)
+        }
+        XCTAssertNil(snapshot.gain)
+        XCTAssertNil(snapshot.whiteBalance)
+        XCTAssertFalse(snapshot.frameRate.supported)
     }
 
     func testCurrentResolutionDoesNotReadUnavailableFeature() async {
