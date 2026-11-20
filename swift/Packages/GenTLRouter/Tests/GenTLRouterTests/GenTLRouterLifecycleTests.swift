@@ -20,10 +20,16 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var calls = CallCounts()
     private let failSystemOpen: Bool
     private let failLibraryClose: Bool
+    private let failDeviceClose: Bool
 
-    init(failSystemOpen: Bool = false, failLibraryClose: Bool = false) {
+    init(
+        failSystemOpen: Bool = false,
+        failLibraryClose: Bool = false,
+        failDeviceClose: Bool = false
+    ) {
         self.failSystemOpen = failSystemOpen
         self.failLibraryClose = failLibraryClose
+        self.failDeviceClose = failDeviceClose
     }
 
     private func record(_ update: (inout CallCounts) -> Void) {
@@ -109,10 +115,59 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 
     func DevClose(_ hDevice: DEV_HANDLE) throws {
         record { $0.deviceClose += 1 }
+        if failDeviceClose { throw GC_ERROR.resourceInUse }
     }
 }
 
 final class GenTLRouterLifecycleTests: XCTestCase {
+    func testSuccessfulInitializationRollbackAllowsRetry() throws {
+        let api = RecordingGenTLAPI(failSystemOpen: true)
+        let router = GenTLRouter()
+        try router.register(backendID: "retry-after-cleanup") { api }
+
+        let first = router.discover()
+        XCTAssertEqual(first.failures.count, 1)
+
+        let second = router.discover()
+        XCTAssertEqual(second.failures.count, 1)
+
+        let calls = api.snapshot()
+        XCTAssertEqual(calls.gcInit, 2)
+        XCTAssertEqual(calls.tlOpen, 2)
+        XCTAssertEqual(calls.gcClose, 2)
+    }
+
+    func testFailedDeviceCloseAbandonsAndQuarantinesProviderContext() throws {
+        let api = RecordingGenTLAPI(failDeviceClose: true)
+        let router = GenTLRouter()
+        try router.register(backendID: "device-close-failure") { api }
+
+        var candidate: GenTLDeviceCandidate?
+        do {
+            let report = router.discover()
+            XCTAssertTrue(report.failures.isEmpty)
+            candidate = try XCTUnwrap(report.devices.first)
+        }
+
+        var session: GenTLDeviceSession? = try XCTUnwrap(candidate).open(
+            accessFlags: GenTLDeviceAccess.exclusive.rawValue
+        )
+        XCTAssertThrowsError(try XCTUnwrap(session).close())
+
+        // Releasing a session whose native close failed abandons the context.
+        session = nil
+        candidate = nil
+
+        let subsequent = router.discover()
+        XCTAssertEqual(subsequent.devices.count, 0)
+        XCTAssertEqual(subsequent.failures.count, 1)
+
+        let calls = api.snapshot()
+        XCTAssertEqual(calls.gcInit, 1)
+        XCTAssertEqual(calls.tlOpen, 1)
+        XCTAssertGreaterThanOrEqual(calls.deviceClose, 2)
+    }
+
     func testFailedInitializationCleanupQuarantinesBackend() throws {
         let api = RecordingGenTLAPI(failSystemOpen: true, failLibraryClose: true)
         let router = GenTLRouter()
