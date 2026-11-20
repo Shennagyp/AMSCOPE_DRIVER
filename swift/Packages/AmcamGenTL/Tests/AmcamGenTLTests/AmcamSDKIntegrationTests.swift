@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import XCTest
 @_spi(BackendConvenience) import GenTLAPI
-@testable import AmcamGenTL
+@_spi(BackendFactory) import AmcamGenTL
 
 private final class FrameCapture: @unchecked Sendable {
     private let lock = NSLock()
@@ -622,6 +622,65 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         try stream.close()
         try session.close()
         cleanupCompleted = true
+    }
+
+
+    func testTypedFeatureAccessUsesSDKControlsAndVerifiedReadback() throws {
+        let libraryURL = try buildMockSDK()
+        let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)
+        try implementation.swiftGCInitLib()
+        let system = try implementation.TLOpen()
+        let interface = try implementation.TLOpenInterface(
+            system,
+            interfaceID: try implementation.TLGetInterfaceID(system, index: 0)
+        )
+        _ = try implementation.IFUpdateDeviceList(interface, timeout: 0)
+        let deviceID = try implementation.IFGetDeviceID(interface, index: 0)
+        let device = try implementation.IFOpenDevice(
+            interface,
+            deviceID: deviceID,
+            accessFlags: GenTLDeviceAccess.exclusive.rawValue
+        )
+        defer {
+            try? implementation.DevClose(device)
+            try? implementation.IFClose(interface)
+            try? implementation.TLClose(system)
+            try? implementation.swiftGCCloseLib()
+        }
+
+        let descriptors = try implementation.featureDescriptors(for: device)
+        let byName = Dictionary(uniqueKeysWithValues: descriptors.map { ($0.name, $0) })
+        let auto = try XCTUnwrap(byName["ExposureAuto"])
+        let exposure = try XCTUnwrap(byName["ExposureTime"])
+        let gain = try XCTUnwrap(byName["AmcamAnalogGainPercent"])
+
+        XCTAssertEqual(auto.kind, .enumeration)
+        XCTAssertEqual(auto.enumerationValues, ["Off", "Once", "Continuous"])
+        XCTAssertTrue(auto.isAvailable)
+        XCTAssertTrue(auto.isWritable)
+
+        XCTAssertEqual(exposure.kind, .integer)
+        XCTAssertEqual(exposure.unit, "us")
+        XCTAssertEqual(exposure.numericRange?.minimum, 100)
+        XCTAssertEqual(exposure.numericRange?.maximum, 1_000_000)
+        XCTAssertTrue(exposure.isAvailable)
+
+        XCTAssertEqual(gain.kind, .integer)
+        XCTAssertEqual(gain.unit, "%")
+        XCTAssertEqual(gain.numericRange?.minimum, 100)
+        XCTAssertEqual(gain.numericRange?.maximum, 800)
+        XCTAssertTrue(gain.isAvailable)
+
+        XCTAssertEqual(
+            try implementation.readFeature("ExposureAuto", from: device),
+            .enumeration("Continuous")
+        )
+        try implementation.writeFeature(.enumeration("Off"), named: "ExposureAuto", to: device)
+        try implementation.writeFeature(.integer(12_000), named: "ExposureTime", to: device)
+        try implementation.writeFeature(.integer(200), named: "AmcamAnalogGainPercent", to: device)
+
+        XCTAssertEqual(try implementation.readFeature("ExposureTime", from: device), .integer(12_000))
+        XCTAssertEqual(try implementation.readFeature("AmcamAnalogGainPercent", from: device), .integer(200))
     }
 
     private func buildMockSDK() throws -> URL {
