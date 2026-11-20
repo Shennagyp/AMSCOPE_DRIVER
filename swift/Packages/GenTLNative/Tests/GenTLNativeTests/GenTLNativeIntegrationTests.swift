@@ -166,7 +166,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
 
         XCTAssertEqual(api.GCInitLib(), GC_ERR_SUCCESS)
 
-        var eventStorage: EVENT_HANDLE = nil
+        var eventStorage: EVENT_HANDLE? = nil
         let registerResult = withUnsafeMutablePointer(to: &eventStorage) {
             api.GCRegisterEvent(mockHandle, 0, $0)
         }
