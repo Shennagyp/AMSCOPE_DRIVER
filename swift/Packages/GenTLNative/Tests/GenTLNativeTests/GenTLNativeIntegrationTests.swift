@@ -73,7 +73,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
             withUnsafeMutablePointer(to: &payload) { payloadPointer in
                 withUnsafeMutablePointer(to: &payloadSize) { sizePointer in
                     api.GCGetInfo(
-                        0,
+                        0x1234,
                         typePointer,
                         UnsafeMutableRawPointer(payloadPointer),
                         sizePointer
@@ -104,11 +104,39 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         let eventHandle = try XCTUnwrap(eventStorage)
         XCTAssertEqual(UInt(bitPattern: eventHandle), 0x1234)
 
+        let portHandle = UnsafeMutableRawPointer(bitPattern: 0x1111)!
+        var readPayload: UInt32 = 0
+        var readSize = MemoryLayout<UInt32>.size
+        let readResult = withUnsafeMutablePointer(to: &readPayload) { payloadPointer in
+            withUnsafeMutablePointer(to: &readSize) { sizePointer in
+                api.GCReadPort(
+                    portHandle,
+                    0x1020304050607080,
+                    UnsafeMutableRawPointer(payloadPointer),
+                    sizePointer
+                )
+            }
+        }
+        XCTAssertEqual(readResult, -5432)
+        XCTAssertEqual(readPayload, 0xA1B2C3D4)
+        XCTAssertEqual(readSize, MemoryLayout<UInt32>.size)
+
+        let writePayload: [UInt8] = [0x12, 0x34, 0x56, 0x78]
+        var writeSize = writePayload.count
+        let writeResult = writePayload.withUnsafeBufferPointer { buffer in
+            api.GCWritePort(
+                portHandle,
+                0x1020304050607080,
+                UnsafeRawPointer(buffer.baseAddress!),
+                &writeSize
+            )
+        }
+        XCTAssertEqual(writeResult, -5434)
+        XCTAssertEqual(writeSize, writePayload.count)
+
         let operations: [(name: String, index: UInt32, expected: GC_ERROR, invoke: () -> GC_ERROR)] = [
-            ("GCGetInfo", 0, -4321, { api.GCGetInfo(0, nil, nil, nil) }),
+            ("GCGetInfo", 0, -4321, { api.GCGetInfo(0x1234, nil, nil, nil) }),
             ("GCGetLastError", 1, -6001, { api.GCGetLastError(nil, nil, nil) }),
-            ("GCReadPort", 4, -6004, { api.GCReadPort(nil, 0, nil, nil) }),
-            ("GCWritePort", 5, -6005, { api.GCWritePort(nil, 0, nil, nil) }),
             ("GCGetPortURL", 6, -6006, { api.GCGetPortURL(nil, nil, nil) }),
             ("GCGetPortInfo", 7, -6007, { api.GCGetPortInfo(nil, 0, nil, nil, nil) }),
             ("EventGetData", 10, -6010, { api.EventGetData(eventHandle, nil, nil, 0) }),
@@ -196,6 +224,8 @@ final class GenTLNativeIntegrationTests: XCTestCase {
                 "Unexpected native invocation count for \(operation.name)"
             )
         }
+        XCTAssertEqual(callCount(4), 1, "GCReadPort must be invoked exactly once.")
+        XCTAssertEqual(callCount(5), 1, "GCWritePort must be invoked exactly once.")
         XCTAssertEqual(callCount(2), 1, "GCInitLib must be invoked exactly once.")
         XCTAssertEqual(callCount(3), 1, "GCCloseLib must be invoked exactly once.")
         XCTAssertEqual(callCount(8), 1, "GCRegisterEvent must be invoked exactly once.")
