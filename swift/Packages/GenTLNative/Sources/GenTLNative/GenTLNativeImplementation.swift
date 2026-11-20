@@ -1687,7 +1687,7 @@ extension GenTLNativeImplementation: GenTLAPI {
                 let key = UInt(bitPattern: event)
                 guard registeredEventsByHandle[key] == nil else {
                     try? functions.gcUnregisterEvent(hEventSrc, iEventID)
-                    throw GenTLABI.GC_ERROR.resourceInUse
+                    throw GenTLAPI.GC_ERROR.resourceInUse
                 }
                 registeredEventsByHandle[key] = RegisteredEvent(
                     sourcePointer: hEventSrc,
@@ -1740,9 +1740,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ pOutBuffer: UnsafeMutableRawPointer?,
         _ piOutSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
-        guard let event = rawEventHandle(hEvent) else {
-            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
-        }
+        let event = rawEventHandle(hEvent)
         lock.lock()
         defer { lock.unlock() }
         do {
