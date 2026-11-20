@@ -4,31 +4,49 @@ import AmcamImagingCore
 
 private enum FakeRuntimeError: Error {
     case closeFailed
+    case startFailed
 }
 
 private actor FakeAcquisition: CameraRuntimeAcquisition {
     private var iterator: AsyncStream<CameraFramePayload>.Iterator
     private let continuation: AsyncStream<CameraFramePayload>.Continuation
     private var closeFailuresRemaining: Int
+    private var startFailuresRemaining: Int
+    private var timeoutsRemaining: Int
     private let frameOnClose: CameraFramePayload?
 
     private(set) var startAttempts = 0
     private(set) var stopAttempts = 0
     private(set) var closeAttempts = 0
 
-    init(closeFailures: Int = 0, frameOnClose: CameraFramePayload? = nil) {
+    init(
+        closeFailures: Int = 0,
+        startFailures: Int = 0,
+        timeoutCount: Int = 0,
+        frameOnClose: CameraFramePayload? = nil
+    ) {
         let stream = AsyncStream<CameraFramePayload>.makeStream()
         iterator = stream.stream.makeAsyncIterator()
         continuation = stream.continuation
         closeFailuresRemaining = closeFailures
+        startFailuresRemaining = startFailures
+        timeoutsRemaining = timeoutCount
         self.frameOnClose = frameOnClose
     }
 
     func start() async throws {
         startAttempts += 1
+        if startFailuresRemaining > 0 {
+            startFailuresRemaining -= 1
+            throw FakeRuntimeError.startFailed
+        }
     }
 
     func nextFrame(timeoutMilliseconds: UInt64) async throws -> CameraFramePayload {
+        if timeoutsRemaining > 0 {
+            timeoutsRemaining -= 1
+            throw CameraAcquisitionFailure.timeout
+        }
         guard let frame = await iterator.next() else {
             throw CameraAcquisitionFailure.stopped
         }
@@ -221,6 +239,56 @@ final class CameraSessionLifecycleTests: XCTestCase {
 
         XCTAssertFalse(receivedFrame, "A frame from an invalidated acquisition generation must not reach the UI.")
         XCTAssertTrue(receivedClosed)
+    }
+
+
+    func testStartFailureClosesPartiallyCreatedAcquisition() async throws {
+        let acquisition = FakeAcquisition(startFailures: 1)
+        let session = FakeSession(acquisition: acquisition)
+        let lifecycle = CameraSessionLifecycle()
+
+        try await lifecycle.attach(session)
+        do {
+            try await lifecycle.start()
+            XCTFail("Expected the injected acquisition start failure.")
+        } catch {}
+
+        let snapshot = await lifecycle.snapshot()
+        let acquisitionCloseAttempts = await acquisition.closeAttempts
+        XCTAssertTrue(snapshot.hasSession)
+        XCTAssertFalse(snapshot.hasAcquisition)
+        XCTAssertFalse(snapshot.isStreaming)
+        XCTAssertEqual(acquisitionCloseAttempts, 1)
+
+        try await lifecycle.close()
+        let sessionCloseAttempts = await session.closeAttempts
+        XCTAssertEqual(sessionCloseAttempts, 1)
+    }
+
+    func testEventTimeoutDoesNotTerminateCaptureLoop() async throws {
+        let acquisition = FakeAcquisition(timeoutCount: 1)
+        let session = FakeSession(acquisition: acquisition)
+        let lifecycle = CameraSessionLifecycle()
+        let events = await lifecycle.events()
+        var iterator = events.makeAsyncIterator()
+
+        try await lifecycle.attach(session)
+        try await lifecycle.start()
+        await acquisition.emit(makeFrame(sequence: 73))
+
+        var receivedFrame: CameraFramePayload?
+        while let event = await iterator.next() {
+            if case .frame(let frame) = event {
+                receivedFrame = frame
+                break
+            }
+        }
+
+        XCTAssertEqual(receivedFrame?.sequence, 73)
+        let snapshot = await lifecycle.snapshot()
+        XCTAssertTrue(snapshot.isStreaming)
+        try await lifecycle.stop()
+        try await lifecycle.close()
     }
 
     func testStartRequiresAnAttachedSession() async {
