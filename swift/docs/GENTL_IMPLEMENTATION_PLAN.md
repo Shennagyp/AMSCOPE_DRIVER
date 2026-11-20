@@ -234,3 +234,33 @@ The work is complete only when:
 - Shared conformance tests pass for supported operations, and unsupported behavior is explicit.
 - Documentation distinguishes implemented behavior, planned work and formal certification.
 
+
+
+## 10. Verification research and dedicated test plan
+
+The detailed engineering rationale, decision record, evidence policy, mock Producer design, operation coverage model, fault-injection catalogue, acquisition test sequence, risks, and verification ledger are maintained in:
+
+- [GenTL Engineering Research Record](GENTL_ENGINEERING_RESEARCH.tex)
+- [GenTL Test Development Plan](GENTL_TEST_DEVELOPMENT_PLAN.md)
+
+These documents are complementary:
+- The research record explains the architecture, decisions, assumptions, test model, limits, and evidence standard.
+- The development plan defines the ordered implementation phases and their exit gates.
+
+### Updated test strategy decision
+
+A physical GenTL camera is not a prerequisite for most of the test program. The critical native boundary must be exercised with a compiled C Mock GenTL Producer loaded through the production `GenTLNative` dynamic loader. A Swift-only fake remains useful for isolated router tests but does not test `dlopen`, `dlsym`, C exports, calling conventions, native function pointers, or ABI-level pointer behavior.
+
+The mock is a first-class deterministic test fixture. It must implement the required GenTL 1.0 base exports and a controlled subset of later behavior, expose test-only call recording and fault injection, and simulate a deterministic device/stream/buffer/event acquisition path. Build variants must test missing required symbols and absent optional later-revision exports.
+
+All 64 protocol operations require an explicit test disposition. Native dispatch tests must verify operation identity, argument forwarding, output writes, buffer sizing, and exact `GC_ERROR` propagation. Amcam tests must use capability-aware expectations: the shared contract is common, but unsupported SDK capabilities must not be fabricated.
+
+### Current test-target facts from source inspection
+
+The package manifests currently define test targets inside `GenTLAPI`, `GenTLNative`, `GenTLRouter`, and `AmcamGenTL`. The `GenTLAPI` package already has a test source file that exercises legacy typed convenience values and constants. That file alone does not establish exhaustive tests of all raw protocol defaults. The native package manifest declares `GenTLNativeTests`; its test source location and current coverage must be inspected before adding fixture code.
+
+No build or test command has been executed as part of this documentation update. The new documents specify work and acceptance criteria; they do not claim that the mock Producer or expanded tests already exist.
+
+### Immediate next phase
+
+Proceed with T0 in `GENTL_TEST_DEVELOPMENT_PLAN.md`: inspect the actual source and test target layout, establish a reproducible package build baseline, and derive the 64-operation and required/optional symbol inventories from the pinned header. Only then implement the C mock fixture and native dispatch tests. Do not create a parallel package hierarchy if the existing package test targets can host the fixture cleanly.
