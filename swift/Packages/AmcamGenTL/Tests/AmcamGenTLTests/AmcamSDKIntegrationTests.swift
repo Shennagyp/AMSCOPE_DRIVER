@@ -46,14 +46,15 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(devices[0].displayName, "Mock AmScope Camera")
         XCTAssertEqual(devices[0].modelName, "Mock AmScope Camera")
         XCTAssertEqual(devices[0].previewResolutions, [
-            AmcamResolution(index: 0, width: 640, height: 480),
-            AmcamResolution(index: 1, width: 320, height: 240)
+            AmcamResolution(index: 0, width: 2560, height: 1922),
+            AmcamResolution(index: 1, width: 1280, height: 960),
+            AmcamResolution(index: 2, width: 640, height: 480)
         ])
 
         let session = try driver.open(deviceIdentifier: devices[0].identifier)
         XCTAssertEqual(session.currentDimensions().width, 640)
         XCTAssertEqual(session.currentDimensions().height, 480)
-        XCTAssertEqual(session.currentResolution(), AmcamResolution(index: 0, width: 640, height: 480))
+        XCTAssertEqual(session.currentResolution(), AmcamResolution(index: 2, width: 640, height: 480))
 
         for expectedSequence in UInt32(1)...UInt32(3) {
             let frameReceived = expectation(description: "frame \(expectedSequence)")
@@ -103,6 +104,65 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         try session.close()
     }
 
+
+
+    func testExposureControlsAndResolutionReadback() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        XCTAssertTrue(session.supportsResolutionChange())
+        var controls = try session.readControls()
+        XCTAssertTrue(controls.exposure.automaticEnabled)
+        XCTAssertEqual(controls.exposure.readbackMicroseconds, 10_000)
+        XCTAssertEqual(controls.exposure.minimumMicroseconds, 100)
+        XCTAssertEqual(controls.exposure.maximumMicroseconds, 1_000_000)
+        XCTAssertFalse(controls.frameRate.supported)
+
+        XCTAssertThrowsError(try session.setExposureTime(microseconds: 20_000))
+        controls = try session.setAutomaticExposure(enabled: false)
+        XCTAssertFalse(controls.exposure.automaticEnabled)
+
+        controls = try session.setExposureTime(microseconds: 20_000)
+        XCTAssertEqual(controls.exposure.readbackMicroseconds, 20_000)
+        XCTAssertEqual(controls.exposure.requestedMicroseconds, 20_000)
+        XCTAssertThrowsError(try session.setExposureTime(microseconds: 1_000_001))
+
+        controls = try session.setAutomaticExposure(enabled: true)
+        XCTAssertTrue(controls.exposure.automaticEnabled)
+
+        let changed = try session.setResolution(index: 1)
+        XCTAssertEqual(changed, AmcamResolution(index: 1, width: 1280, height: 960))
+        XCTAssertEqual(session.currentDimensions().width, 1280)
+        XCTAssertEqual(session.currentDimensions().height, 960)
+        XCTAssertEqual(session.currentResolution(), changed)
+
+        let frameReceived = expectation(description: "frame at changed resolution")
+        let receivedFrame = FrameCapture()
+        try session.start { result in
+            if case .success(let frame) = result {
+                receivedFrame.store(frame)
+                frameReceived.fulfill()
+            } else if case .failure(let error) = result {
+                XCTFail("Unexpected frame failure: \\(error)")
+            }
+        }
+        wait(for: [frameReceived], timeout: 2)
+        let frame = try XCTUnwrap(receivedFrame.load())
+        XCTAssertEqual(frame.width, 1280)
+        XCTAssertEqual(frame.height, 960)
+        XCTAssertEqual(frame.bytesPerRow, 3840)
+        XCTAssertEqual(frame.bytes.count, 1280 * 960 * 3)
+        XCTAssertThrowsError(try session.setResolution(index: 0))
+
+        try session.stop()
+        let restored = try session.setResolution(index: 2)
+        XCTAssertEqual(restored, AmcamResolution(index: 2, width: 640, height: 480))
+        XCTAssertEqual(session.currentDimensions().width, 640)
+        XCTAssertEqual(session.currentDimensions().height, 480)
+    }
 
     func testDataStreamQueuesAndDeliversACompleteRGBFrame() throws {
         let libraryURL = try buildMockSDK()
