@@ -19,6 +19,12 @@ public protocol CameraRuntimeAcquisition: Sendable {
     func close() async throws
 }
 
+/// Backend adapter contract for a discovered camera device.
+/// The imaging runtime invokes open() and assumes ownership of the returned session.
+public protocol CameraRuntimeDevice: Sendable {
+    func open() async throws -> any CameraRuntimeSession
+}
+
 /// Backend adapter contract for one opened device session.
 /// The session owns the device; its acquisition is a child resource.
 public protocol CameraRuntimeSession: Sendable {
