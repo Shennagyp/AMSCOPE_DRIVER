@@ -109,6 +109,7 @@ Acceptance: all steps pass on physical hardware. Hosted mock tests are not a sub
 
 - Preserve the existing parent/child cleanup and retry semantics.
 - Add sustained-stream tests for frame sequence, buffer reuse, timeout recovery and stop/close races.
+- Verify a failed `DSQueueBuffer` return is surfaced once and never retried with the same handle; the Producer may have accepted the first call despite its error status.
 - Make probe output structured and include backend, SDK version, model descriptor, pixel format, dimensions, stride, payload size and failure stage.
 - Keep hardware-specific facts explicitly distinguished from unsupported or unverified features.
 
@@ -157,6 +158,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Extract monotonic-timestamp frame-rate estimation into AmcamImagingCore and test smoothing-window bounds, invalid timestamps and reset behavior.
 - [x] Add AmcamImagingRuntime with async backend protocols, an event stream, strict child-before-parent cleanup, retryable ownership and generation-based stale-frame rejection.
 - [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, startup rollback, timeout recovery, unsolicited stop, fatal-read cleanup, FIFO concurrent-close serialization, same-device idempotent open, feature-I/O-versus-close ordering, frame delivery and stale-frame suppression.
+- [x] Prevent a failed GenTL buffer requeue from being retried implicitly; add a regression test that rejects a duplicate enqueue attempt.
 - [x] Add AmcamImagingGenTLAdapter to bridge GenTLRouter's synchronous device/acquisition sessions into the portable async lifecycle contracts; blocking reads run off the cooperative executor so stop/close can interrupt them.
 - [x] Keep the opened backend session exclusively inside CameraSessionLifecycle; expose async feature descriptors/read/write through the lifecycle actor and queue backend operations FIFO against open/start/stop/close. Identified opens are idempotent for the same device and reject a different device until ordered close succeeds. Unexpected acquisition-stop and fatal-read transitions use the same queue.
 - [x] Replace the AppKit model's direct acquisition task with the lifecycle coordinator and route device opening, session closure and acquisition operations through the adapter.
