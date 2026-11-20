@@ -303,3 +303,8 @@ The test fixture can now omit any one of the 47 required GenTL 1.0 symbols by co
 ### ABI header/layout assertions (2026-11-20)
 
 Added a test for the compiled GenTL 1.6.0 header version code and the runtime ABI layout validator. The C ABI target's compile-time structure layout assertions remain the authoritative compile gate. Execution is pending.
+
+
+### CI runner provisioning blocker (2026-11-20)
+
+The new macOS workflow has been triggered, but its four jobs fail before any step starts: GitHub reports `runner_id: 0`, empty step arrays, and no job logs. Rerunning failed jobs did not change this. The Swift build/test commands have not executed. Treat this as a GitHub Actions runner availability/billing/permission blocker, not as a source-code test failure. Local macOS/Xcode execution or repaired runner access is required for the next evidence gate.
