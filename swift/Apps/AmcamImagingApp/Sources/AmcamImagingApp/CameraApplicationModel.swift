@@ -387,7 +387,7 @@ final class CameraApplicationModel: ObservableObject {
                 : nil
         } catch {
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
-            _ = await closeSession(expectedGeneration: operation)
+            _ = await closeSession(expectedGeneration: expectedGeneration)
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
             status = "Unable to open camera through the AmScope camera provider"
             errorMessage = error.localizedDescription
