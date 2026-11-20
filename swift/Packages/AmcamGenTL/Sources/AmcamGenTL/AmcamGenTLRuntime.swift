@@ -699,7 +699,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 4: return .uint64(UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue))
         case 5: return .size(buffer.width)
         case 6: return .size(buffer.height)
-        case 7, 8, 9: return .size(0) // Part XPADDING is expressed in pixels.
+        case 7, 8: return .size(0) // No image offset.
+        case 9: return .size(buffer.rowPaddingBytes) // X padding is bytes per row.
         case 10, 12, 13: return .uint64(0)
         case 11: return .size(buffer.height)
         default: throw GC_ERROR.invalidParameter
@@ -790,11 +791,16 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         numStarted &+= 1
 
         let frameBytes = frame.bytes.count
-        let layout = AmcamRGB24Layout(width: frame.width, height: frame.height)
-        let geometryIsValid = layout.map {
-            frame.bytesPerRow == $0.bytesPerRow
-        } ?? false
-        let payloadIsComplete = geometryIsValid && layout?.payloadSize == frameBytes
+        // PullImageV2 may return DWORD-aligned rows; row-pitch-aware APIs
+        // return tightly packed rows when called with rowPitch = -1. Validate
+        // the actual stride rather than assuming one API generation's layout.
+        let layout = AmcamRGB24Layout(
+            width: frame.width,
+            height: frame.height,
+            bytesPerRow: frame.bytesPerRow
+        )
+        let geometryIsValid = layout != nil
+        let payloadIsComplete = layout?.payloadSize == frameBytes
         let expectedDataSize = layout?.payloadSize ?? frameBytes
 
         buffer.dataLargerThanBuffer = max(expectedDataSize, frameBytes) > buffer.size
