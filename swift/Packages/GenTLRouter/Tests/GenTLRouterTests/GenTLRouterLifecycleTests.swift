@@ -14,6 +14,8 @@ private struct CallCounts {
     var interfaceClose = 0
     var interfaceUpdateDevices = 0
     var deviceClose = 0
+    var bufferRevoke = 0
+    var dataStreamClose = 0
 }
 
 private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
@@ -33,6 +35,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var eventDelivered = false
     private var queuedBufferCount = 0
     private var flushCountValue = 0
+    private var failBufferRevoke = false
 
     init(
         failSystemOpen: Bool = false,
@@ -233,6 +236,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return queuedBufferCount
+    }
+
+    func setFailBufferRevoke(_ value: Bool) {
+        lock.lock()
+        failBufferRevoke = value
+        lock.unlock()
     }
 
     func flushCount() -> Int {
@@ -482,6 +491,13 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         guard hDataStream == streamToken, hBuffer == bufferToken else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
         }
+        lock.lock()
+        calls.bufferRevoke += 1
+        let shouldFail = failBufferRevoke
+        lock.unlock()
+        if shouldFail {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_RESOURCE_IN_USE)
+        }
         if let ppBuffer { ppBuffer.pointee = bufferMemory }
         if let ppPrivate { ppPrivate.pointee = nil }
         bufferMemory?.deallocate()
@@ -490,9 +506,11 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     }
 
     func DSClose(_ hDataStream: GenTLABI.DS_HANDLE) -> GenTLABI.GC_ERROR {
-        hDataStream == streamToken
-            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
-            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+        guard hDataStream == streamToken else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE)
+        }
+        record { $0.dataStreamClose += 1 }
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
 
     func DevClose(_ hDevice: GenTLABI.DEV_HANDLE) -> GenTLABI.GC_ERROR {
@@ -560,6 +578,26 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(api.flushCount(), 2, "Stop must return outstanding buffers to the input pool.")
         try acquisition.close()
         XCTAssertEqual(api.flushCount(), 3, "Close must flush before revoking announced buffers.")
+        try device.close()
+    }
+
+    func testAcquisitionCloseRetainsOwnershipWhenBufferRevokeFailsAndCanRetry() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "retryable-acquisition-close") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        api.setFailBufferRevoke(true)
+
+        XCTAssertThrowsError(try acquisition.close())
+        XCTAssertEqual(api.snapshot().bufferRevoke, 1)
+        XCTAssertEqual(api.snapshot().dataStreamClose, 0)
+
+        api.setFailBufferRevoke(false)
+        try acquisition.close()
+        XCTAssertEqual(api.snapshot().bufferRevoke, 2)
+        XCTAssertEqual(api.snapshot().dataStreamClose, 1)
         try device.close()
     }
 
