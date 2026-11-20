@@ -28,6 +28,20 @@ The earlier Swift convenience function groups, typed-handle wrappers and decoded
 
 The application uses GenTLAPI. It does not call Amcam SDK types directly or maintain a second camera abstraction.
 
+
+## Typed feature access
+
+`GenTLFeatureAccess` is an optional Swift capability contract alongside the unchanged 64-operation GenTLAPI protocol. It provides feature descriptors, typed values, units, numeric ranges, enumeration symbols, availability and read/write access. A routed `GenTLDeviceSession` forwards these calls to the exact backend instance that opened the device.
+
+A backend may implement this contract through GenApi over its GenTL port, or through a documented vendor SDK interface where no GenApi XML/register map is supplied. These paths must not be conflated:
+
+- The Amcam backend currently maps `ExposureAuto`, `ExposureTime` and the vendor-specific `AmcamAnalogGainPercent` feature to existing SDK operations and readback.
+- Amcam analog gain is reported in percent, not dB; it is intentionally not mislabeled as the SFNC `Gain` feature.
+- The native CTI backend does not yet conform to `GenTLFeatureAccess`. Its future feature path must use the Producer's GenApi XML/port contract; the router reports feature access as unavailable until that is implemented.
+- No Amcam register addresses or synthetic GenApi XML are created.
+
+Applications inspect descriptors before presenting or writing controls. Device-specific availability and access state are resolved by the backend for the opened device. The optional feature contract does not add operations to the GenTL 1.6 C API and does not change its ABI.
+
 ## Standard module groups
 
 The shared contract follows the GenTL module structure:
