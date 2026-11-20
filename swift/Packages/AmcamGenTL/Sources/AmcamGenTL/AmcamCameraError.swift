@@ -1,6 +1,6 @@
 import Foundation
 
-public enum AmcamCameraError: Error, LocalizedError, Sendable {
+enum AmcamCameraError: Error, LocalizedError, Sendable {
     case libraryNotFound(String)
     case libraryLoadFailed(String)
     case missingSymbol(String)
@@ -35,7 +35,7 @@ public enum AmcamCameraError: Error, LocalizedError, Sendable {
     case cameraDisconnected
     case cameraEventFailure(UInt32)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .libraryNotFound(let path): return "Amcam SDK library not found at: \(path)"
         case .libraryLoadFailed(let message): return "Unable to load Amcam SDK: \(message)"
