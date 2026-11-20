@@ -1,4 +1,5 @@
 import Foundation
+import GenTLABI
 @_spi(BackendConvenience) import GenTLAPI
 @_spi(BackendConvenience) import GenTLNative
 @_spi(BackendConvenience) import AmcamGenTL
@@ -80,9 +81,12 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let backendID: String
     public let interfaceID: String
     public let deviceID: String
-    let api: any GenTLBackendConvenience
-    let systemHandle: TL_HANDLE
-    let interfaceHandle: IF_HANDLE
+    public let api: any GenTLAPI
+    public let systemHandle: GenTLABI.TL_HANDLE
+    public let interfaceHandle: GenTLABI.IF_HANDLE
+    private let backendAPI: any GenTLBackendConvenience
+    private let backendSystemHandle: TL_HANDLE
+    private let backendInterfaceHandle: IF_HANDLE
 
     private let context: GenTLProviderContext
 
@@ -107,18 +111,21 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
         self.interfaceID = interfaceID
         self.deviceID = deviceID
         self.api = context.api
-        self.systemHandle = context.systemHandle
-        self.interfaceHandle = interfaceHandle
+        self.systemHandle = UnsafeMutableRawPointer(bitPattern: context.systemHandle.rawValue)
+        self.interfaceHandle = UnsafeMutableRawPointer(bitPattern: interfaceHandle.rawValue)
+        self.backendAPI = context.backendAPI
+        self.backendSystemHandle = context.systemHandle
+        self.backendInterfaceHandle = interfaceHandle
         self.context = context
     }
 
     public func open(accessFlags: Int32) throws -> GenTLDeviceSession {
         let handle = try context.openDevice(
-            interfaceHandle,
+            backendInterfaceHandle,
             deviceID: deviceID,
             accessFlags: accessFlags
         )
-        return GenTLDeviceSession(context: context, api: api, deviceHandle: handle)
+        return GenTLDeviceSession(context: context, api: api, backendDeviceHandle: handle)
     }
 }
 
@@ -142,7 +149,8 @@ private final class GenTLProviderRetainer: @unchecked Sendable {
 /// It remains alive while any discovered candidate or opened device session uses it.
 private final class GenTLProviderContext: @unchecked Sendable {
     let backendID: String
-    let api: any GenTLBackendConvenience
+    let backendAPI: any GenTLBackendConvenience & GenTLAPI
+    var api: any GenTLAPI { backendAPI }
     let systemHandle: TL_HANDLE
 
     private let lock = NSRecursiveLock()
@@ -151,9 +159,13 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
     private var interfaceHandlesByID: [String: IF_HANDLE] = [:]
 
-    init(backendID: String, api: any GenTLBackendConvenience, systemHandle: TL_HANDLE) {
+    init(
+        backendID: String,
+        backendAPI: any GenTLBackendConvenience & GenTLAPI,
+        systemHandle: TL_HANDLE
+    ) {
         self.backendID = backendID
-        self.api = api
+        self.backendAPI = backendAPI
         self.systemHandle = systemHandle
     }
 
@@ -180,7 +192,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         guard !closed else {
             throw GenTLRouterError.providerContextUnavailable(backendID)
         }
-        let deviceHandle = try api.IFOpenDevice(
+        let deviceHandle = try backendAPI.IFOpenDevice(
             interfaceHandle,
             deviceID: deviceID,
             accessFlags: accessFlags
@@ -192,7 +204,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
     func closeDevice(_ deviceHandle: DEV_HANDLE) throws {
         lock.lock()
         defer { lock.unlock() }
-        try api.DevClose(deviceHandle)
+        try backendAPI.DevClose(deviceHandle)
     }
 
     /// Refreshes discovery while reusing this backend's already-open System
@@ -204,15 +216,15 @@ private final class GenTLProviderContext: @unchecked Sendable {
             throw GenTLRouterError.providerContextUnavailable(backendID)
         }
 
-        try api.TLUpdateInterfaceList(systemHandle, timeout: timeout)
-        let interfaceCount = try api.TLGetNumInterfaces(systemHandle)
+        try backendAPI.TLUpdateInterfaceList(systemHandle, timeout: timeout)
+        let interfaceCount = try backendAPI.TLGetNumInterfaces(systemHandle)
         guard interfaceCount <= 4_096 else { throw GC_ERROR.resourceExhausted }
 
         var candidates: [GenTLDeviceCandidate] = []
         var seenInterfaceIDs = Set<String>()
 
         for interfaceIndex in 0..<interfaceCount {
-            let interfaceID = try api.TLGetInterfaceID(systemHandle, index: interfaceIndex)
+            let interfaceID = try backendAPI.TLGetInterfaceID(systemHandle, index: interfaceIndex)
             guard !interfaceID.isEmpty,
                   seenInterfaceIDs.insert(interfaceID).inserted else {
                 throw GC_ERROR.invalidID
@@ -222,7 +234,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
             if let existingHandle = interfaceHandlesByID[interfaceID] {
                 interfaceHandle = existingHandle
             } else {
-                let openedHandle = try api.TLOpenInterface(systemHandle, interfaceID: interfaceID)
+                let openedHandle = try backendAPI.TLOpenInterface(systemHandle, interfaceID: interfaceID)
                 guard openedHandle.isValid else { throw GC_ERROR.invalidHandle }
                 guard !interfaceHandles.contains(openedHandle) else {
                     throw GC_ERROR.resourceInUse
@@ -232,13 +244,13 @@ private final class GenTLProviderContext: @unchecked Sendable {
                 interfaceHandle = openedHandle
             }
 
-            try api.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
-            let deviceCount = try api.IFGetNumDevices(interfaceHandle)
+            try backendAPI.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
+            let deviceCount = try backendAPI.IFGetNumDevices(interfaceHandle)
             guard deviceCount <= 65_536 else { throw GC_ERROR.resourceExhausted }
 
             var seenDeviceIDs = Set<String>()
             for deviceIndex in 0..<deviceCount {
-                let deviceID = try api.IFGetDeviceID(interfaceHandle, index: deviceIndex)
+                let deviceID = try backendAPI.IFGetDeviceID(interfaceHandle, index: deviceIndex)
                 guard !deviceID.isEmpty,
                       seenDeviceIDs.insert(deviceID).inserted else {
                     throw GC_ERROR.invalidID
@@ -272,7 +284,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
         for handle in interfaceHandles.reversed() {
             do {
-                try api.IFClose(handle)
+                try backendAPI.IFClose(handle)
             } catch {
                 closed = true
                 GenTLProviderRetainer.shared.retain(api)
@@ -283,7 +295,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         interfaceHandlesByID.removeAll()
 
         do {
-            try api.TLClose(systemHandle)
+            try backendAPI.TLClose(systemHandle)
         } catch {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
@@ -291,7 +303,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         }
 
         do {
-            try api.swiftGCCloseLib()
+            try backendAPI.swiftGCCloseLib()
         } catch {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
@@ -308,8 +320,9 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
 /// Open device ownership. Close the device before releasing its GenTL route.
 public final class GenTLDeviceSession: @unchecked Sendable {
-    let api: any GenTLBackendConvenience
-    let deviceHandle: DEV_HANDLE
+    public let api: any GenTLAPI
+    public let deviceHandle: GenTLABI.DEV_HANDLE
+    private let backendDeviceHandle: DEV_HANDLE
 
     private let context: GenTLProviderContext
     private let lock = NSLock()
@@ -317,19 +330,20 @@ public final class GenTLDeviceSession: @unchecked Sendable {
 
     fileprivate init(
         context: GenTLProviderContext,
-        api: any GenTLBackendConvenience,
-        deviceHandle: DEV_HANDLE
+        api: any GenTLAPI,
+        backendDeviceHandle: DEV_HANDLE
     ) {
         self.context = context
         self.api = api
-        self.deviceHandle = deviceHandle
+        self.backendDeviceHandle = backendDeviceHandle
+        self.deviceHandle = UnsafeMutableRawPointer(bitPattern: backendDeviceHandle.rawValue)
     }
 
     public func close() throws {
         lock.lock()
         defer { lock.unlock() }
         guard !isClosed else { return }
-        try context.closeDevice(deviceHandle)
+        try context.closeDevice(backendDeviceHandle)
         isClosed = true
     }
 
@@ -346,7 +360,7 @@ public final class GenTLDeviceSession: @unchecked Sendable {
 
 private struct BackendRegistration: Sendable {
     let identifier: String
-    let makeAPI: @Sendable () throws -> any GenTLBackendConvenience
+    let makeAPI: @Sendable () throws -> any GenTLBackendConvenience & GenTLAPI
 }
 
 /// Registers and routes to GenTLBackendConvenience implementations.
@@ -373,7 +387,7 @@ public final class GenTLRouter: @unchecked Sendable {
     @_spi(BackendConvenience)
     public func register(
         backendID: String,
-        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience
+        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience & GenTLAPI
     ) throws {
         let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty, normalized == backendID else {
@@ -511,26 +525,26 @@ public final class GenTLRouter: @unchecked Sendable {
             return existing
         }
 
-        let api = try registration.makeAPI()
-        try api.swiftGCInitLib()
+        let backendAPI = try registration.makeAPI()
+        try backendAPI.swiftGCInitLib()
 
         do {
-            let systemHandle = try api.TLOpen()
+            let systemHandle = try backendAPI.TLOpen()
             guard systemHandle.isValid else { throw GC_ERROR.invalidHandle }
 
             let context = GenTLProviderContext(
                 backendID: registration.identifier,
-                api: api,
+                backendAPI: backendAPI,
                 systemHandle: systemHandle
             )
             providerContexts[registration.identifier] = context
             return context
         } catch {
             do {
-                try api.swiftGCCloseLib()
+                try backendAPI.swiftGCCloseLib()
             } catch {
                 unavailableBackendIDs.insert(registration.identifier)
-                GenTLProviderRetainer.shared.retain(api)
+                GenTLProviderRetainer.shared.retain(backendAPI)
             }
             throw error
         }
