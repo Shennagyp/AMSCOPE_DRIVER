@@ -47,15 +47,15 @@ public enum AmcamAutoExposureMode: Int, Codable, CaseIterable, Sendable {
 }
 
 public struct AmcamExposureControl: Equatable, Sendable {
-    public let autoMode: AmcamAutoExposureMode
-    public var automaticEnabled: Bool { autoMode.isAutomatic }
-    public let readbackMicroseconds: UInt32
-    public let minimumMicroseconds: UInt32
-    public let maximumMicroseconds: UInt32
-    public let defaultMicroseconds: UInt32
+    public let autoMode: AmcamAutoExposureMode?
+    public var automaticEnabled: Bool? { autoMode?.isAutomatic }
+    public let readbackMicroseconds: UInt32?
+    public let minimumMicroseconds: UInt32?
+    public let maximumMicroseconds: UInt32?
+    public let defaultMicroseconds: UInt32?
     public let requestedMicroseconds: UInt32?
 
-    public init(autoMode: AmcamAutoExposureMode, readbackMicroseconds: UInt32, minimumMicroseconds: UInt32, maximumMicroseconds: UInt32, defaultMicroseconds: UInt32, requestedMicroseconds: UInt32? = nil) {
+    public init(autoMode: AmcamAutoExposureMode?, readbackMicroseconds: UInt32?, minimumMicroseconds: UInt32?, maximumMicroseconds: UInt32?, defaultMicroseconds: UInt32?, requestedMicroseconds: UInt32? = nil) {
         self.autoMode = autoMode
         self.readbackMicroseconds = readbackMicroseconds
         self.minimumMicroseconds = minimumMicroseconds
