@@ -3,185 +3,83 @@ import Foundation
 import GenTLABI
 import GenTLAPI
 
-// MARK: GenTL 1.6 C ABI function signatures
+// MARK: GenTL C ABI function pointer types
+//
+// These aliases come directly from the PGC/P* typedefs in GenTL_v1_6.h.
+// Do not restate @convention(c) signatures here: the standard header is the
+// single authority for calling convention and parameter ABI.
 
-private typealias GCInitLibFunction = @convention(c) () -> Int32
-private typealias GCCloseLibFunction = @convention(c) () -> Int32
-private typealias GCGetInfoFunction = @convention(c) (
-    Int32, UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias GCGetLastErrorFunction = @convention(c) (
-    UnsafeMutablePointer<Int32>?, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
-) -> Int32
+private typealias GCInitLibFunction = PGCInitLib
+private typealias GCCloseLibFunction = PGCCloseLib
+private typealias GCGetInfoFunction = PGCGetInfo
+private typealias GCGetLastErrorFunction = PGCGetLastError
 
-private typealias TLOpenFunction = @convention(c) (UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> Int32
-private typealias TLCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
-private typealias ModuleInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<Int32>?,
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias TLGetNumInterfacesFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias TLGetInterfaceIDFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias TLUpdateInterfaceListFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt8>?, UInt64
-) -> Int32
-private typealias TLOpenInterfaceFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
+private typealias TLOpenFunction = PTLOpen
+private typealias TLCloseFunction = PTLClose
+private typealias TLGetInfoFunction = PTLGetInfo
+private typealias TLGetNumInterfacesFunction = PTLGetNumInterfaces
+private typealias TLGetInterfaceIDFunction = PTLGetInterfaceID
+private typealias TLGetInterfaceInfoFunction = PTLGetInterfaceInfo
+private typealias TLUpdateInterfaceListFunction = PTLUpdateInterfaceList
+private typealias TLOpenInterfaceFunction = PTLOpenInterface
 
-private typealias IFCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
-private typealias IFUpdateDeviceListFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt8>?, UInt64
-) -> Int32
-private typealias IFGetNumDevicesFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias IFGetDeviceIDFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias IFGetDeviceInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, Int32,
-    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias IFOpenDeviceFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, Int32,
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias IFGetParentTLFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
+private typealias IFCloseFunction = PIFClose
+private typealias IFGetInfoFunction = PIFGetInfo
+private typealias IFGetNumDevicesFunction = PIFGetNumDevices
+private typealias IFGetDeviceIDFunction = PIFGetDeviceID
+private typealias IFUpdateDeviceListFunction = PIFUpdateDeviceList
+private typealias IFGetDeviceInfoFunction = PIFGetDeviceInfo
+private typealias IFOpenDeviceFunction = PIFOpenDevice
+private typealias IFGetParentTLFunction = PIFGetParentTL
 
-private typealias DevGetPortFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DevGetNumDataStreamsFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias DevGetDataStreamIDFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DevOpenDataStreamFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DevGetParentIFFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DevCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
+private typealias DevGetPortFunction = PDevGetPort
+private typealias DevGetNumDataStreamsFunction = PDevGetNumDataStreams
+private typealias DevGetDataStreamIDFunction = PDevGetDataStreamID
+private typealias DevOpenDataStreamFunction = PDevOpenDataStream
+private typealias DevGetInfoFunction = PDevGetInfo
+private typealias DevGetParentIFFunction = PDevGetParentIF
+private typealias DevCloseFunction = PDevClose
 
-private typealias DSAnnounceBufferFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int, UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DSAllocAndAnnounceBufferFunction = @convention(c) (
-    UnsafeMutableRawPointer?, Int, UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DSQueueBufferFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?
-) -> Int32
-private typealias DSFlushQueueFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
-private typealias DSStartAcquisitionFunction = @convention(c) (
-    UnsafeMutableRawPointer?, Int32, UInt64
-) -> Int32
-private typealias DSStopAcquisitionFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
-private typealias DSGetBufferIDFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt32, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DSGetBufferInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32,
-    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DSRevokeBufferFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DSCloseFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
-private typealias DSGetParentDevFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
+private typealias DSAnnounceBufferFunction = PDSAnnounceBuffer
+private typealias DSAllocAndAnnounceBufferFunction = PDSAllocAndAnnounceBuffer
+private typealias DSQueueBufferFunction = PDSQueueBuffer
+private typealias DSFlushQueueFunction = PDSFlushQueue
+private typealias DSStartAcquisitionFunction = PDSStartAcquisition
+private typealias DSStopAcquisitionFunction = PDSStopAcquisition
+private typealias DSGetInfoFunction = PDSGetInfo
+private typealias DSGetBufferIDFunction = PDSGetBufferID
+private typealias DSGetBufferInfoFunction = PDSGetBufferInfo
+private typealias DSRevokeBufferFunction = PDSRevokeBuffer
+private typealias DSCloseFunction = PDSClose
+private typealias DSGetParentDevFunction = PDSGetParentDev
 
-private typealias GCReadPortFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt64, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias GCWritePortFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt64, UnsafeRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias GCGetPortURLFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias GCGetNumPortURLsFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias GCGetPortURLInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt32, Int32, UnsafeMutablePointer<Int32>?,
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
+private typealias GCReadPortFunction = PGCReadPort
+private typealias GCWritePortFunction = PGCWritePort
+private typealias GCGetPortURLFunction = PGCGetPortURL
+private typealias GCGetPortInfoFunction = PGCGetPortInfo
+private typealias GCGetNumPortURLsFunction = PGCGetNumPortURLs
+private typealias GCGetPortURLInfoFunction = PGCGetPortURLInfo
 
-private typealias GCRegisterEventFunction = @convention(c) (
-    UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias GCUnregisterEventFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
-private typealias EventGetDataFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?, UInt64
-) -> Int32
-private typealias EventGetDataInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeRawPointer?, Int, Int32, UnsafeMutablePointer<Int32>?,
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias EventGetInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<Int32>?,
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias EventSimpleFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
+private typealias GCRegisterEventFunction = PGCRegisterEvent
+private typealias GCUnregisterEventFunction = PGCUnregisterEvent
+private typealias EventGetDataFunction = PEventGetData
+private typealias EventGetDataInfoFunction = PEventGetDataInfo
+private typealias EventGetInfoFunction = PEventGetInfo
+private typealias EventFlushFunction = PEventFlush
+private typealias EventKillFunction = PEventKill
 
-private typealias GCReadPortStackedFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<PORT_REGISTER_STACK_ENTRY>?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias GCWritePortStackedFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<PORT_REGISTER_STACK_ENTRY>?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DSGetBufferChunkDataFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<SINGLE_CHUNK_DATA>?,
-    UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DSGetNumBufferPartsFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias DSGetBufferPartInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UInt32, Int32,
-    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DSAnnounceCompositeBufferFunction = @convention(c) (
-    UnsafeMutableRawPointer?, Int, UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
-    UnsafeMutablePointer<Int>?, UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> Int32
-private typealias DSGetNumFlowsFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias DSGetFlowInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UInt32, Int32, UnsafeMutablePointer<Int32>?,
-    UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DSGetNumBufferSegmentsFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?
-) -> Int32
-private typealias DSGetBufferSegmentInfoFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UInt32, Int32,
-    UnsafeMutablePointer<Int32>?, UnsafeMutableRawPointer?, UnsafeMutablePointer<Int>?
-) -> Int32
-private typealias DSGetBufferInfoStackedFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<DS_BUFFER_INFO_STACKED>?, Int
-) -> Int32
-private typealias DSGetBufferPartInfoStackedFunction = @convention(c) (
-    UnsafeMutableRawPointer?, UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<DS_BUFFER_PART_INFO_STACKED>?, Int
-) -> Int32
+private typealias GCReadPortStackedFunction = PGCReadPortStacked
+private typealias GCWritePortStackedFunction = PGCWritePortStacked
+private typealias DSGetBufferChunkDataFunction = PDSGetBufferChunkData
+private typealias DSGetNumBufferPartsFunction = PDSGetNumBufferParts
+private typealias DSGetBufferPartInfoFunction = PDSGetBufferPartInfo
+private typealias DSAnnounceCompositeBufferFunction = PDSAnnounceCompositeBuffer
+private typealias DSGetNumFlowsFunction = PDSGetNumFlows
+private typealias DSGetFlowInfoFunction = PDSGetFlowInfo
+private typealias DSGetNumBufferSegmentsFunction = PDSGetNumBufferSegments
+private typealias DSGetBufferSegmentInfoFunction = PDSGetBufferSegmentInfo
+private typealias DSGetBufferInfoStackedFunction = PDSGetBufferInfoStacked
+private typealias DSGetBufferPartInfoStackedFunction = PDSGetBufferPartInfoStacked
 
 private final class GenTLProducerLibraryRetainer: @unchecked Sendable {
     static let shared = GenTLProducerLibraryRetainer()
@@ -212,15 +110,15 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
         let tlOpen: TLOpenFunction
         let tlClose: TLCloseFunction
-        let tlGetInfo: ModuleInfoFunction
+        let tlGetInfo: TLGetInfoFunction
         let tlGetNumInterfaces: TLGetNumInterfacesFunction
         let tlGetInterfaceID: TLGetInterfaceIDFunction
-        let tlGetInterfaceInfo: IFGetDeviceInfoFunction
+        let tlGetInterfaceInfo: TLGetInterfaceInfoFunction
         let tlUpdateInterfaceList: TLUpdateInterfaceListFunction
         let tlOpenInterface: TLOpenInterfaceFunction
 
         let ifClose: IFCloseFunction
-        let ifGetInfo: ModuleInfoFunction
+        let ifGetInfo: IFGetInfoFunction
         let ifGetNumDevices: IFGetNumDevicesFunction
         let ifGetDeviceID: IFGetDeviceIDFunction
         let ifUpdateDeviceList: IFUpdateDeviceListFunction
@@ -232,7 +130,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let devGetNumDataStreams: DevGetNumDataStreamsFunction
         let devGetDataStreamID: DevGetDataStreamIDFunction
         let devOpenDataStream: DevOpenDataStreamFunction
-        let devGetInfo: ModuleInfoFunction
+        let devGetInfo: DevGetInfoFunction
         let devGetParentIF: DevGetParentIFFunction?
         let devClose: DevCloseFunction
 
@@ -242,7 +140,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let dsFlushQueue: DSFlushQueueFunction
         let dsStartAcquisition: DSStartAcquisitionFunction
         let dsStopAcquisition: DSStopAcquisitionFunction
-        let dsGetInfo: ModuleInfoFunction
+        let dsGetInfo: DSGetInfoFunction
         let dsGetBufferID: DSGetBufferIDFunction
         let dsGetBufferInfo: DSGetBufferInfoFunction
         let dsRevokeBuffer: DSRevokeBufferFunction
@@ -254,15 +152,15 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
         let gcGetPortURL: GCGetPortURLFunction
         let gcGetNumPortURLs: GCGetNumPortURLsFunction?
         let gcGetPortURLInfo: GCGetPortURLInfoFunction?
-        let gcGetPortInfo: ModuleInfoFunction
+        let gcGetPortInfo: GCGetPortInfoFunction
 
         let gcRegisterEvent: GCRegisterEventFunction
         let gcUnregisterEvent: GCUnregisterEventFunction
         let eventGetData: EventGetDataFunction
         let eventGetDataInfo: EventGetDataInfoFunction
         let eventGetInfo: EventGetInfoFunction
-        let eventFlush: EventSimpleFunction
-        let eventKill: EventSimpleFunction
+        let eventFlush: EventFlushFunction
+        let eventKill: EventKillFunction
 
         let gcReadPortStacked: GCReadPortStackedFunction?
         let gcWritePortStacked: GCWritePortStackedFunction?
@@ -321,15 +219,15 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
 
             tlOpen: load("TLOpen", as: TLOpenFunction.self),
             tlClose: load("TLClose", as: TLCloseFunction.self),
-            tlGetInfo: load("TLGetInfo", as: ModuleInfoFunction.self),
+            tlGetInfo: load("TLGetInfo", as: TLGetInfoFunction.self),
             tlGetNumInterfaces: load("TLGetNumInterfaces", as: TLGetNumInterfacesFunction.self),
             tlGetInterfaceID: load("TLGetInterfaceID", as: TLGetInterfaceIDFunction.self),
-            tlGetInterfaceInfo: load("TLGetInterfaceInfo", as: IFGetDeviceInfoFunction.self),
+            tlGetInterfaceInfo: load("TLGetInterfaceInfo", as: TLGetInterfaceInfoFunction.self),
             tlUpdateInterfaceList: load("TLUpdateInterfaceList", as: TLUpdateInterfaceListFunction.self),
             tlOpenInterface: load("TLOpenInterface", as: TLOpenInterfaceFunction.self),
 
             ifClose: load("IFClose", as: IFCloseFunction.self),
-            ifGetInfo: load("IFGetInfo", as: ModuleInfoFunction.self),
+            ifGetInfo: load("IFGetInfo", as: IFGetInfoFunction.self),
             ifGetNumDevices: load("IFGetNumDevices", as: IFGetNumDevicesFunction.self),
             ifGetDeviceID: load("IFGetDeviceID", as: IFGetDeviceIDFunction.self),
             ifUpdateDeviceList: load("IFUpdateDeviceList", as: IFUpdateDeviceListFunction.self),
@@ -341,7 +239,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             devGetNumDataStreams: load("DevGetNumDataStreams", as: DevGetNumDataStreamsFunction.self),
             devGetDataStreamID: load("DevGetDataStreamID", as: DevGetDataStreamIDFunction.self),
             devOpenDataStream: load("DevOpenDataStream", as: DevOpenDataStreamFunction.self),
-            devGetInfo: load("DevGetInfo", as: ModuleInfoFunction.self),
+            devGetInfo: load("DevGetInfo", as: DevGetInfoFunction.self),
             devGetParentIF: try? load("DevGetParentIF", as: DevGetParentIFFunction.self),
             devClose: load("DevClose", as: DevCloseFunction.self),
 
@@ -351,7 +249,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             dsFlushQueue: load("DSFlushQueue", as: DSFlushQueueFunction.self),
             dsStartAcquisition: load("DSStartAcquisition", as: DSStartAcquisitionFunction.self),
             dsStopAcquisition: load("DSStopAcquisition", as: DSStopAcquisitionFunction.self),
-            dsGetInfo: load("DSGetInfo", as: ModuleInfoFunction.self),
+            dsGetInfo: load("DSGetInfo", as: DSGetInfoFunction.self),
             dsGetBufferID: load("DSGetBufferID", as: DSGetBufferIDFunction.self),
             dsGetBufferInfo: load("DSGetBufferInfo", as: DSGetBufferInfoFunction.self),
             dsRevokeBuffer: load("DSRevokeBuffer", as: DSRevokeBufferFunction.self),
@@ -363,15 +261,15 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
             gcGetPortURL: load("GCGetPortURL", as: GCGetPortURLFunction.self),
             gcGetNumPortURLs: try? load("GCGetNumPortURLs", as: GCGetNumPortURLsFunction.self),
             gcGetPortURLInfo: try? load("GCGetPortURLInfo", as: GCGetPortURLInfoFunction.self),
-            gcGetPortInfo: load("GCGetPortInfo", as: ModuleInfoFunction.self),
+            gcGetPortInfo: load("GCGetPortInfo", as: GCGetPortInfoFunction.self),
 
             gcRegisterEvent: load("GCRegisterEvent", as: GCRegisterEventFunction.self),
             gcUnregisterEvent: load("GCUnregisterEvent", as: GCUnregisterEventFunction.self),
             eventGetData: load("EventGetData", as: EventGetDataFunction.self),
             eventGetDataInfo: load("EventGetDataInfo", as: EventGetDataInfoFunction.self),
             eventGetInfo: load("EventGetInfo", as: EventGetInfoFunction.self),
-            eventFlush: load("EventFlush", as: EventSimpleFunction.self),
-            eventKill: load("EventKill", as: EventSimpleFunction.self),
+            eventFlush: load("EventFlush", as: EventFlushFunction.self),
+            eventKill: load("EventKill", as: EventKillFunction.self),
 
             gcReadPortStacked: try? load("GCReadPortStacked", as: GCReadPortStackedFunction.self),
             gcWritePortStacked: try? load("GCWritePortStacked", as: GCWritePortStackedFunction.self),
