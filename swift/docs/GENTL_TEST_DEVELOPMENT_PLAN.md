@@ -326,3 +326,35 @@ The test source has been committed but has **not** been compiled or executed. Th
 - The native implementation uses imported `PGC*` / `P*` function-pointer typedefs and resolves native exports in `GenTLNativeImplementation.swift`.
 
 T0 is therefore partially complete at the source-inspection level. Package compilation, the full header-derived symbol inventory, and the native test target layout remain open. Do not advance the mock fixture design on assumptions about those items.
+
+
+## 11. Work log — first native CTI integration fixture
+
+### Source changes committed
+
+- Added `Tests/GenTLNativeTests/Fixtures/MockGenTLProducer.c`, a C shared-library fixture that includes the pinned `GenTL_v1_6.h`.
+- The fixture exports the 47 entry points currently classified by `GenTLProducerLibrary.requiredEntryPoints`: 46 deterministic `GC_ERR_NOT_IMPLEMENTED` stubs and a custom `GCGetInfo` implementation.
+- The custom `GCGetInfo` writes a known datatype, payload marker, and payload size, then returns the distinctive error code `-4321`. This makes argument/output/result forwarding observable across the real C ABI.
+- The fixture supports `MOCK_OMIT_GCGETINFO`, creating a malformed Producer variant for required-symbol rejection tests.
+- Added `GenTLNativeIntegrationTests.swift`. It compiles the C fixture at test runtime with the macOS SDK compiler, loads the resulting `.cti` through `GenTLNativeImplementation`, and tests output and error forwarding.
+- Added tests for missing required `GCGetInfo` rejection and absent optional `GCGetNumPortURLs` behavior. The latter asserts `GC_ERR_NOT_IMPLEMENTED` and that the caller's output sentinel remains unchanged.
+- Updated the native test target dependencies to import `GenTLABI` and `GenTLAPI`, and used the existing test target rather than adding a parallel package.
+
+### Source-level inventory check
+
+The mock fixture's declared exports were compared against `GenTLProducerLibrary.requiredEntryPoints`: all 47 required names are represented, with no missing required symbol. This is a source comparison only; the compiler and dynamic loader have not yet executed.
+
+### Test execution status
+
+Not run. This environment has no checked-out working tree with a Swift/Xcode toolchain. The tests require macOS with Xcode command-line tools because they compile a Mach-O dynamic library at test runtime. The next operator must run:
+
+```sh
+swift test --package-path swift/Packages/GenTLNative
+swift test --package-path swift/Packages/GenTLAPI
+```
+
+Record the exact Xcode/Swift versions and full output. Fix compiler errors before treating the native integration tests as evidence.
+
+### Important scope limit
+
+This first mock is intentionally a dispatch/loader fixture, not yet a simulated camera. All required base exports exist, but most return `GC_ERR_NOT_IMPLEMENTED`. It proves the intended test architecture and creates the first real C ABI dispatch test; it does not yet support Producer discovery or acquisition. The next mock increment should implement a minimal valid Producer/System/Interface/Device path, then stream/buffer/event acquisition.
