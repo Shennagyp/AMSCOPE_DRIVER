@@ -300,7 +300,7 @@ private struct FeatureGroupView: View {
                              ? "Detected"
                              : (availability?.implemented == true ? "Available" : "Integration pending"))
                             .font(.system(size: 10))
-                            .foregroundStyle(availability?.implemented == true ? .green : .secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -567,7 +567,7 @@ private struct FeatureGroupView: View {
                  ? "Detected"
                  : "Hardware-supported; UI integration pending")
                 .font(.system(size: 10))
-                .foregroundStyle(availability?.feature.isInformational == true ? .green : .secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }
