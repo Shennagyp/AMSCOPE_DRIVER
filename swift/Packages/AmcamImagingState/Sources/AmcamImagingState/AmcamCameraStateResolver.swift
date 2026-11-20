@@ -84,9 +84,18 @@ public struct AmcamCameraStateResolver: Sendable {
             descriptors.map { ($0.name, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
+        let readableFeatureNames = Set(
+            descriptors.filter { $0.isAvailable && $0.isReadable }.map(\\.name)
+        )
+        let safeReadFeature: FeatureReader = { name in
+            guard readableFeatureNames.contains(name) else {
+                throw CameraFeatureAccessError.featureUnavailable(name)
+            }
+            return try await readFeature(name)
+        }
 
         let autoMode: AmcamAutoExposureMode?
-        if case .enumeration(let symbol)? = try? await readFeature("ExposureAuto") {
+        if case .enumeration(let symbol)? = try? await safeReadFeature("ExposureAuto") {
             switch symbol {
             case "Off": autoMode = .manual
             case "Once": autoMode = .once
@@ -98,7 +107,7 @@ public struct AmcamCameraStateResolver: Sendable {
         }
 
         let exposureDescriptor = descriptorsByName["ExposureTime"]
-        let exposureValue = await readIntegerFeature("ExposureTime", readFeature: readFeature)
+        let exposureValue = await readIntegerFeature("ExposureTime", readFeature: safeReadFeature)
         let exposure = exposureDescriptor.map { descriptor in
             AmcamExposureControl(
                 autoMode: autoMode,
