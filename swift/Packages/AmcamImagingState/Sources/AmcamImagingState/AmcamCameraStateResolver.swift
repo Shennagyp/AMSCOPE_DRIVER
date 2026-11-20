@@ -168,7 +168,7 @@ public struct AmcamCameraStateResolver: Sendable {
 
     public func controlSnapshot(
         descriptors: [CameraFeatureDescriptor],
-        readFeature: FeatureReader
+        readFeature: @escaping FeatureReader
     ) async -> AmcamControlSnapshot {
         // The latest descriptor for a name is authoritative. An older duplicate
         // must not re-enable a feature that the current descriptor disables.
