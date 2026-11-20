@@ -16,7 +16,7 @@ This is the sole application-facing camera API. It is not a second vendor-neutra
 ## Two implementations
 
 1. **GenTLNative** forwards operations to third-party `.cti` GenTL Producers through the GenTL C ABI.
-2. **AmcamGenTL** maps the same Swift function surface to the Amcam SDK where equivalent operations exist. It does not create an AmScope `.cti`.
+2. **AmcamGenTL** maps the same Swift function surface to the Amcam SDK where equivalent operations exist. It does not create an AmScope `.cti`. Its raw camera driver, session, frame, control and error types are module-internal; only the GenTL implementation is exported from the package.
 
 The Swift surface uses typed opaque handles and Swift values while preserving GenTL function names, module ownership, error codes and lifecycle semantics. It is not itself a C ABI and is not a GenTL Producer.
 
