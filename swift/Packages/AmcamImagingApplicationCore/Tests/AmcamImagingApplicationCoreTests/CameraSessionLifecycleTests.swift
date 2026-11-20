@@ -259,9 +259,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
         let events = await lifecycle.events()
-        let frames = await lifecycle.frames()
         var eventIterator = events.makeAsyncIterator()
-        var frameIterator = frames.makeAsyncIterator()
 
         try await lifecycle.attach(session)
         try await lifecycle.start()
@@ -274,9 +272,12 @@ final class CameraSessionLifecycleTests: XCTestCase {
                 break
             }
         }
-        let receivedFrame = await frameIterator.next()
 
-        XCTAssertNil(receivedFrame, "A frame from an invalidated acquisition generation must not reach the UI.")
+        let snapshot = await lifecycle.snapshot()
+        XCTAssertNil(
+            snapshot.lastDeliveredFrameSequence,
+            "A frame from an invalidated acquisition generation must not be recorded as delivered."
+        )
         XCTAssertTrue(receivedClosed)
     }
 

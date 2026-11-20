@@ -12,6 +12,7 @@ public actor CameraSessionLifecycle {
     private var acquisition: (any CameraRuntimeAcquisition)?
     private var captureTask: Task<Void, Never>?
     private var isStreaming = false
+    private var lastDeliveredFrameSequence: UInt64?
     /// Actor methods can be re-entered at every suspension point. This gate prevents
     /// concurrent public lifecycle operations from acting on the same owned handles.
     private var lifecycleOperationInProgress = false
@@ -55,7 +56,8 @@ public actor CameraSessionLifecycle {
         CameraSessionLifecycleSnapshot(
             hasSession: session != nil,
             hasAcquisition: acquisition != nil,
-            isStreaming: isStreaming
+            isStreaming: isStreaming,
+            lastDeliveredFrameSequence: lastDeliveredFrameSequence
         )
     }
 
@@ -67,6 +69,7 @@ public actor CameraSessionLifecycle {
             throw CameraSessionLifecycleError.sessionAlreadyAttached
         }
         session = newSession
+        lastDeliveredFrameSequence = nil
     }
 
     public func start() async throws {
@@ -189,6 +192,7 @@ public actor CameraSessionLifecycle {
                 let frame = try await acquisition.nextFrame(timeoutMilliseconds: 5_000)
                 guard !frame.isIncomplete else { continue }
                 guard activeGeneration == generation, isStreaming else { return }
+                lastDeliveredFrameSequence = frame.sequence
                 publishFrame(frame)
             } catch let failure as CameraAcquisitionFailure {
                 switch failure {

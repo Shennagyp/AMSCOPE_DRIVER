@@ -38,11 +38,18 @@ public struct CameraSessionLifecycleSnapshot: Equatable, Sendable {
     public let hasSession: Bool
     public let hasAcquisition: Bool
     public let isStreaming: Bool
+    public let lastDeliveredFrameSequence: UInt64?
 
-    public init(hasSession: Bool, hasAcquisition: Bool, isStreaming: Bool) {
+    public init(
+        hasSession: Bool,
+        hasAcquisition: Bool,
+        isStreaming: Bool,
+        lastDeliveredFrameSequence: UInt64?
+    ) {
         self.hasSession = hasSession
         self.hasAcquisition = hasAcquisition
         self.isStreaming = isStreaming
+        self.lastDeliveredFrameSequence = lastDeliveredFrameSequence
     }
 }
 
