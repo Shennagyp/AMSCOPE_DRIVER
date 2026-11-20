@@ -518,14 +518,22 @@ Verified evidence:
 - Six test cases were scheduled and completed: three RGB24 layout tests and three integration tests covering discovery/open, repeated stream start-stop, synchronous callback delivery, disconnect cleanup, exposure controls/readback, resolution changes/readback, frame delivery, and the GenTL data-stream buffer/event lifecycle.
 - The overall workflow was not green because the separate \`GenTLNative\` and \`GenTLRouter\` jobs failed. Do not attribute those failures to the Amcam package job.
 
-### Additional tests currently pending CI
+### Latest Amcam hardening revision — CI pending
 
-After the verified run:
-- \`AmcamFrameInfoV2.timestamp\` was changed to signed 64-bit to match the SDK structure; negative values are represented as unavailable rather than reinterpreted as unsigned.
-- Added an undersized-buffer safety test. It checks that a buffer smaller than the incoming frame is marked incomplete/data-larger-than-buffer and its memory remains unchanged.
-- Corrected test diagnostic interpolation.
+The current source revision remains focused on the macOS AmScope camera path. No cross-platform loader or mock-producer refactor was started.
 
-The latest source commit is \`7e7c10f203cb0c7f620bac9a0e730567b0f8b5f3\`; its workflow run is [44680315441](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44680315441). Its Amcam test result is pending and must be checked before these additions are called verified.
+Changes now committed:
+- Added bounded C helpers for the Amcam SDK's fixed 64-byte device identifier and display-name arrays. The Swift loader rejects malformed or empty identifiers explicitly instead of passing potentially unterminated memory to `String(cString:)` or silently omitting a device.
+- Added three ABI helper tests: valid fixed-field copying, unterminated-field rejection, and insufficient destination-capacity rejection.
+- Exposure writes now require exact SDK readback. The mock can report setter success while ignoring the requested value; the integration test expects a control-readback mismatch.
+- The mock now advertises precise frame-rate capability and exercises min/max/current option mapping, 0.1 FPS increments, successful readback, range rejection, invalid increments, and unavailable discrete speed control.
+- The stream integration test uses two buffers over a three-frame finite acquisition and checks round-robin delivery, user-pointer payload, metadata, requeue ownership, and finite-stop completion.
+- The camera probe now announces up to four buffers, subject to a 512 MiB aggregate allocation limit. It validates event handles and user pointers, buffer capacity, filled/data sizes, dimensions, row padding, RGB8 PFNC format, and format namespace before reading memory. Host timing is monotonic. Teardown errors are reported and cause a failing exit status.
+- Updated probe instructions: [AMCAM_MACOS_CAMERA_PROBE.md](AMCAM_MACOS_CAMERA_PROBE.md).
+
+The expected Amcam package suite now contains ten test cases: three RGB24 layout tests, three Amcam ABI helper tests, and four SDK integration tests. This is a test inventory, not a passing result.
+
+Latest complete source commit: `d5d7138ccba49c77a40c264bd4efa25e9d5eb692`. Workflow [44682507702](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44682507702) contains this source revision and is queued at the time of this update. The Amcam tests, release probe build, and artifact upload must all succeed before this revision is considered CI-verified. The previous verified Amcam tests and probe build are run [44680887948](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44680887948); that artifact predates the latest safety and multi-buffer changes and should not be used as the acceptance executable.
 
 ### Hardware acceptance — not yet completed
 
