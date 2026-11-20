@@ -157,10 +157,17 @@ final class AmcamSDK: @unchecked Sendable {
         }
         return (0..<count).compactMap { index in
             let pointer = devices.advanced(by: index)
-            guard let identifierPointer = amcam_device_identifier(pointer),
-                  let displayPointer = amcam_device_display_name(pointer) else { return nil }
-            let identifier = String(cString: identifierPointer)
-            let displayName = String(cString: displayPointer)
+            var identifierBuffer = [CChar](repeating: 0, count: 65)
+            var displayNameBuffer = [CChar](repeating: 0, count: 65)
+            let identifierIsValid = identifierBuffer.withUnsafeMutableBufferPointer {
+                amcam_device_copy_identifier(pointer, $0.baseAddress, $0.count)
+            }
+            let displayNameIsValid = displayNameBuffer.withUnsafeMutableBufferPointer {
+                amcam_device_copy_display_name(pointer, $0.baseAddress, $0.count)
+            }
+            guard identifierIsValid == 1, displayNameIsValid == 1 else { return nil }
+            let identifier = String(cString: identifierBuffer)
+            let displayName = String(cString: displayNameBuffer)
             guard !identifier.isEmpty else { return nil }
             guard let model = pointer.pointee.model else {
                 return AmcamDevice(identifier: identifier, displayName: displayName, modelName: nil, modelFlags: nil, maximumSpeedLevel: nil, sensorPixelSizeMicrometers: nil, previewResolutions: [])
