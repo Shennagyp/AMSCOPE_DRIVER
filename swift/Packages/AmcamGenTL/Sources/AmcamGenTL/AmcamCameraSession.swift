@@ -460,7 +460,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
             throw AmcamCameraError.controlReadbackMismatch(
                 control: "white balance temperature/tint",
                 requested: "\(temperature) K / \(tint)",
-                actual: snapshot.whiteBalance.map { "\($0.temperature) K / \($0.tint)" } ?? "unavailable"
+                actual: snapshot.whiteBalance.map {
+                    "\($0.temperature.map { String($0) } ?? "unavailable") K / \($0.tint.map { String($0) } ?? "unavailable")"
+                } ?? "unavailable"
             )
         }
         return snapshot
