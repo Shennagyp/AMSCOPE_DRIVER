@@ -1,5 +1,5 @@
 import Foundation
-import GenTLAPI
+@_spi(BackendConvenience) @_spi(BackendConvenience) import GenTLAPI
 import GenTLNative
 import AmcamGenTL
 
@@ -73,14 +73,14 @@ public struct GenTLProducerRegistrationReport: Sendable {
     }
 }
 
-/// A discovered device remains bound to the exact GenTLAPI implementation
+/// A discovered device remains bound to the exact GenTLBackendConvenience implementation
 /// and interface handle that discovered it. The app still uses GenTL function
 /// calls; backend selection is not repeated at individual call sites.
 public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let backendID: String
     public let interfaceID: String
     public let deviceID: String
-    public let api: any GenTLAPI
+    public let api: any GenTLBackendConvenience
     public let systemHandle: TL_HANDLE
     public let interfaceHandle: IF_HANDLE
 
@@ -129,9 +129,9 @@ private final class GenTLProviderRetainer: @unchecked Sendable {
     static let shared = GenTLProviderRetainer()
 
     private let lock = NSLock()
-    private var retainedAPIs: [any GenTLAPI] = []
+    private var retainedAPIs: [any GenTLBackendConvenience] = []
 
-    func retain(_ api: any GenTLAPI) {
+    func retain(_ api: any GenTLBackendConvenience) {
         lock.lock()
         defer { lock.unlock() }
         retainedAPIs.append(api)
@@ -142,7 +142,7 @@ private final class GenTLProviderRetainer: @unchecked Sendable {
 /// It remains alive while any discovered candidate or opened device session uses it.
 private final class GenTLProviderContext: @unchecked Sendable {
     let backendID: String
-    let api: any GenTLAPI
+    let api: any GenTLBackendConvenience
     let systemHandle: TL_HANDLE
 
     private let lock = NSRecursiveLock()
@@ -151,7 +151,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
     private var interfaceHandlesByID: [String: IF_HANDLE] = [:]
 
-    init(backendID: String, api: any GenTLAPI, systemHandle: TL_HANDLE) {
+    init(backendID: String, api: any GenTLBackendConvenience, systemHandle: TL_HANDLE) {
         self.backendID = backendID
         self.api = api
         self.systemHandle = systemHandle
@@ -308,7 +308,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
 /// Open device ownership. Close the device before releasing its GenTL route.
 public final class GenTLDeviceSession: @unchecked Sendable {
-    public let api: any GenTLAPI
+    public let api: any GenTLBackendConvenience
     public let deviceHandle: DEV_HANDLE
 
     private let context: GenTLProviderContext
@@ -317,7 +317,7 @@ public final class GenTLDeviceSession: @unchecked Sendable {
 
     fileprivate init(
         context: GenTLProviderContext,
-        api: any GenTLAPI,
+        api: any GenTLBackendConvenience,
         deviceHandle: DEV_HANDLE
     ) {
         self.context = context
@@ -346,10 +346,10 @@ public final class GenTLDeviceSession: @unchecked Sendable {
 
 private struct BackendRegistration: Sendable {
     let identifier: String
-    let makeAPI: @Sendable () throws -> any GenTLAPI
+    let makeAPI: @Sendable () throws -> any GenTLBackendConvenience
 }
 
-/// Registers and routes to GenTLAPI implementations.
+/// Registers and routes to GenTLBackendConvenience implementations.
 ///
 /// A native registration is one CTI Producer. An Amcam registration is the
 /// Amcam SDK-backed implementation of the same GenTL-shaped Swift API.
@@ -372,7 +372,7 @@ public final class GenTLRouter: @unchecked Sendable {
 
     public func register(
         backendID: String,
-        makeAPI: @escaping @Sendable () throws -> any GenTLAPI
+        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience
     ) throws {
         let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty, normalized == backendID else {
@@ -393,7 +393,7 @@ public final class GenTLRouter: @unchecked Sendable {
     private func registerUniqueResource(
         backendID: String,
         resourceIdentity: String,
-        makeAPI: @escaping @Sendable () throws -> any GenTLAPI
+        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience
     ) throws {
         let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty, normalized == backendID else {
