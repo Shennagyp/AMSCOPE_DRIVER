@@ -142,7 +142,8 @@ public struct AmcamCameraStateResolver: Sendable {
                   let resolutionSeparator = symbol[symbol.index(after: separator)...].firstIndex(of: "x"),
                   let index = Int(symbol[..<separator]),
                   let width = Int(symbol[symbol.index(after: separator)..<resolutionSeparator]),
-                  let height = Int(symbol[symbol.index(after: resolutionSeparator)...]) else {
+                  let height = Int(symbol[symbol.index(after: resolutionSeparator)...]),
+                  index >= 0, width > 0, height > 0 else {
                 return nil
             }
             return AmcamResolution(index: index, width: width, height: height)
