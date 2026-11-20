@@ -13,9 +13,10 @@ public actor CameraSessionLifecycle {
     private var captureTask: Task<Void, Never>?
     private var isStreaming = false
     private var lastDeliveredFrameSequence: UInt64?
-    /// Actor methods can be re-entered at every suspension point. This gate prevents
-    /// concurrent public lifecycle operations from acting on the same owned handles.
-    private var lifecycleOperationInProgress = false
+    /// Actor methods are re-entrant across awaits. This FIFO gate queues backend
+    /// operations instead of rejecting ordinary UI overlap or exposing owned handles.
+    private var lifecycleOperationHeld = false
+    private var lifecycleOperationWaiters: [CheckedContinuation<Void, Never>] = []
     private var generation: UInt64 = 0
     private var eventContinuations: [UUID: AsyncStream<CameraSessionLifecycleEvent>.Continuation] = [:]
     private var frameContinuations: [UUID: AsyncStream<CameraFramePayload>.Continuation] = [:]
@@ -64,15 +65,12 @@ public actor CameraSessionLifecycle {
     /// Opens and adopts a device as one atomic library-owned lifecycle operation.
     /// The backend session never escapes this actor.
     public func open(_ device: any CameraRuntimeDevice) async throws {
-        guard !lifecycleOperationInProgress else {
-            throw CameraSessionLifecycleError.operationInProgress
-        }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
+
         guard session == nil, acquisition == nil, captureTask == nil else {
             throw CameraSessionLifecycleError.sessionAlreadyAttached
         }
-
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
 
         let openedSession = try await device.open()
         session = openedSession
@@ -82,42 +80,36 @@ public actor CameraSessionLifecycle {
     /// Feature I/O is serialized with lifecycle transitions. The backend session
     /// never escapes this actor, so close cannot race a borrowed feature handle.
     public func supportsAcquisition() async -> Bool {
-        guard !lifecycleOperationInProgress, let session else { return false }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
+        guard let session else { return false }
         return await session.supportsAcquisition()
     }
 
     public func featureDescriptors() async throws -> [CameraFeatureDescriptor] {
-        guard !lifecycleOperationInProgress else { throw CameraSessionLifecycleError.operationInProgress }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
         guard let session else { throw CameraSessionLifecycleError.sessionNotAttached }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
         return try await session.featureDescriptors()
     }
 
     public func readFeature(_ name: String) async throws -> CameraFeatureValue {
-        guard !lifecycleOperationInProgress else { throw CameraSessionLifecycleError.operationInProgress }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
         guard let session else { throw CameraSessionLifecycleError.sessionNotAttached }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
         return try await session.readFeature(name)
     }
 
     public func writeFeature(_ value: CameraFeatureValue, named name: String) async throws {
-        guard !lifecycleOperationInProgress else { throw CameraSessionLifecycleError.operationInProgress }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
         guard let session else { throw CameraSessionLifecycleError.sessionNotAttached }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
         try await session.writeFeature(value, named: name)
     }
 
     public func start() async throws {
-        guard !lifecycleOperationInProgress else {
-            throw CameraSessionLifecycleError.operationInProgress
-        }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
 
         guard let session else {
             throw CameraSessionLifecycleError.sessionNotAttached
@@ -166,11 +158,8 @@ public actor CameraSessionLifecycle {
     /// Stops the acquisition but keeps the device session open.
     /// If stop fails, the acquisition and capture task remain owned for retry.
     public func stop() async throws {
-        guard !lifecycleOperationInProgress else {
-            throw CameraSessionLifecycleError.operationInProgress
-        }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
 
         guard let acquisition else { return }
 
@@ -191,11 +180,8 @@ public actor CameraSessionLifecycle {
     /// Closes the acquisition first, then its owning device session.
     /// Any failed close leaves the failed resource retained for a later call.
     public func close() async throws {
-        guard !lifecycleOperationInProgress else {
-            throw CameraSessionLifecycleError.operationInProgress
-        }
-        lifecycleOperationInProgress = true
-        defer { lifecycleOperationInProgress = false }
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
 
         generation &+= 1
         if isStreaming {
@@ -268,22 +254,41 @@ public actor CameraSessionLifecycle {
         guard activeGeneration == generation, isStreaming else { return }
 
         // A fatal read must stop the producer, not merely abandon the reader.
-        // Treat this as a lifecycle operation so a concurrent close cannot race
-        // the backend stop call against acquisition cleanup.
-        lifecycleOperationInProgress = true
+        // Queue the stop against feature writes and explicit lifecycle operations.
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
+        guard activeGeneration == generation, isStreaming else { return }
+
         generation &+= 1
         isStreaming = false
         publish(.streamingChanged(false))
 
         do {
             try await acquisition.stop()
-            lifecycleOperationInProgress = false
             publish(.failure(message))
         } catch {
-            lifecycleOperationInProgress = false
             publish(.failure(
                 "\(message) The acquisition also failed to stop: \(error.localizedDescription)"
             ))
+        }
+    }
+
+
+    private func acquireLifecycleOperation() async {
+        if !lifecycleOperationHeld {
+            lifecycleOperationHeld = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            lifecycleOperationWaiters.append(continuation)
+        }
+    }
+
+    private func releaseLifecycleOperation() {
+        if lifecycleOperationWaiters.isEmpty {
+            lifecycleOperationHeld = false
+        } else {
+            lifecycleOperationWaiters.removeFirst().resume()
         }
     }
 
