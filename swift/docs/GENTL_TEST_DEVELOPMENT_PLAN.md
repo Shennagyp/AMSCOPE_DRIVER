@@ -518,22 +518,26 @@ Verified evidence:
 - Six test cases were scheduled and completed: three RGB24 layout tests and three integration tests covering discovery/open, repeated stream start-stop, synchronous callback delivery, disconnect cleanup, exposure controls/readback, resolution changes/readback, frame delivery, and the GenTL data-stream buffer/event lifecycle.
 - The overall workflow was not green because the separate \`GenTLNative\` and \`GenTLRouter\` jobs failed. Do not attribute those failures to the Amcam package job.
 
-### Latest Amcam hardening revision — CI pending
+### Verified hardening baseline and pending follow-up
 
-The current source revision remains focused on the macOS AmScope camera path. No cross-platform loader or mock-producer refactor was started.
+A hardening baseline completed successfully in workflow [44682176084](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44682176084), source commit `0f35d0ee87e3f100a7826846c032ceab04c29880`.
 
-Changes now committed:
-- Added bounded C helpers for the Amcam SDK's fixed 64-byte device identifier and display-name arrays. The Swift loader rejects malformed or empty identifiers explicitly instead of passing potentially unterminated memory to `String(cString:)` or silently omitting a device.
-- Added three ABI helper tests: valid fixed-field copying, unterminated-field rejection, and insufficient destination-capacity rejection.
-- Exposure writes now require exact SDK readback. The mock can report setter success while ignoring the requested value; the integration test expects a control-readback mismatch.
-- The mock now advertises precise frame-rate capability and exercises min/max/current option mapping, 0.1 FPS increments, successful readback, range rejection, invalid increments, and unavailable discrete speed control.
-- The stream integration test uses two buffers over a three-frame finite acquisition and checks round-robin delivery, user-pointer payload, metadata, requeue ownership, and finite-stop completion.
-- The camera probe now announces up to four buffers, subject to a 512 MiB aggregate allocation limit. It validates event handles and user pointers, buffer capacity, filled/data sizes, dimensions, row padding, RGB8 PFNC format, and format namespace before reading memory. Host timing is monotonic. Teardown errors are reported and cause a failing exit status.
-- Updated probe instructions: [AMCAM_MACOS_CAMERA_PROBE.md](AMCAM_MACOS_CAMERA_PROBE.md).
+The Amcam macOS job:
+- Scheduled all 10 tests: three bounded Amcam ABI string-helper tests, three RGB24 layout tests, and four SDK integration tests.
+- Completed the `Run package tests` step successfully.
+- Built the release camera probe, identified it as a Mach-O 64-bit arm64 executable, and ran `--help`.
+- Uploaded artifact `amcam-camera-probe-macos-arm64`, ID `14604159604`, SHA-256 `82d0d24d1a06a341565d775d74ae544bcb7e82c71a388a4a8dd15e951bea4bcd`, expiring 2026-12-04.
 
-The expected Amcam package suite now contains ten test cases: three RGB24 layout tests, three Amcam ABI helper tests, and four SDK integration tests. This is a test inventory, not a passing result.
+The overall workflow remained red because the separate GenTLNative and GenTLRouter jobs failed. The Linux ABI/API, GenTLAPI, and Amcam jobs succeeded. The Amcam tests validate the deterministic SDK fixture, not a physical camera.
 
-Latest complete source commit: `d5d7138ccba49c77a40c264bd4efa25e9d5eb692`. Workflow [44682507702](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44682507702) contains this source revision and is queued at the time of this update. The Amcam tests, release probe build, and artifact upload must all succeed before this revision is considered CI-verified. The previous verified Amcam tests and probe build are run [44680887948](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44680887948); that artifact predates the latest safety and multi-buffer changes and should not be used as the acceptance executable.
+Changes made after that verified baseline:
+- The mock now advertises precise frame-rate capability and tests range, 0.1 FPS increments, setter/readback, invalid increments, and unsupported discrete speed control.
+- The stream integration test now uses two buffers over three finite frames and verifies round-robin delivery, buffer metadata, requeue ownership, and finite-stop completion.
+- The hardware probe now uses up to four buffers under a 512 MiB aggregate allocation ceiling.
+
+Latest source commit: `d5d7138ccba49c77a40c264bd4efa25e9d5eb692`. Workflow [44682507702](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44682507702) contains those follow-up changes and is queued. Do not call the new frame-rate, multi-buffer, or updated probe changes verified until the Amcam test, release-build, and artifact-upload steps all succeed.
+
+The artifact from run 44682176084 predates these follow-up changes. Use only an artifact rebuilt from the latest passing source revision for physical hardware acceptance.
 
 ### Hardware acceptance — not yet completed
 
