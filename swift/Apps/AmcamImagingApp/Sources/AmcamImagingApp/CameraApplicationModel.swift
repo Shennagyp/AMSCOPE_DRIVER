@@ -302,7 +302,7 @@ final class CameraApplicationModel: ObservableObject {
               let device = selectedDevice else { return }
 
         do {
-            try await cameraLifecycle.open(candidate.runtimeDevice)
+            try await cameraLifecycle.open(candidate.runtimeDevice, identifier: candidate.id)
             guard isCurrentCameraSelectionOperation(expectedGeneration) else { return }
 
             let descriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
