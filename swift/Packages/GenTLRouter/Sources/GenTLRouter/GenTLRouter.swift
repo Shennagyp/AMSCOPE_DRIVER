@@ -12,6 +12,7 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case interfaceHandleUnavailable(String)
     case providerContextUnavailable(String)
     case genTLCallFailed(Int32)
+    case featureAccessUnavailable(String)
 
     public var errorDescription: String? {
         switch self {
@@ -373,6 +374,7 @@ public final class GenTLDeviceSession: @unchecked Sendable {
     public let deviceHandle: GenTLABI.DEV_HANDLE
 
     private let context: GenTLProviderContext
+    private let featureDeviceHandle: DEV_HANDLE
     private let lock = NSLock()
     private var isClosed = false
 
@@ -384,6 +386,34 @@ public final class GenTLDeviceSession: @unchecked Sendable {
         self.context = context
         self.api = api
         self.deviceHandle = deviceHandle
+        self.featureDeviceHandle = DEV_HANDLE(rawValue: UInt(bitPattern: deviceHandle))
+    }
+
+    /// True when this backend supplies typed feature access alongside GenTLAPI.
+    /// Native CTI backends return false until their GenApi adapter is available.
+    public var supportsFeatureAccess: Bool {
+        api is any GenTLFeatureAccess
+    }
+
+    public func featureDescriptors() throws -> [GenTLFeatureDescriptor] {
+        guard let provider = api as? any GenTLFeatureAccess else {
+            throw GenTLRouterError.featureAccessUnavailable(context.backendID)
+        }
+        return try provider.featureDescriptors(for: featureDeviceHandle)
+    }
+
+    public func readFeature(_ name: String) throws -> GenTLFeatureValue {
+        guard let provider = api as? any GenTLFeatureAccess else {
+            throw GenTLRouterError.featureAccessUnavailable(context.backendID)
+        }
+        return try provider.readFeature(name, from: featureDeviceHandle)
+    }
+
+    public func writeFeature(_ value: GenTLFeatureValue, named name: String) throws {
+        guard let provider = api as? any GenTLFeatureAccess else {
+            throw GenTLRouterError.featureAccessUnavailable(context.backendID)
+        }
+        try provider.writeFeature(value, named: name, to: featureDeviceHandle)
     }
 
     public func close() throws {
