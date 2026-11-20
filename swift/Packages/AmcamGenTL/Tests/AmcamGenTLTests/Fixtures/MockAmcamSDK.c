@@ -31,6 +31,9 @@ static uint32_t exposure_time = 10000;
 static int ignore_exposure_write = 0;
 static uint16_t exposure_gain = 100;
 static int ignore_exposure_gain_write = 0;
+static int32_t white_balance_temperature = 6503;
+static int32_t white_balance_tint = 1000;
+static int32_t white_balance_rgb[3] = {100, 100, 100};
 static int32_t precise_frame_rate_tenths = 150;
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
@@ -134,6 +137,19 @@ int32_t Amcam_get_ExpTimeRange(void *handle, uint32_t *minimum, uint32_t *maximu
     *default_value = 10000;
     return 0;
 }
+int32_t Amcam_get_TempTint(void *handle, int32_t *temperature, int32_t *tint) {
+    if (!handle || !temperature || !tint) return -1;
+    *temperature = white_balance_temperature;
+    *tint = white_balance_tint;
+    return 0;
+}
+int32_t Amcam_get_WhiteBalanceGain(void *handle, int32_t *values) {
+    if (!handle || !values) return -1;
+    values[0] = white_balance_rgb[0];
+    values[1] = white_balance_rgb[1];
+    values[2] = white_balance_rgb[2];
+    return 0;
+}
 int32_t Amcam_get_ExpoAGain(void *handle, uint16_t *value) {
     if (!handle || !value) return -1;
     *value = exposure_gain;
@@ -158,7 +174,9 @@ int32_t Amcam_get_ExpoAGainRange(void *handle, uint16_t *minimum, uint16_t *maxi
 
 int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
     if (!handle || !value) return -1;
-    if (option == 0x32) *value = 1;
+    if (option == 0x0d) *value = 1;
+    else if (option == 0x1a) *value = 0;
+    else if (option == 0x32) *value = 1;
     else if (option == 0x2c) *value = 300;
     else if (option == 0x2d) *value = precise_frame_rate_tenths;
     else return -1;
