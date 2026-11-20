@@ -65,16 +65,20 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
 
     deinit {
         lock.lock()
+        eventReadCondition.lock()
         let canRelease = !initialized &&
             !systemOpen &&
             !interfaceOpen &&
             openDevices.isEmpty &&
             dataStreams.isEmpty &&
-            events.isEmpty
+            events.isEmpty &&
+            activeRawEventReads.isEmpty &&
+            pendingRawEventData.isEmpty
         let active = Array(activeHandleTokens.values)
         let retired = retiredHandleTokens
         activeHandleTokens.removeAll()
         retiredHandleTokens.removeAll()
+        eventReadCondition.unlock()
         lock.unlock()
 
         // If cleanup was not proven complete, leave tokens allocated. A leaked
