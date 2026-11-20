@@ -603,6 +603,10 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         for (eventHandle, record) in streamEvents {
             stream.unregisterEvent(record)
             events.removeValue(forKey: eventHandle)
+            eventReadCondition.lock()
+            pendingRawEventData.removeValue(forKey: eventHandle)
+            eventReadCondition.broadcast()
+            eventReadCondition.unlock()
             retireHandle(eventHandle)
         }
 
@@ -783,6 +787,10 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         }
         stream.unregisterEvent(match.value)
         events.removeValue(forKey: match.key)
+        eventReadCondition.lock()
+        pendingRawEventData.removeValue(forKey: match.key)
+        eventReadCondition.broadcast()
+        eventReadCondition.unlock()
         retireHandle(match.key)
     }
 
@@ -2058,7 +2066,14 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func EventFlush(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
         guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
-        rawStatus { try EventFlush(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))) }
+        let key = UInt(bitPattern: hEvent)
+        let status = rawStatus { try EventFlush(EVENT_HANDLE(rawValue: key)) }
+        if status == GenTLABI.GC_ERR_SUCCESS {
+            eventReadCondition.lock()
+            pendingRawEventData.removeValue(forKey: key)
+            eventReadCondition.unlock()
+        }
+        return status
     }
 
     public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
