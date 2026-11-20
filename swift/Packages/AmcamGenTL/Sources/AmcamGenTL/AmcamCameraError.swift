@@ -35,7 +35,7 @@ public enum AmcamCameraError: Error, LocalizedError, Sendable {
     case cameraDisconnected
     case cameraEventFailure(UInt32)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .libraryNotFound(let path): return "Amcam SDK library not found at: \(path)"
         case .libraryLoadFailed(let message): return "Unable to load Amcam SDK: \(message)"
