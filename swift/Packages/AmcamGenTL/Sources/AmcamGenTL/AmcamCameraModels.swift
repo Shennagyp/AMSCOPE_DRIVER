@@ -68,10 +68,12 @@ public struct AmcamExposureControl: Equatable, Sendable {
 public struct AmcamWhiteBalanceControl: Equatable, Sendable {
     public let temperature: Int32
     public let tint: Int32
+    public let rgbGain: [Int32]?
 
-    public init(temperature: Int32, tint: Int32) {
+    public init(temperature: Int32, tint: Int32, rgbGain: [Int32]? = nil) {
         self.temperature = temperature
         self.tint = tint
+        self.rgbGain = rgbGain
     }
 }
 
