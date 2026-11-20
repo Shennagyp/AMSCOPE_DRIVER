@@ -23,7 +23,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AmcamGenTLTests",
-            dependencies: ["AmcamGenTL"],
+            dependencies: [
+                "AmcamGenTL",
+                .product(name: "GenTLAPI", package: "GenTLAPI")
+            ],
             exclude: ["Fixtures"]
         )
     ]
