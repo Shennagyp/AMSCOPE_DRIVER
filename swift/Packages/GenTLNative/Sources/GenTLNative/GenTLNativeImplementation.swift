@@ -301,7 +301,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     public func swiftGCInitLib() throws {
         lock.lock()
         defer { lock.unlock() }
-        guard !initialized else { throw GC_ERROR.resourceInUse }
+        guard !initialized else { throw GenTLABI.GC_ERROR.resourceInUse }
         try check(functions.gcInitLib())
         initialized = true
     }
@@ -313,7 +313,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         guard !hasActiveEventDataReads,
               registeredEventsByHandle.isEmpty,
               unregisteringEventHandles.isEmpty else {
-            throw GC_ERROR.resourceInUse
+            throw GenTLABI.GC_ERROR.resourceInUse
         }
         try check(functions.gcCloseLib())
         initialized = false
@@ -332,14 +332,14 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        var errorCode: Int32 = GC_ERROR.success.rawValue
+        var errorCode: Int32 = GenTLABI.GC_ERROR.success.rawValue
         var size = 0
         let queryResult = functions.gcGetLastError(&errorCode, nil, &size)
-        guard (queryResult == GC_ERROR.success.rawValue ||
-               queryResult == GC_ERROR.bufferTooSmall.rawValue),
+        guard (queryResult == GenTLABI.GC_ERROR.success.rawValue ||
+               queryResult == GenTLABI.GC_ERROR.bufferTooSmall.rawValue),
               size > 0, size <= 1_048_576 else {
             return GenTLErrorInfo(
-                code: GC_ERROR(rawValue: errorCode),
+                code: GenTLABI.GC_ERROR(rawValue: errorCode),
                 message: "GenTL Producer did not return a valid last-error text size."
             )
         }
@@ -348,35 +348,35 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         let readResult = text.withUnsafeMutableBufferPointer {
             functions.gcGetLastError(&errorCode, $0.baseAddress, &size)
         }
-        guard readResult == GC_ERROR.success.rawValue else {
+        guard readResult == GenTLABI.GC_ERROR.success.rawValue else {
             return GenTLErrorInfo(
-                code: GC_ERROR(rawValue: errorCode),
+                code: GenTLABI.GC_ERROR(rawValue: errorCode),
                 message: "GenTL Producer could not return its last-error text (status \(readResult))."
             )
         }
-        return GenTLErrorInfo(code: GC_ERROR(rawValue: errorCode), message: String(cString: text))
+        return GenTLErrorInfo(code: GenTLABI.GC_ERROR(rawValue: errorCode), message: String(cString: text))
     }
 
     // MARK: System
 
-    public func TLOpen() throws -> TL_HANDLE {
+    public func TLOpen() throws -> GenTLABI.TL_HANDLE {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
         var handle: UnsafeMutableRawPointer?
         try check(functions.tlOpen(&handle))
-        guard let handle else { throw GC_ERROR.invalidHandle }
-        return TL_HANDLE(rawValue: UInt(bitPattern: handle))
+        guard let handle else { throw GenTLABI.GC_ERROR.invalidHandle }
+        return GenTLABI.TL_HANDLE(rawValue: UInt(bitPattern: handle))
     }
 
-    public func TLClose(_ hTL: TL_HANDLE) throws {
+    public func TLClose(_ hTL: GenTLABI.TL_HANDLE) throws {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
         try check(functions.tlClose(try pointer(hTL)))
     }
 
-    public func TLGetInfo(_ hTL: TL_HANDLE, command: Int32) throws -> GenTLInfoValue {
+    public func TLGetInfo(_ hTL: GenTLABI.TL_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
             try readInfo { type, buffer, size in
                 functions.tlGetInfo(try pointer(hTL), command, type, buffer, size)
@@ -384,7 +384,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func TLGetNumInterfaces(_ hTL: TL_HANDLE) throws -> UInt32 {
+    public func TLGetNumInterfaces(_ hTL: GenTLABI.TL_HANDLE) throws -> UInt32 {
         try withLock {
             var count: UInt32 = 0
             try check(functions.tlGetNumInterfaces(try pointer(hTL), &count))
@@ -392,7 +392,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func TLGetInterfaceID(_ hTL: TL_HANDLE, index: UInt32) throws -> String {
+    public func TLGetInterfaceID(_ hTL: GenTLABI.TL_HANDLE, index: UInt32) throws -> String {
         try withLock {
             try readString { buffer, size in
                 functions.tlGetInterfaceID(try pointer(hTL), index, buffer, size)
@@ -401,7 +401,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func TLGetInterfaceInfo(
-        _ hTL: TL_HANDLE,
+        _ hTL: GenTLABI.TL_HANDLE,
         interfaceID: String,
         command: Int32
     ) throws -> GenTLInfoValue {
@@ -415,7 +415,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func TLUpdateInterfaceList(_ hTL: TL_HANDLE, timeout: UInt64) throws -> Bool {
+    public func TLUpdateInterfaceList(_ hTL: GenTLABI.TL_HANDLE, timeout: UInt64) throws -> Bool {
         try withLock {
             var changed: UInt8 = 0
             try check(functions.tlUpdateInterfaceList(try pointer(hTL), &changed, timeout))
@@ -423,25 +423,25 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func TLOpenInterface(_ hTL: TL_HANDLE, interfaceID: String) throws -> IF_HANDLE {
+    public func TLOpenInterface(_ hTL: GenTLABI.TL_HANDLE, interfaceID: String) throws -> GenTLABI.IF_HANDLE {
         try withLock {
             let handle = try pointer(hTL)
             var interface: UnsafeMutableRawPointer?
             try check(interfaceID.withCString { id in
                 functions.tlOpenInterface(handle, id, &interface)
             })
-            guard let interface else { throw GC_ERROR.invalidHandle }
-            return IF_HANDLE(rawValue: UInt(bitPattern: interface))
+            guard let interface else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.IF_HANDLE(rawValue: UInt(bitPattern: interface))
         }
     }
 
     // MARK: Interface
 
-    public func IFClose(_ hIF: IF_HANDLE) throws {
+    public func IFClose(_ hIF: GenTLABI.IF_HANDLE) throws {
         try withLock { try check(functions.ifClose(try pointer(hIF))) }
     }
 
-    public func IFGetInfo(_ hIF: IF_HANDLE, command: Int32) throws -> GenTLInfoValue {
+    public func IFGetInfo(_ hIF: GenTLABI.IF_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
             try readInfo { type, buffer, size in
                 functions.ifGetInfo(try pointer(hIF), command, type, buffer, size)
@@ -449,7 +449,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func IFGetNumDevices(_ hIF: IF_HANDLE) throws -> UInt32 {
+    public func IFGetNumDevices(_ hIF: GenTLABI.IF_HANDLE) throws -> UInt32 {
         try withLock {
             var count: UInt32 = 0
             try check(functions.ifGetNumDevices(try pointer(hIF), &count))
@@ -457,7 +457,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func IFGetDeviceID(_ hIF: IF_HANDLE, index: UInt32) throws -> String {
+    public func IFGetDeviceID(_ hIF: GenTLABI.IF_HANDLE, index: UInt32) throws -> String {
         try withLock {
             try readString { buffer, size in
                 functions.ifGetDeviceID(try pointer(hIF), index, buffer, size)
@@ -465,7 +465,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func IFUpdateDeviceList(_ hIF: IF_HANDLE, timeout: UInt64) throws -> Bool {
+    public func IFUpdateDeviceList(_ hIF: GenTLABI.IF_HANDLE, timeout: UInt64) throws -> Bool {
         try withLock {
             var changed: UInt8 = 0
             try check(functions.ifUpdateDeviceList(try pointer(hIF), &changed, timeout))
@@ -474,7 +474,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func IFGetDeviceInfo(
-        _ hIF: IF_HANDLE,
+        _ hIF: GenTLABI.IF_HANDLE,
         deviceID: String,
         command: Int32
     ) throws -> GenTLInfoValue {
@@ -489,43 +489,43 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func IFOpenDevice(
-        _ hIF: IF_HANDLE,
+        _ hIF: GenTLABI.IF_HANDLE,
         deviceID: String,
         accessFlags: Int32
-    ) throws -> DEV_HANDLE {
+    ) throws -> GenTLABI.DEV_HANDLE {
         try withLock {
             let handle = try pointer(hIF)
             var device: UnsafeMutableRawPointer?
             try check(deviceID.withCString { id in
                 functions.ifOpenDevice(handle, id, accessFlags, &device)
             })
-            guard let device else { throw GC_ERROR.invalidHandle }
-            return DEV_HANDLE(rawValue: UInt(bitPattern: device))
+            guard let device else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.DEV_HANDLE(rawValue: UInt(bitPattern: device))
         }
     }
 
-    public func IFGetParentTL(_ hIF: IF_HANDLE) throws -> TL_HANDLE {
+    public func IFGetParentTL(_ hIF: GenTLABI.IF_HANDLE) throws -> GenTLABI.TL_HANDLE {
         try withLock {
-            guard let getParent = functions.ifGetParentTL else { throw GC_ERROR.notImplemented }
+            guard let getParent = functions.ifGetParentTL else { throw GenTLABI.GC_ERROR.notImplemented }
             var system: UnsafeMutableRawPointer?
             try check(getParent(try pointer(hIF), &system))
-            guard let system else { throw GC_ERROR.invalidHandle }
-            return TL_HANDLE(rawValue: UInt(bitPattern: system))
+            guard let system else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.TL_HANDLE(rawValue: UInt(bitPattern: system))
         }
     }
 
     // MARK: Device
 
-    public func DevGetPort(_ hDevice: DEV_HANDLE) throws -> PORT_HANDLE {
+    public func DevGetPort(_ hDevice: GenTLABI.DEV_HANDLE) throws -> GenTLABI.PORT_HANDLE {
         try withLock {
             var port: UnsafeMutableRawPointer?
             try check(functions.devGetPort(try pointer(hDevice), &port))
-            guard let port else { throw GC_ERROR.invalidHandle }
-            return PORT_HANDLE(rawValue: UInt(bitPattern: port))
+            guard let port else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.PORT_HANDLE(rawValue: UInt(bitPattern: port))
         }
     }
 
-    public func DevGetNumDataStreams(_ hDevice: DEV_HANDLE) throws -> UInt32 {
+    public func DevGetNumDataStreams(_ hDevice: GenTLABI.DEV_HANDLE) throws -> UInt32 {
         try withLock {
             var count: UInt32 = 0
             try check(functions.devGetNumDataStreams(try pointer(hDevice), &count))
@@ -533,7 +533,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DevGetDataStreamID(_ hDevice: DEV_HANDLE, index: UInt32) throws -> String {
+    public func DevGetDataStreamID(_ hDevice: GenTLABI.DEV_HANDLE, index: UInt32) throws -> String {
         try withLock {
             try readString { buffer, size in
                 functions.devGetDataStreamID(try pointer(hDevice), index, buffer, size)
@@ -541,19 +541,19 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DevOpenDataStream(_ hDevice: DEV_HANDLE, dataStreamID: String) throws -> DS_HANDLE {
+    public func DevOpenDataStream(_ hDevice: GenTLABI.DEV_HANDLE, dataStreamID: String) throws -> GenTLABI.DS_HANDLE {
         try withLock {
             let handle = try pointer(hDevice)
             var stream: UnsafeMutableRawPointer?
             try check(dataStreamID.withCString { id in
                 functions.devOpenDataStream(handle, id, &stream)
             })
-            guard let stream else { throw GC_ERROR.invalidHandle }
-            return DS_HANDLE(rawValue: UInt(bitPattern: stream))
+            guard let stream else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.DS_HANDLE(rawValue: UInt(bitPattern: stream))
         }
     }
 
-    public func DevGetInfo(_ hDevice: DEV_HANDLE, command: Int32) throws -> GenTLInfoValue {
+    public func DevGetInfo(_ hDevice: GenTLABI.DEV_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
             try readInfo { type, buffer, size in
                 functions.devGetInfo(try pointer(hDevice), command, type, buffer, size)
@@ -561,66 +561,66 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DevGetParentIF(_ hDevice: DEV_HANDLE) throws -> IF_HANDLE {
+    public func DevGetParentIF(_ hDevice: GenTLABI.DEV_HANDLE) throws -> GenTLABI.IF_HANDLE {
         try withLock {
-            guard let getParent = functions.devGetParentIF else { throw GC_ERROR.notImplemented }
+            guard let getParent = functions.devGetParentIF else { throw GenTLABI.GC_ERROR.notImplemented }
             var interface: UnsafeMutableRawPointer?
             try check(getParent(try pointer(hDevice), &interface))
-            guard let interface else { throw GC_ERROR.invalidHandle }
-            return IF_HANDLE(rawValue: UInt(bitPattern: interface))
+            guard let interface else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.IF_HANDLE(rawValue: UInt(bitPattern: interface))
         }
     }
 
-    public func DevClose(_ hDevice: DEV_HANDLE) throws {
+    public func DevClose(_ hDevice: GenTLABI.DEV_HANDLE) throws {
         try withLock { try check(functions.devClose(try pointer(hDevice))) }
     }
 
     // MARK: Data Stream / Buffer
 
     public func DSAnnounceBuffer(
-        _ hDS: DS_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
         memory: GenTLBufferMemory,
         privateData: UnsafeMutableRawPointer?
-    ) throws -> BUFFER_HANDLE {
+    ) throws -> GenTLABI.BUFFER_HANDLE {
         try withLock {
-            guard memory.size > 0 else { throw GC_ERROR.invalidParameter }
+            guard memory.size > 0 else { throw GenTLABI.GC_ERROR.invalidParameter }
             var buffer: UnsafeMutableRawPointer?
             try check(functions.dsAnnounceBuffer(
                 try pointer(hDS), memory.baseAddress, memory.size, privateData, &buffer
             ))
-            guard let buffer else { throw GC_ERROR.invalidBuffer }
-            return BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
+            guard let buffer else { throw GenTLABI.GC_ERROR.invalidBuffer }
+            return GenTLABI.BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
         }
     }
 
     public func DSAllocAndAnnounceBuffer(
-        _ hDS: DS_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
         size: Int,
         privateData: UnsafeMutableRawPointer?
-    ) throws -> BUFFER_HANDLE {
+    ) throws -> GenTLABI.BUFFER_HANDLE {
         try withLock {
-            guard size > 0 else { throw GC_ERROR.invalidParameter }
+            guard size > 0 else { throw GenTLABI.GC_ERROR.invalidParameter }
             var buffer: UnsafeMutableRawPointer?
             try check(functions.dsAllocAndAnnounceBuffer(try pointer(hDS), size, privateData, &buffer))
-            guard let buffer else { throw GC_ERROR.invalidBuffer }
-            return BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
+            guard let buffer else { throw GenTLABI.GC_ERROR.invalidBuffer }
+            return GenTLABI.BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
         }
     }
 
-    public func DSQueueBuffer(_ hDS: DS_HANDLE, buffer: BUFFER_HANDLE) throws {
+    public func DSQueueBuffer(_ hDS: GenTLABI.DS_HANDLE, buffer: GenTLABI.BUFFER_HANDLE) throws {
         try withLock {
             try check(functions.dsQueueBuffer(try pointer(hDS), try pointer(buffer)))
         }
     }
 
-    public func DSFlushQueue(_ hDS: DS_HANDLE, operation: Int32) throws {
+    public func DSFlushQueue(_ hDS: GenTLABI.DS_HANDLE, operation: Int32) throws {
         try withLock {
             try check(functions.dsFlushQueue(try pointer(hDS), operation))
         }
     }
 
     public func DSStartAcquisition(
-        _ hDS: DS_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
         flags: Int32,
         numberToAcquire: UInt64
     ) throws {
@@ -629,13 +629,13 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DSStopAcquisition(_ hDS: DS_HANDLE, flags: Int32) throws {
+    public func DSStopAcquisition(_ hDS: GenTLABI.DS_HANDLE, flags: Int32) throws {
         try withLock {
             try check(functions.dsStopAcquisition(try pointer(hDS), flags))
         }
     }
 
-    public func DSGetInfo(_ hDS: DS_HANDLE, command: Int32) throws -> GenTLInfoValue {
+    public func DSGetInfo(_ hDS: GenTLABI.DS_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
             try readInfo { type, buffer, size in
                 functions.dsGetInfo(try pointer(hDS), command, type, buffer, size)
@@ -643,18 +643,18 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DSGetBufferID(_ hDS: DS_HANDLE, index: UInt32) throws -> BUFFER_HANDLE {
+    public func DSGetBufferID(_ hDS: GenTLABI.DS_HANDLE, index: UInt32) throws -> GenTLABI.BUFFER_HANDLE {
         try withLock {
             var buffer: UnsafeMutableRawPointer?
             try check(functions.dsGetBufferID(try pointer(hDS), index, &buffer))
-            guard let buffer else { throw GC_ERROR.invalidBuffer }
-            return BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
+            guard let buffer else { throw GenTLABI.GC_ERROR.invalidBuffer }
+            return GenTLABI.BUFFER_HANDLE(rawValue: UInt(bitPattern: buffer))
         }
     }
 
     public func DSGetBufferInfo(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE,
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
@@ -667,8 +667,8 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSRevokeBuffer(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE
     ) throws -> GenTLRevokedBuffer {
         try withLock {
             var memory: UnsafeMutableRawPointer?
@@ -678,29 +678,29 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DSGetParentDev(_ hDS: DS_HANDLE) throws -> DEV_HANDLE {
+    public func DSGetParentDev(_ hDS: GenTLABI.DS_HANDLE) throws -> GenTLABI.DEV_HANDLE {
         try withLock {
-            guard let getParent = functions.dsGetParentDev else { throw GC_ERROR.notImplemented }
+            guard let getParent = functions.dsGetParentDev else { throw GenTLABI.GC_ERROR.notImplemented }
             var device: UnsafeMutableRawPointer?
             try check(getParent(try pointer(hDS), &device))
-            guard let device else { throw GC_ERROR.invalidHandle }
-            return DEV_HANDLE(rawValue: UInt(bitPattern: device))
+            guard let device else { throw GenTLABI.GC_ERROR.invalidHandle }
+            return GenTLABI.DEV_HANDLE(rawValue: UInt(bitPattern: device))
         }
     }
 
-    public func DSClose(_ hDS: DS_HANDLE) throws {
+    public func DSClose(_ hDS: GenTLABI.DS_HANDLE) throws {
         try withLock { try check(functions.dsClose(try pointer(hDS))) }
     }
 
     // MARK: GenTL 1.6 Advanced Data Functions
 
     public func GCReadPortStacked(
-        _ hPort: PORT_HANDLE,
+        _ hPort: GenTLABI.PORT_HANDLE,
         requests: [GenTLPortReadRequest]
     ) throws -> [Data] {
         try withLock {
             guard !requests.isEmpty else { return [] }
-            guard let readStacked = functions.gcReadPortStacked else { throw GC_ERROR.notImplemented }
+            guard let readStacked = functions.gcReadPortStacked else { throw GenTLABI.GC_ERROR.notImplemented }
             let port = try pointer(hPort)
             var allocations: [UnsafeMutableRawPointer] = []
             defer { allocations.forEach { $0.deallocate() } }
@@ -709,7 +709,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             entries.reserveCapacity(requests.count)
             for request in requests {
                 guard request.size > 0, request.size <= 64 * 1024 * 1024 else {
-                    throw GC_ERROR.invalidParameter
+                    throw GenTLABI.GC_ERROR.invalidParameter
                 }
                 let memory = UnsafeMutableRawPointer.allocate(byteCount: request.size, alignment: 8)
                 memory.initializeMemory(as: UInt8.self, repeating: 0, count: request.size)
@@ -726,7 +726,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 readStacked(port, $0.baseAddress, &count)
             }
             try check(result)
-            guard count == requests.count else { throw GC_ERROR.invalidValue }
+            guard count == requests.count else { throw GenTLABI.GC_ERROR.invalidValue }
 
             return zip(requests, allocations).map { request, memory in
                 Data(bytes: memory, count: request.size)
@@ -735,12 +735,12 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func GCWritePortStacked(
-        _ hPort: PORT_HANDLE,
+        _ hPort: GenTLABI.PORT_HANDLE,
         requests: [GenTLPortWriteRequest]
     ) throws {
         try withLock {
             guard !requests.isEmpty else { return }
-            guard let writeStacked = functions.gcWritePortStacked else { throw GC_ERROR.notImplemented }
+            guard let writeStacked = functions.gcWritePortStacked else { throw GenTLABI.GC_ERROR.notImplemented }
             let port = try pointer(hPort)
             var allocations: [UnsafeMutableRawPointer] = []
             defer { allocations.forEach { $0.deallocate() } }
@@ -750,7 +750,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             for request in requests {
                 guard !request.data.isEmpty,
                       request.data.count <= 64 * 1024 * 1024 else {
-                    throw GC_ERROR.invalidParameter
+                    throw GenTLABI.GC_ERROR.invalidParameter
                 }
                 let memory = UnsafeMutableRawPointer.allocate(
                     byteCount: request.data.count,
@@ -774,22 +774,22 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 writeStacked(port, $0.baseAddress, &count)
             }
             try check(result)
-            guard count == requests.count else { throw GC_ERROR.invalidValue }
+            guard count == requests.count else { throw GenTLABI.GC_ERROR.invalidValue }
         }
     }
 
     public func DSGetBufferChunkData(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE
     ) throws -> [GenTLChunkData] {
         try withLock {
-            guard let getChunkData = functions.dsGetBufferChunkData else { throw GC_ERROR.notImplemented }
+            guard let getChunkData = functions.dsGetBufferChunkData else { throw GenTLABI.GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             var count = 0
             let query = getChunkData(stream, bufferHandle, nil, &count)
             try checkInfoSizeQuery(query, size: count)
-            guard count <= 1_000_000 else { throw GC_ERROR.invalidValue }
+            guard count <= 1_000_000 else { throw GenTLABI.GC_ERROR.invalidValue }
             guard count > 0 else { return [] }
 
             let memory = UnsafeMutableRawPointer.allocate(
@@ -806,7 +806,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             let chunks = memory.bindMemory(to: SINGLE_CHUNK_DATA.self, capacity: count)
             var actualCount = count
             try check(getChunkData(stream, bufferHandle, chunks, &actualCount))
-            guard actualCount >= 0, actualCount <= count else { throw GC_ERROR.invalidValue }
+            guard actualCount >= 0, actualCount <= count else { throw GenTLABI.GC_ERROR.invalidValue }
 
             return (0..<actualCount).map { index in
                 GenTLChunkData(
@@ -819,11 +819,11 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSGetNumBufferParts(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE
     ) throws -> UInt32 {
         try withLock {
-            guard let getNumParts = functions.dsGetNumBufferParts else { throw GC_ERROR.notImplemented }
+            guard let getNumParts = functions.dsGetNumBufferParts else { throw GenTLABI.GC_ERROR.notImplemented }
             var count: UInt32 = 0
             try check(getNumParts(try pointer(hDS), try pointer(buffer), &count))
             return count
@@ -831,13 +831,13 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSGetBufferPartInfo(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE,
         partIndex: UInt32,
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            guard let getPartInfo = functions.dsGetBufferPartInfo else { throw GC_ERROR.notImplemented }
+            guard let getPartInfo = functions.dsGetBufferPartInfo else { throw GenTLABI.GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             return try readInfo { type, output, size in
@@ -847,16 +847,16 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSAnnounceCompositeBuffer(
-        _ hDS: DS_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
         segments: [GenTLCompositeBufferSegment],
         privateData: UnsafeMutableRawPointer?
-    ) throws -> BUFFER_HANDLE {
+    ) throws -> GenTLABI.BUFFER_HANDLE {
         try withLock {
             guard !segments.isEmpty,
                   segments.allSatisfy({ $0.memory.size > 0 }) else {
-                throw GC_ERROR.invalidParameter
+                throw GenTLABI.GC_ERROR.invalidParameter
             }
-            guard let announceComposite = functions.dsAnnounceCompositeBuffer else { throw GC_ERROR.notImplemented }
+            guard let announceComposite = functions.dsAnnounceCompositeBuffer else { throw GenTLABI.GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             var pointers = segments.map { Optional($0.memory.baseAddress) }
             var sizes = segments.map { $0.memory.size }
@@ -875,18 +875,18 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 }
             }
             try check(result)
-            guard let resultBuffer else { throw GC_ERROR.invalidBuffer }
-            return BUFFER_HANDLE(rawValue: UInt(bitPattern: resultBuffer))
+            guard let resultBuffer else { throw GenTLABI.GC_ERROR.invalidBuffer }
+            return GenTLABI.BUFFER_HANDLE(rawValue: UInt(bitPattern: resultBuffer))
         }
     }
 
     public func DSGetBufferInfoStacked(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE,
         commands: [Int32]
-    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
+    ) throws -> [Result<GenTLInfoValue, GenTLABI.GC_ERROR>] {
         try withLock {
-            guard let getBufferInfoStacked = functions.dsGetBufferInfoStacked else { throw GC_ERROR.notImplemented }
+            guard let getBufferInfoStacked = functions.dsGetBufferInfoStacked else { throw GenTLABI.GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             guard !commands.isEmpty else { return [] }
@@ -897,7 +897,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 entry.iType = GenTLInfoDataType.unknown.rawValue
                 entry.pBuffer = nil
                 entry.iSize = 0
-                entry.iResult = GC_ERROR.success.rawValue
+                entry.iResult = GenTLABI.GC_ERROR.success.rawValue
                 return entry
             }
 
@@ -913,14 +913,14 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             defer { allocations.compactMap { $0 }.forEach { $0.deallocate() } }
 
             for index in entries.indices {
-                let entryStatus = GC_ERROR(rawValue: entries[index].iResult)
+                let entryStatus = GenTLABI.GC_ERROR(rawValue: entries[index].iResult)
                 guard entryStatus == .success || entryStatus == .bufferTooSmall else {
                     continue
                 }
 
                 let capacity = entries[index].iSize
                 guard capacity >= 0, capacity <= 64 * 1024 * 1024 else {
-                    entries[index].iResult = GC_ERROR.invalidValue.rawValue
+                    entries[index].iResult = GenTLABI.GC_ERROR.invalidValue.rawValue
                     continue
                 }
 
@@ -935,7 +935,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 var outputEntry = entries[index]
                 outputEntry.pBuffer = allocations[index]
                 outputEntry.iSize = capacity
-                outputEntry.iResult = GC_ERROR.success.rawValue
+                outputEntry.iResult = GenTLABI.GC_ERROR.success.rawValue
                 outputEntries.append(outputEntry)
                 outputIndices.append(index)
             }
@@ -964,12 +964,12 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSGetBufferPartInfoStacked(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE,
         requests: [GenTLBufferPartInfoStackedRequest]
-    ) throws -> [Result<GenTLInfoValue, GC_ERROR>] {
+    ) throws -> [Result<GenTLInfoValue, GenTLABI.GC_ERROR>] {
         try withLock {
-            guard let getBufferPartInfoStacked = functions.dsGetBufferPartInfoStacked else { throw GC_ERROR.notImplemented }
+            guard let getBufferPartInfoStacked = functions.dsGetBufferPartInfoStacked else { throw GenTLABI.GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             guard !requests.isEmpty else { return [] }
@@ -978,7 +978,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 var entry = DS_BUFFER_PART_INFO_STACKED()
                 entry.iPartIndex = request.partIndex
                 entry.iInfoCmd = request.command
-                entry.iResult = GC_ERROR.success.rawValue
+                entry.iResult = GenTLABI.GC_ERROR.success.rawValue
                 entry.iType = GenTLInfoDataType.unknown.rawValue
                 entry.pBuffer = nil
                 entry.iSize = 0
@@ -997,14 +997,14 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             defer { allocations.compactMap { $0 }.forEach { $0.deallocate() } }
 
             for index in entries.indices {
-                let entryStatus = GC_ERROR(rawValue: entries[index].iResult)
+                let entryStatus = GenTLABI.GC_ERROR(rawValue: entries[index].iResult)
                 guard entryStatus == .success || entryStatus == .bufferTooSmall else {
                     continue
                 }
 
                 let capacity = entries[index].iSize
                 guard capacity >= 0, capacity <= 64 * 1024 * 1024 else {
-                    entries[index].iResult = GC_ERROR.invalidValue.rawValue
+                    entries[index].iResult = GenTLABI.GC_ERROR.invalidValue.rawValue
                     continue
                 }
 
@@ -1019,7 +1019,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 var outputEntry = entries[index]
                 outputEntry.pBuffer = allocations[index]
                 outputEntry.iSize = capacity
-                outputEntry.iResult = GC_ERROR.success.rawValue
+                outputEntry.iResult = GenTLABI.GC_ERROR.success.rawValue
                 outputEntries.append(outputEntry)
                 outputIndices.append(index)
             }
@@ -1047,9 +1047,9 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func DSGetNumFlows(_ hDS: DS_HANDLE) throws -> UInt32 {
+    public func DSGetNumFlows(_ hDS: GenTLABI.DS_HANDLE) throws -> UInt32 {
         try withLock {
-            guard let getNumFlows = functions.dsGetNumFlows else { throw GC_ERROR.notImplemented }
+            guard let getNumFlows = functions.dsGetNumFlows else { throw GenTLABI.GC_ERROR.notImplemented }
             var count: UInt32 = 0
             try check(getNumFlows(try pointer(hDS), &count))
             return count
@@ -1057,12 +1057,12 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSGetFlowInfo(
-        _ hDS: DS_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
         flowIndex: UInt32,
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            guard let getFlowInfo = functions.dsGetFlowInfo else { throw GC_ERROR.notImplemented }
+            guard let getFlowInfo = functions.dsGetFlowInfo else { throw GenTLABI.GC_ERROR.notImplemented }
             return try readInfo { type, output, size in
                 getFlowInfo(try pointer(hDS), flowIndex, command, type, output, size)
             }
@@ -1070,11 +1070,11 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSGetNumBufferSegments(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE
     ) throws -> UInt32 {
         try withLock {
-            guard let getNumSegments = functions.dsGetNumBufferSegments else { throw GC_ERROR.notImplemented }
+            guard let getNumSegments = functions.dsGetNumBufferSegments else { throw GenTLABI.GC_ERROR.notImplemented }
             var count: UInt32 = 0
             try check(getNumSegments(try pointer(hDS), try pointer(buffer), &count))
             return count
@@ -1082,13 +1082,13 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func DSGetBufferSegmentInfo(
-        _ hDS: DS_HANDLE,
-        buffer: BUFFER_HANDLE,
+        _ hDS: GenTLABI.DS_HANDLE,
+        buffer: GenTLABI.BUFFER_HANDLE,
         segmentIndex: UInt32,
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            guard let getSegmentInfo = functions.dsGetBufferSegmentInfo else { throw GC_ERROR.notImplemented }
+            guard let getSegmentInfo = functions.dsGetBufferSegmentInfo else { throw GenTLABI.GC_ERROR.notImplemented }
             let stream = try pointer(hDS)
             let bufferHandle = try pointer(buffer)
             return try readInfo { type, output, size in
@@ -1099,9 +1099,9 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
 
     // MARK: Port / Register Access
 
-    public func GCReadPort(_ hPort: PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
+    public func GCReadPort(_ hPort: GenTLABI.PORT_HANDLE, address: UInt64, size: Int) throws -> Data {
         try withLock {
-            guard size > 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidParameter }
+            guard size > 0, size <= 64 * 1024 * 1024 else { throw GenTLABI.GC_ERROR.invalidParameter }
             let port = try pointer(hPort)
             var data = Data(count: size)
             var actualSize = size
@@ -1109,16 +1109,16 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 functions.gcReadPort(port, address, output.baseAddress, &actualSize)
             }
             try check(result)
-            guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+            guard actualSize >= 0, actualSize <= size else { throw GenTLABI.GC_ERROR.invalidValue }
             data.count = actualSize
             return data
         }
     }
 
-    public func GCWritePort(_ hPort: PORT_HANDLE, address: UInt64, data: Data) throws {
+    public func GCWritePort(_ hPort: GenTLABI.PORT_HANDLE, address: UInt64, data: Data) throws {
         try withLock {
             guard !data.isEmpty, data.count <= 64 * 1024 * 1024 else {
-                throw GC_ERROR.invalidParameter
+                throw GenTLABI.GC_ERROR.invalidParameter
             }
             let port = try pointer(hPort)
             var size = data.count
@@ -1126,11 +1126,11 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 functions.gcWritePort(port, address, input.baseAddress, &size)
             }
             try check(result)
-            guard size == data.count else { throw GC_ERROR.error }
+            guard size == data.count else { throw GenTLABI.GC_ERROR.error }
         }
     }
 
-    public func GCGetPortURL(_ hPort: PORT_HANDLE) throws -> String {
+    public func GCGetPortURL(_ hPort: GenTLABI.PORT_HANDLE) throws -> String {
         try withLock {
             try readString { buffer, size in
                 functions.gcGetPortURL(try pointer(hPort), buffer, size)
@@ -1138,9 +1138,9 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func GCGetNumPortURLs(_ hPort: PORT_HANDLE) throws -> UInt32 {
+    public func GCGetNumPortURLs(_ hPort: GenTLABI.PORT_HANDLE) throws -> UInt32 {
         try withLock {
-            guard let getNumPortURLs = functions.gcGetNumPortURLs else { throw GC_ERROR.notImplemented }
+            guard let getNumPortURLs = functions.gcGetNumPortURLs else { throw GenTLABI.GC_ERROR.notImplemented }
             var count: UInt32 = 0
             try check(getNumPortURLs(try pointer(hPort), &count))
             return count
@@ -1148,19 +1148,19 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func GCGetPortURLInfo(
-        _ hPort: PORT_HANDLE,
+        _ hPort: GenTLABI.PORT_HANDLE,
         index: UInt32,
         command: Int32
     ) throws -> GenTLInfoValue {
         try withLock {
-            guard let getPortURLInfo = functions.gcGetPortURLInfo else { throw GC_ERROR.notImplemented }
+            guard let getPortURLInfo = functions.gcGetPortURLInfo else { throw GenTLABI.GC_ERROR.notImplemented }
             return try readInfo { type, buffer, size in
                 getPortURLInfo(try pointer(hPort), index, command, type, buffer, size)
             }
         }
     }
 
-    public func GCGetPortInfo(_ hPort: PORT_HANDLE, command: Int32) throws -> GenTLInfoValue {
+    public func GCGetPortInfo(_ hPort: GenTLABI.PORT_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
             try readInfo { type, buffer, size in
                 functions.gcGetPortInfo(try pointer(hPort), command, type, buffer, size)
@@ -1171,27 +1171,27 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     // MARK: Signaling / Events
 
     public func GCRegisterEvent(
-        _ source: EVENTSRC_HANDLE,
+        _ source: GenTLABI.EVENTSRC_HANDLE,
         eventType: Int32
-    ) throws -> EVENT_HANDLE {
+    ) throws -> GenTLABI.EVENT_HANDLE {
         let sourcePointer = try eventSourcePointer(source)
         return try withLock {
             guard !registeredEventsByHandle.values.contains(where: {
                 $0.sourcePointer == sourcePointer && $0.eventType == eventType
             }) else {
-                throw GC_ERROR.resourceInUse
+                throw GenTLABI.GC_ERROR.resourceInUse
             }
 
             var event: UnsafeMutableRawPointer?
             try check(functions.gcRegisterEvent(sourcePointer, eventType, &event))
-            guard let event else { throw GC_ERROR.invalidHandle }
-            let handle = EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+            guard let event else { throw GenTLABI.GC_ERROR.invalidHandle }
+            let handle = GenTLABI.EVENT_HANDLE(rawValue: UInt(bitPattern: event))
             guard registeredEventsByHandle[handle.rawValue] == nil else {
                 // A Producer returning an already-live event handle violates
                 // handle uniqueness. Undo the just-issued registration before
                 // reporting the invalid Producer behavior.
                 try? functions.gcUnregisterEvent(sourcePointer, eventType)
-                throw GC_ERROR.resourceInUse
+                throw GenTLABI.GC_ERROR.resourceInUse
             }
             registeredEventsByHandle[handle.rawValue] = RegisteredEvent(
                 sourcePointer: sourcePointer,
@@ -1202,7 +1202,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     }
 
     public func GCUnregisterEvent(
-        _ source: EVENTSRC_HANDLE,
+        _ source: GenTLABI.EVENTSRC_HANDLE,
         eventType: Int32
     ) throws {
         try unregisterEvent(sourcePointer: eventSourcePointer(source), eventType: eventType)
@@ -1216,15 +1216,15 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             let matchingHandles = registeredEventsByHandle.compactMap { handle, record in
                 record.sourcePointer == sourcePointer && record.eventType == eventType ? handle : nil
             }
-            guard !matchingHandles.isEmpty else { throw GC_ERROR.invalidHandle }
+            guard !matchingHandles.isEmpty else { throw GenTLABI.GC_ERROR.invalidHandle }
             guard matchingHandles.allSatisfy({
                 !unregisteringEventHandles.contains($0)
             }) else {
-                throw GC_ERROR.resourceInUse
+                throw GenTLABI.GC_ERROR.resourceInUse
             }
 
             let eventPointers = try matchingHandles.map {
-                try pointer(EVENT_HANDLE(rawValue: $0))
+                try pointer(GenTLABI.EVENT_HANDLE(rawValue: $0))
             }
             unregisteringEventHandles.formUnion(matchingHandles)
             do {
@@ -1262,14 +1262,14 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
+    public func EventGetData(_ event: GenTLABI.EVENT_HANDLE, timeout: UInt64) throws -> Data {
         // A NULL EventGetData buffer discards queued data in the GenTL standard,
         // so first determine a safe capacity, then perform exactly one retrieval.
         // Do not hold the API lock while waiting: EventKill must be able to
         // interrupt an infinite-timeout read.
         let (maximumSize, eventType) = try withLock {
             guard let registration = registeredEventsByHandle[event.rawValue] else {
-                throw GC_ERROR.invalidHandle
+                throw GenTLABI.GC_ERROR.invalidHandle
             }
             let registeredPointer = try registeredEventPointer(event)
 
@@ -1285,10 +1285,10 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 }
                 guard case .size(let value) = value,
                       value >= 0, value <= 64 * 1024 * 1024 else {
-                    throw GC_ERROR.invalidValue
+                    throw GenTLABI.GC_ERROR.invalidValue
                 }
                 return (value, registration.eventType)
-            } catch let error as GC_ERROR
+            } catch let error as GenTLABI.GC_ERROR
                 where error == .invalidParameter || error == .notImplemented {
                 // EVENT_SIZE_MAX (EventGetInfo command 3) was standardized in
                 // GenTL 1.2. GenTL 1.0 defines the New Buffer event payload as
@@ -1297,7 +1297,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
                 // an unknown command. Other 1.0 event payloads have no
                 // standard fixed layout, so do not guess their capacity.
                 guard registration.eventType == GenTLEventType.newBuffer.rawValue else {
-                    throw GC_ERROR.notImplemented
+                    throw GenTLABI.GC_ERROR.notImplemented
                 }
                 return (MemoryLayout<EVENT_NEW_BUFFER_DATA>.size, registration.eventType)
             }
@@ -1318,18 +1318,18 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
         try check(result)
         guard actualSize >= 0, actualSize <= allocationSize else {
-            throw GC_ERROR.invalidValue
+            throw GenTLABI.GC_ERROR.invalidValue
         }
         if eventType == GenTLEventType.newBuffer.rawValue,
            actualSize != MemoryLayout<EVENT_NEW_BUFFER_DATA>.size {
-            throw GC_ERROR.invalidValue
+            throw GenTLABI.GC_ERROR.invalidValue
         }
         data.count = actualSize
         return data
     }
 
     public func EventGetDataInfo(
-        _ event: EVENT_HANDLE,
+        _ event: GenTLABI.EVENT_HANDLE,
         inputData: Data,
         command: Int32
     ) throws -> GenTLInfoValue {
@@ -1346,7 +1346,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func EventGetInfo(_ event: EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
+    public func EventGetInfo(_ event: GenTLABI.EVENT_HANDLE, command: Int32) throws -> GenTLInfoValue {
         try withLock {
             let eventPointer = try registeredEventPointer(event)
             return try readInfo { type, buffer, size in
@@ -1355,13 +1355,13 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
     }
 
-    public func EventFlush(_ event: EVENT_HANDLE) throws {
+    public func EventFlush(_ event: GenTLABI.EVENT_HANDLE) throws {
         try withLock {
             try check(functions.eventFlush(try registeredEventPointer(event)))
         }
     }
 
-    public func EventKill(_ event: EVENT_HANDLE) throws {
+    public func EventKill(_ event: GenTLABI.EVENT_HANDLE) throws {
         try withLock {
             try check(functions.eventKill(try registeredEventPointer(event)))
         }
@@ -1376,7 +1376,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         return try operation()
     }
 
-    private func beginEventDataRead(_ event: EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
+    private func beginEventDataRead(_ event: GenTLABI.EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
         lock.lock()
         defer { lock.unlock() }
         try requireInitialized()
@@ -1406,30 +1406,30 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         return !activeEventDataReadsByHandle.isEmpty
     }
 
-    private func registeredEventPointer(_ event: EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
+    private func registeredEventPointer(_ event: GenTLABI.EVENT_HANDLE) throws -> UnsafeMutableRawPointer {
         guard registeredEventsByHandle[event.rawValue] != nil,
               !unregisteringEventHandles.contains(event.rawValue) else {
-            throw GC_ERROR.invalidHandle
+            throw GenTLABI.GC_ERROR.invalidHandle
         }
         return try pointer(event)
     }
 
     private func requireInitialized() throws {
-        guard initialized else { throw GC_ERROR.notInitialized }
+        guard initialized else { throw GenTLABI.GC_ERROR.notInitialized }
     }
 
     private func check(_ result: Int32) throws {
-        guard result == GC_ERROR.success.rawValue else {
-            throw GC_ERROR(rawValue: result)
+        guard result == GenTLABI.GC_ERROR.success.rawValue else {
+            throw GenTLABI.GC_ERROR(rawValue: result)
         }
     }
 
     private func checkInfoSizeQuery(_ result: Int32, size: Int) throws {
-        guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidValue }
-        if result == GC_ERROR.success.rawValue || result == GC_ERROR.bufferTooSmall.rawValue {
+        guard size >= 0, size <= 64 * 1024 * 1024 else { throw GenTLABI.GC_ERROR.invalidValue }
+        if result == GenTLABI.GC_ERROR.success.rawValue || result == GenTLABI.GC_ERROR.bufferTooSmall.rawValue {
             return
         }
-        throw GC_ERROR(rawValue: result)
+        throw GenTLABI.GC_ERROR(rawValue: result)
     }
 
     private func readString(
@@ -1459,7 +1459,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         var size = 0
         let query = try call(&dataType, nil, &size)
         try checkInfoSizeQuery(query, size: size)
-        guard size >= 0, size <= 64 * 1024 * 1024 else { throw GC_ERROR.invalidValue }
+        guard size >= 0, size <= 64 * 1024 * 1024 else { throw GenTLABI.GC_ERROR.invalidValue }
 
         var data = Data(count: size)
         var actualSize = size
@@ -1467,15 +1467,15 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
             try call(&dataType, output.baseAddress, &actualSize)
         }
         try check(result)
-        guard actualSize >= 0, actualSize <= size else { throw GC_ERROR.invalidValue }
+        guard actualSize >= 0, actualSize <= size else { throw GenTLABI.GC_ERROR.invalidValue }
         data.count = actualSize
         return try decodeInfo(dataType: dataType, data: data)
     }
 
     private func checkStackedInfoCall(_ result: Int32) throws {
-        guard result == GC_ERROR.success.rawValue ||
-              result == GC_ERROR.bufferTooSmall.rawValue else {
-            throw GC_ERROR(rawValue: result)
+        guard result == GenTLABI.GC_ERROR.success.rawValue ||
+              result == GenTLABI.GC_ERROR.bufferTooSmall.rawValue else {
+            throw GenTLABI.GC_ERROR(rawValue: result)
         }
     }
 
@@ -1485,8 +1485,8 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         capacity: Int,
         actualSize: Int,
         result: Int32
-    ) -> Result<GenTLInfoValue, GC_ERROR> {
-        let status = GC_ERROR(rawValue: result)
+    ) -> Result<GenTLInfoValue, GenTLABI.GC_ERROR> {
+        let status = GenTLABI.GC_ERROR(rawValue: result)
         guard status == .success else { return .failure(status) }
         guard actualSize >= 0, actualSize <= 64 * 1024 * 1024 else {
             return .failure(.invalidValue)
@@ -1499,7 +1499,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         let data = buffer.map { Data(bytes: $0, count: actualSize) } ?? Data()
         do {
             return .success(try decodeInfo(dataType: dataType, data: data))
-        } catch let error as GC_ERROR {
+        } catch let error as GenTLABI.GC_ERROR {
             return .failure(error)
         } catch {
             return .failure(.error)
@@ -1512,7 +1512,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         }
 
         func value<T>(_ type: T.Type) throws -> T {
-            guard data.count >= MemoryLayout<T>.size else { throw GC_ERROR.bufferTooSmall }
+            guard data.count >= MemoryLayout<T>.size else { throw GenTLABI.GC_ERROR.bufferTooSmall }
             return data.withUnsafeBytes { $0.loadUnaligned(as: T.self) }
         }
 
@@ -1539,7 +1539,7 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
         case .bool8: return .bool8((try value(UInt8.self)) != 0)
         case .size:
             let rawSize = try value(UInt.self)
-            guard rawSize <= UInt(Int.max) else { throw GC_ERROR.invalidValue }
+            guard rawSize <= UInt(Int.max) else { throw GenTLABI.GC_ERROR.invalidValue }
             return .size(Int(rawSize))
         case .pointerDifference: return .pointerDifference(try value(Int.self))
         }
@@ -1550,12 +1550,12 @@ public final class GenTLNativeImplementation: @unchecked Sendable {
     ) throws -> UnsafeMutableRawPointer {
         guard handle.isValid,
               let raw = UnsafeMutableRawPointer(bitPattern: handle.rawValue) else {
-            throw GC_ERROR.invalidHandle
+            throw GenTLABI.GC_ERROR.invalidHandle
         }
         return raw
     }
 
-    private func eventSourcePointer(_ source: EVENTSRC_HANDLE) throws -> UnsafeMutableRawPointer {
+    private func eventSourcePointer(_ source: GenTLABI.EVENTSRC_HANDLE) throws -> UnsafeMutableRawPointer {
         switch source {
         case .system(let handle): return try pointer(handle)
         case .interface(let handle): return try pointer(handle)
@@ -1579,7 +1579,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     }
 
     private func rawError(_ error: Error) -> GenTLABI.GC_ERROR {
-        if let code = error as? GC_ERROR {
+        if let code = error as? GenTLABI.GC_ERROR {
             return code.rawValue
         }
         return GenTLABI.GC_ERR_ERROR
@@ -1587,9 +1587,9 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     private func rawEventHandle(
         _ event: GenTLABI.EVENT_HANDLE
-    ) -> EVENT_HANDLE? {
+    ) -> GenTLABI.EVENT_HANDLE? {
         guard let event else { return nil }
-        return EVENT_HANDLE(rawValue: UInt(bitPattern: event))
+        return GenTLABI.EVENT_HANDLE(rawValue: UInt(bitPattern: event))
     }
 
     // MARK: Library
@@ -1672,7 +1672,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     public func GCRegisterEvent(
         _ hEventSrc: GenTLABI.EVENTSRC_HANDLE,
         _ iEventID: GenTLABI.EVENT_TYPE,
-        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE>?
+        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         guard let phEvent else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
         do {
@@ -1680,16 +1680,16 @@ extension GenTLNativeImplementation: GenTLAPI {
                 guard !registeredEventsByHandle.values.contains(where: {
                     $0.sourcePointer == hEventSrc && $0.eventType == iEventID
                 }) else {
-                    throw GC_ERROR.resourceInUse
+                    throw GenTLABI.GC_ERROR.resourceInUse
                 }
 
                 var event: UnsafeMutableRawPointer?
                 try check(functions.gcRegisterEvent(hEventSrc, iEventID, &event))
-                guard let event else { throw GC_ERROR.invalidHandle }
+                guard let event else { throw GenTLABI.GC_ERROR.invalidHandle }
                 let key = UInt(bitPattern: event)
                 guard registeredEventsByHandle[key] == nil else {
                     try? functions.gcUnregisterEvent(hEventSrc, iEventID)
-                    throw GC_ERROR.resourceInUse
+                    throw GenTLABI.GC_ERROR.resourceInUse
                 }
                 registeredEventsByHandle[key] = RegisteredEvent(
                     sourcePointer: hEventSrc,
@@ -1812,7 +1812,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     // MARK: System
 
     public func TLOpen(
-        _ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?
+        _ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.tlOpen(phTL) }
     }
@@ -1861,7 +1861,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     public func TLOpenInterface(
         _ hTL: GenTLABI.TL_HANDLE,
         _ sIfaceID: UnsafePointer<CChar>?,
-        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.tlOpenInterface(hTL, sIfaceID, phIface) }
     }
@@ -1929,7 +1929,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ hIface: GenTLABI.IF_HANDLE,
         _ sDeviceID: UnsafePointer<CChar>?,
         _ iOpenFlag: GenTLABI.DEVICE_ACCESS_FLAGS,
-        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.ifOpenDevice(hIface, sDeviceID, iOpenFlag, phDevice) }
     }
@@ -1938,7 +1938,7 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     public func DevGetPort(
         _ hDevice: GenTLABI.DEV_HANDLE,
-        _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE>?
+        _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.devGetPort(hDevice, phRemoteDevice) }
     }
@@ -1962,7 +1962,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     public func DevOpenDataStream(
         _ hDevice: GenTLABI.DEV_HANDLE,
         _ sDataStreamID: UnsafePointer<CChar>?,
-        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE>?
+        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.devOpenDataStream(hDevice, sDataStreamID, phDataStream) }
     }
@@ -1988,7 +1988,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ pBuffer: UnsafeMutableRawPointer?,
         _ iSize: Int,
         _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.dsAnnounceBuffer(hDataStream, pBuffer, iSize, pPrivate, phBuffer) }
     }
@@ -1997,7 +1997,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iSize: Int,
         _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.dsAllocAndAnnounceBuffer(hDataStream, iSize, pPrivate, phBuffer) }
     }
@@ -2037,7 +2037,7 @@ extension GenTLNativeImplementation: GenTLAPI {
     public func DSGetBufferID(
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iIndex: UInt32,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { $0.dsGetBufferID(hDataStream, iIndex, phBuffer) }
     }
@@ -2149,7 +2149,7 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     public func IFGetParentTL(
         _ hIface: GenTLABI.IF_HANDLE,
-        _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?
+        _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.ifGetParentTL else {
@@ -2161,7 +2161,7 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     public func DevGetParentIF(
         _ hDevice: GenTLABI.DEV_HANDLE,
-        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.devGetParentIF else {
@@ -2173,7 +2173,7 @@ extension GenTLNativeImplementation: GenTLAPI {
 
     public func DSGetParentDev(
         _ hDataStream: GenTLABI.DS_HANDLE,
-        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsGetParentDev else {
@@ -2223,7 +2223,7 @@ extension GenTLNativeImplementation: GenTLAPI {
         _ ppSegments: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
         _ piSizes: UnsafeMutablePointer<Int>?,
         _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR {
         rawLocked { functions in
             guard let function = functions.dsAnnounceCompositeBuffer else {
