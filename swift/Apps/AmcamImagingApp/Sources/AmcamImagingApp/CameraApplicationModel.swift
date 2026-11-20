@@ -26,7 +26,7 @@ final class CameraApplicationModel: ObservableObject {
     private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
     private var deviceSession: GenTLDeviceSession?
     private let cameraLifecycle = CameraSessionLifecycle()
-    private var captureTask: Task<Void, Never>?
+    private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?
     private var featureDescriptors: [GenTLFeatureDescriptor] = []
     private var hasInitialized = false
@@ -181,8 +181,8 @@ final class CameraApplicationModel: ObservableObject {
         }
 
         let frames = await cameraLifecycle.frames()
-        captureTask?.cancel()
-        captureTask = Task { [weak self] in
+        frameConsumerTask?.cancel()
+        frameConsumerTask = Task { [weak self] in
             for await frame in frames {
                 guard !Task.isCancelled, let self else { return }
                 self.accept(frame)
@@ -194,11 +194,12 @@ final class CameraApplicationModel: ObservableObject {
             latestFrame = nil
             frameRateEstimator.reset()
             framesPerSecond = 0
-            status = "Starting — \(device.displayName)"
+            isStreaming = true
+            status = "Live — \(device.displayName)"
             errorMessage = nil
         } catch {
-            captureTask?.cancel()
-            captureTask = nil
+            frameConsumerTask?.cancel()
+            frameConsumerTask = nil
             lifecycleEventTask?.cancel()
             lifecycleEventTask = nil
             isStreaming = false
@@ -230,8 +231,8 @@ final class CameraApplicationModel: ObservableObject {
     private func stopOwned() async {
         do {
             try await cameraLifecycle.stop()
-            captureTask?.cancel()
-            captureTask = nil
+            frameConsumerTask?.cancel()
+            frameConsumerTask = nil
             isStreaming = false
             status = "Stopped — \(selectedDevice?.displayName ?? "camera")"
         } catch {
@@ -382,8 +383,8 @@ final class CameraApplicationModel: ObservableObject {
     private func closeSession() async -> Bool {
         do {
             try await cameraLifecycle.close()
-            captureTask?.cancel()
-            captureTask = nil
+            frameConsumerTask?.cancel()
+            frameConsumerTask = nil
             lifecycleEventTask?.cancel()
             lifecycleEventTask = nil
             deviceSession = nil

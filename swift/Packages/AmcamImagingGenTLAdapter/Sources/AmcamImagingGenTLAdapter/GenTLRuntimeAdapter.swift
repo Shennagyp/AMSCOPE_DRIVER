@@ -14,9 +14,8 @@ public enum GenTLRuntimeAdapterError: Error, Equatable, LocalizedError {
     }
 }
 
-/// Adapts one already-open GenTL device session to the portable lifecycle contract.
-/// The caller delegates device close responsibility to this wrapper. It may retain
-/// the session reference for feature access, but must not close it independently.
+/// Opens a discovered GenTL candidate on behalf of the imaging runtime and adapts
+/// the resulting session to the backend-neutral lifecycle contract.
 public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable {
     private let candidate: GenTLDeviceCandidate
     private let access: GenTLDeviceAccessMode
