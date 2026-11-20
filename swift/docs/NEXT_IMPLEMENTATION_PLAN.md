@@ -129,6 +129,11 @@ Acceptance: per-format fixtures pass exact pixel-value, stride and payload tests
 
 ### Phase E — Feature model completion
 
+- [x] Treat the latest descriptor for a feature name as authoritative; stale duplicate descriptors cannot re-enable reads, controls or writes.
+- [x] Gate feature readbacks on descriptor availability and readability.
+- [x] Validate writes against availability, writability, value kind, numeric bounds/increments, advertised enumeration values and declared vector cardinality.
+- [x] Derive editable settings visibility, numeric slider ranges and enumeration choices from the active camera descriptors and model-profile capability policy.
+- [x] Clear stale settings visibility when camera state is absent or changes; expose manual exposure editing only after manual mode is read back.
 - Continue feature-by-feature from the supplied SDK wrapper and per-model runtime evidence.
 - Keep symbol availability, model capability, successful runtime probe and application implementation as separate facts.
 - Add tests before each feature implementation.
