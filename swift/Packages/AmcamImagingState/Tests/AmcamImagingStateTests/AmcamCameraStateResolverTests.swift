@@ -249,7 +249,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         )
         XCTAssertEqual(
             resolver.validateWrite(.floatingPoint(10.25), named: "SteppedRate", descriptors: descriptors),
-            .invalidValue("SteppedRate must be between 1.0 and 11.0.")
+            .invalidValue("SteppedRate must be between 1.0 and 11.0 in increments of 0.5.")
         )
         XCTAssertNil(
             resolver.validateWrite(.floatingPoint(10.5), named: "SteppedRate", descriptors: descriptors)
