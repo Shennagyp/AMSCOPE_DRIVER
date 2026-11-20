@@ -8,17 +8,20 @@ static AmcamModelV2 model = {
     .name = "Mock AmScope Camera",
     .flag = 0,
     .maxspeed = 4,
-    .preview = 2,
+    .preview = 3,
     .still = 0,
     .maxfanspeed = 0,
     .ioctrol = 0,
     .xpixsz = 2.4f,
     .ypixsz = 2.4f,
-    .res = {{640, 480}, {320, 240}}
+    .res = {{2560, 1922}, {1280, 960}, {640, 480}}
 };
 
 static AmcamEventCallback active_callback;
 static void *active_context;
+static uint32_t current_resolution_index = 2;
+static const uint32_t resolution_widths[] = {2560, 1280, 640};
+static const uint32_t resolution_heights[] = {1922, 960, 480};
 static uint32_t close_count;
 static uint32_t stop_count;
 static uint32_t pull_count;
@@ -49,8 +52,20 @@ void Amcam_Close(void *handle) {
 
 int32_t Amcam_get_Size(void *handle, int32_t *width, int32_t *height) {
     if (!handle || !width || !height) return -1;
-    *width = 640;
-    *height = 480;
+    *width = (int32_t)resolution_widths[current_resolution_index];
+    *height = (int32_t)resolution_heights[current_resolution_index];
+    return 0;
+}
+
+int32_t Amcam_put_eSize(void *handle, uint32_t index) {
+    if (!handle || index >= 3) return -1;
+    current_resolution_index = index;
+    return 0;
+}
+
+int32_t Amcam_get_eSize(void *handle, uint32_t *index) {
+    if (!handle || !index) return -1;
+    *index = current_resolution_index;
     return 0;
 }
 
@@ -64,10 +79,12 @@ int32_t Amcam_StartPullModeWithCallback(void *handle, AmcamEventCallback callbac
 
 int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameInfoV2 *info) {
     if (!handle || !buffer || !info || bits != 24) return -1;
-    const size_t size = 640u * 480u * 3u;
+    const uint32_t width = resolution_widths[current_resolution_index];
+    const uint32_t height = resolution_heights[current_resolution_index];
+    const size_t size = (size_t)width * (size_t)height * 3u;
     memset(buffer, 0x5a, size);
-    info->width = 640;
-    info->height = 480;
+    info->width = width;
+    info->height = height;
     info->flag = 0x0003;
     info->seq = ++pull_count;
     info->timestamp = 123456789u + pull_count;
@@ -123,6 +140,7 @@ void MockAmcam_Reset(void) {
     close_count = 0;
     stop_count = 0;
     pull_count = 0;
+    current_resolution_index = 2;
     active_callback = 0;
     active_context = 0;
     auto_exposure = 1;
