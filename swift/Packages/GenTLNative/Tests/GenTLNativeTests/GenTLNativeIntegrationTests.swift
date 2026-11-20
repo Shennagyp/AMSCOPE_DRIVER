@@ -166,7 +166,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
 
         XCTAssertEqual(api.GCInitLib(), GC_ERR_SUCCESS)
 
-        var eventStorage: EVENT_HANDLE? = nil
+        var eventStorage: GenTLABI.EVENT_HANDLE? = nil
         let registerResult = withUnsafeMutablePointer(to: &eventStorage) {
             api.GCRegisterEvent(mockHandle, 0, $0)
         }
@@ -204,7 +204,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
         XCTAssertEqual(writeResult, -11005)
         XCTAssertEqual(writeSize, writePayload.count)
 
-        let operations: [(name: String, index: UInt32, expected: GC_ERROR, invoke: () -> GC_ERROR)] = [
+        let operations: [(name: String, index: UInt32, expected: GenTLABI.GC_ERROR, invoke: () -> GenTLABI.GC_ERROR)] = [
             ("GCGetInfo", 0, -11000, { api.GCGetInfo(0x1234, nil, nil, nil) }),
             ("GCGetLastError", 1, -12001, { api.GCGetLastError(nil, nil, nil) }),
             ("GCGetPortURL", 6, -12006, { api.GCGetPortURL(mockHandle, nil, nil) }),
