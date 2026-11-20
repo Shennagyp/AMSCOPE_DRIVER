@@ -6,22 +6,25 @@ Validate the Amcam Swift implementation and the packaged imaging application aga
 
 The full Xcode application is not required. The Mac needs Apple's Swift compiler, macOS SDK and AppKit SDK for the source build. Hosted CI validates package tests and app compilation; the user's Mac builds and launches the app with `make run` before physical-camera acceptance.
 
-## Required files
+## Required files and SDK placement
 
-From the same successful GitHub Actions run, download:
+Start from a checkout of this repository on the target Mac. The vendor SDK is proprietary and is not committed. Place the compatible arm64 `libamcam.dylib` at `vendor/amcam/macos/libamcam.dylib`, or install it in one of the backend's standard per-user/system locations. The build script copies a local SDK into the app bundle and signs the copy. The backend resolves the bundled library first; the UI has no SDK file picker.
 
-- \`amcam-imaging-macos-arm64\`: packaged \`AmScope Imaging.app\` ZIP and quick-start note.
-- \`amcam-camera-probe-macos-arm64\`: arm64 diagnostic probe and probe instructions.
+Build and launch from the repository root:
 
-The vendor SDK is intentionally not bundled. The user must select their existing compatible \`libamcam.dylib\` from the SDK installation or vendor package.
+```sh
+git pull
+make run
+```
 
+If the SDK is absent, the app can launch but the AmScope provider remains unavailable.
 ## Test sequence
 
 ### A. Establish library and device identity
 
 1. Connect the MU503 directly to the Mac, using a known-good USB cable and power arrangement.
 2. Launch AmScope Imaging.
-3. Use **SDK…** to select the vendor \`libamcam.dylib\` if automatic discovery did not find it.
+3. Confirm the SDK was found by the backend. If the provider is unavailable, check the vendor directory or standard SDK installation paths, then relaunch.
 4. Refresh the camera list.
 5. Confirm the device display name and exact model descriptor shown by the SDK.
 6. Open Settings and record which groups and controls are shown.
@@ -56,21 +59,15 @@ Do not force an unsupported setting or infer a range from another camera model.
 
 ### D. Diagnostic probe
 
-Run the probe after closing the imaging application:
+Run the probe after closing the imaging application. From the repository root:
 
-\`\`\`bash
-chmod +x ./amcam-camera-probe
+```sh
+make run-probe PROBE_ARGS='--sdk "/absolute/path/to/libamcam.dylib" --frames 10 --output "$HOME/Desktop/mu503-test.ppm"'
+```
 
-./amcam-camera-probe \
-  --sdk "/absolute/path/to/libamcam.dylib" \
-  --frames 10 \
-  --output "$HOME/Desktop/mu503-test.ppm"
-\`\`\`
-
-Preserve the full terminal output and the generated PPM image. Do not use \`sudo\`.
+Preserve the full terminal output and the generated PPM image. Do not use `sudo`.
 
 If the probe reports an SDK load, version, enumeration, open, event, buffer, format, or cleanup error, preserve the exact error rather than retrying with guessed SDK arguments.
-
 ## Acceptance record
 
 Record:
