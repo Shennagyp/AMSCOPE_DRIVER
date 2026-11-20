@@ -225,7 +225,9 @@ public actor CameraSessionLifecycle {
                 case .timeout:
                     continue
                 case .stopped:
-                    reportUnexpectedStop(generation: activeGeneration)
+                    Task { [weak self] in
+                        await self?.reportUnexpectedStop(generation: activeGeneration)
+                    }
                     return
                 case .failed(let message):
                     Task { [weak self] in
@@ -243,7 +245,10 @@ public actor CameraSessionLifecycle {
         }
     }
 
-    private func reportUnexpectedStop(generation activeGeneration: UInt64) {
+    private func reportUnexpectedStop(generation activeGeneration: UInt64) async {
+        await acquireLifecycleOperation()
+        defer { releaseLifecycleOperation() }
+
         guard activeGeneration == generation, isStreaming else { return }
         generation &+= 1
         isStreaming = false
