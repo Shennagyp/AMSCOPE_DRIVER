@@ -4,8 +4,14 @@ import XCTest
 final class AmcamABITests: XCTestCase {
     func testCopiesNullTerminatedDeviceFieldsWithinTheirFixedBounds() {
         var device = AmcamDeviceV2()
-        setFixedField(&device.displayname, to: "Mock AmScope Camera")
-        setFixedField(&device.id, to: "MOCK-001")
+        withUnsafeMutableBytes(of: &device.displayname) {
+            $0.initializeMemory(as: UInt8.self, repeating: 0, count: $0.count)
+            $0.copyBytes(from: Array("Mock AmScope Camera".utf8))
+        }
+        withUnsafeMutableBytes(of: &device.id) {
+            $0.initializeMemory(as: UInt8.self, repeating: 0, count: $0.count)
+            $0.copyBytes(from: Array("MOCK-001".utf8))
+        }
 
         var displayName = [CChar](repeating: 0, count: 65)
         var identifier = [CChar](repeating: 0, count: 65)
@@ -40,7 +46,10 @@ final class AmcamABITests: XCTestCase {
 
     func testRejectsDestinationThatCannotHoldTheCompleteString() {
         var device = AmcamDeviceV2()
-        setFixedField(&device.id, to: "CAMERA-IDENTIFIER")
+        withUnsafeMutableBytes(of: &device.id) {
+            $0.initializeMemory(as: UInt8.self, repeating: 0, count: $0.count)
+            $0.copyBytes(from: Array("CAMERA-IDENTIFIER".utf8))
+        }
 
         var destination = [CChar](repeating: 0x5a, count: 4)
         let result = destination.withUnsafeMutableBufferPointer {
@@ -51,21 +60,4 @@ final class AmcamABITests: XCTestCase {
         XCTAssertEqual(destination, [0x5a, 0x5a, 0x5a, 0x5a])
     }
 
-    private func setFixedField(
-        _ field: inout (CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar,
-                        CChar, CChar, CChar, CChar, CChar, CChar, CChar, CChar),
-        to value: String
-    ) {
-        withUnsafeMutableBytes(of: &field) { destination in
-            destination.initializeMemory(as: UInt8.self, repeating: 0, count: destination.count)
-            let bytes = Array(value.utf8)
-            destination.copyBytes(from: bytes)
-        }
-    }
 }
