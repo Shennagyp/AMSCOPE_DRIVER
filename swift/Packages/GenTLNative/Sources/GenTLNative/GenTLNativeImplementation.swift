@@ -1324,27 +1324,43 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
     }
 
     public func EventGetData(_ event: EVENT_HANDLE, timeout: UInt64) throws -> Data {
-        // EventGetData(pBuffer: nil) discards the queued event under GenTL 1.6.
-        // Query the maximum size through EventGetInfo instead, then perform one
-        // real data retrieval. Do not hold the API lock while waiting: EventKill
-        // must be able to interrupt an infinite-timeout read.
+        // A NULL EventGetData buffer discards queued data in the GenTL standard,
+        // so first determine a safe capacity, then perform exactly one retrieval.
+        // Do not hold the API lock while waiting: EventKill must be able to
+        // interrupt an infinite-timeout read.
         let maximumSize = try withLock {
+            guard let registration = registeredEventsByHandle[event.rawValue] else {
+                throw GC_ERROR.invalidHandle
+            }
             let registeredPointer = try registeredEventPointer(event)
-            let value = try readInfo { type, buffer, size in
-                functions.eventGetInfo(
-                    registeredPointer,
-                    GenTLInfoCommand.Event.maxSize.rawValue,
-                    type,
-                    buffer,
-                    size
-                )
-            }
 
-            guard case .size(let value) = value,
-                  value >= 0, value <= 64 * 1024 * 1024 else {
-                throw GC_ERROR.invalidValue
+            do {
+                let value = try readInfo { type, buffer, size in
+                    functions.eventGetInfo(
+                        registeredPointer,
+                        GenTLInfoCommand.Event.maxSize.rawValue,
+                        type,
+                        buffer,
+                        size
+                    )
+                }
+                guard case .size(let value) = value,
+                      value >= 0, value <= 64 * 1024 * 1024 else {
+                    throw GC_ERROR.invalidValue
+                }
+                return value
+            } catch let error as GC_ERROR where error == .invalidParameter {
+                // EVENT_SIZE_MAX (EventGetInfo command 3) was standardized in
+                // GenTL 1.2. GenTL 1.0 defines the New Buffer event payload as
+                // exactly EVENT_NEW_BUFFER_DATA: two pointers. That fixed
+                // structure is safe to size without asking a 1.0 Producer for
+                // an unknown command. Other 1.0 event payloads have no
+                // standard fixed layout, so do not guess their capacity.
+                guard registration.eventType == GenTLEventType.newBuffer.rawValue else {
+                    throw GC_ERROR.notImplemented
+                }
+                return 2 * MemoryLayout<UnsafeMutableRawPointer>.size
             }
-            return value
         }
 
         // Mark the read only after its size query succeeds, then enter the
