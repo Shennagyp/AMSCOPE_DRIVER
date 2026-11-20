@@ -490,7 +490,7 @@ The strongest defensible outcome before hardware access is: compiler-verified co
 
 \section{Fixture now present in source}
 A first C fixture has been added under
-\texttt{swift/Packages/GenTLNative/Tests/GenTLNativeTests/Fixtures/MockGenTLProducer.c}.
+\texttt{swift/Packages/GenTLNative/Tests/MockGenTLProducer/MockGenTLProducer.c}.
 It includes the pinned \texttt{GenTL\_v1\_6.h} rather than redeclaring GenTL types. The fixture exports all 47 names currently listed in \texttt{GenTLProducerLibrary.requiredEntryPoints}. Forty-six functions are deterministic stubs returning \texttt{GC\_ERR\_NOT\_IMPLEMENTED}; \texttt{GCGetInfo} is deliberately implemented with observable outputs and a distinctive return code.
 
 The fixture has a compile-time variant, \texttt{MOCK\_OMIT\_GCGETINFO}, which omits the required export while leaving the other required exports present. This permits a targeted required-symbol rejection test rather than testing only a library with no GenTL symbols at all.
