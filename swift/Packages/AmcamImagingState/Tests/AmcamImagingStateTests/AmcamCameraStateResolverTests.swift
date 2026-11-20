@@ -200,6 +200,12 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             [AmcamResolution(index: 0, width: 640, height: 480),
              AmcamResolution(index: 1, width: 1920, height: 1080)]
         )
+        let wrongKind = CameraFeatureDescriptor(
+            name: "AmcamResolutionIndex", displayName: "Resolution", kind: .integer,
+            isAvailable: true, isReadable: true, isWritable: true,
+            enumerationValues: ["0:640x480"]
+        )
+        XCTAssertTrue(resolver.resolutions(from: [wrongKind]).isEmpty)
     }
 
     func testCurrentResolutionUsesTypedFeatureReadback() async {
