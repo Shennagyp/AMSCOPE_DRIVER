@@ -104,6 +104,31 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
         XCTAssertFalse(capabilities.availability(of: .analogGain).available)
     }
 
+    func testModelFlagTaxonomyIncludesSensorTransportAndAccessories() {
+        let flags: UInt64 =
+            0x00000001 | 0x00000002 | 0x00000008 | 0x00000200 |
+            0x0000001000000000 | 0x00000040 | 0x0000200000000000 |
+            0x0008000000000000 | 0x0004000000000000
+        let capabilities = AmcamCameraProfileRegistry().resolve(
+            modelCode: "CapabilityFixture",
+            modelFlags: flags,
+            maximumSpeedLevel: nil,
+            probes: [:],
+            implemented: []
+        )
+
+        XCTAssertTrue(capabilities.availability(of: .cmosSensor).available)
+        XCTAssertTrue(capabilities.availability(of: .ccdProgressiveSensor).available)
+        XCTAssertTrue(capabilities.availability(of: .globalShutter).available)
+        XCTAssertTrue(capabilities.availability(of: .usb3).available)
+        XCTAssertTrue(capabilities.availability(of: .gigE).available)
+        XCTAssertTrue(capabilities.availability(of: .cameraLink).available)
+        XCTAssertTrue(capabilities.availability(of: .standaloneLightSource).available)
+        XCTAssertTrue(capabilities.availableGroups.contains(.sensor))
+        XCTAssertTrue(capabilities.availableGroups.contains(.transport))
+        XCTAssertTrue(capabilities.availableGroups.contains(.accessories))
+    }
+
     func testAvailableGroupsContainOnlyUsableFeatures() {
         let capabilities = AmcamCameraProfileRegistry().resolve(
             modelCode: "ModelA", modelFlags: 0x0000004000000000,
