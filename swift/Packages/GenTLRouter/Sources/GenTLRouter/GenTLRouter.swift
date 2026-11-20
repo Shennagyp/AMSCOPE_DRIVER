@@ -1,8 +1,8 @@
 import Foundation
 import GenTLABI
-@_spi(BackendConvenience) import GenTLAPI
-@_spi(BackendConvenience) import GenTLNative
-@_spi(BackendConvenience) import AmcamGenTL
+import GenTLAPI
+@_spi(BackendFactory) import GenTLNative
+@_spi(BackendFactory) import AmcamGenTL
 
 public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case emptyBackendID
@@ -11,6 +11,7 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case unknownBackendID(String)
     case interfaceHandleUnavailable(String)
     case providerContextUnavailable(String)
+    case genTLCallFailed(Int32)
 
     public var errorDescription: String? {
         switch self {
@@ -26,6 +27,8 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
             return "The discovered GenTL interface handle for '\(id)' is no longer available."
         case .providerContextUnavailable(let id):
             return "The GenTL provider context for backend '\(id)' is no longer available."
+        case .genTLCallFailed(let code):
+            return "A GenTL API call failed with GC_ERROR \(code)."
         }
     }
 }
@@ -74,9 +77,8 @@ public struct GenTLProducerRegistrationReport: Sendable {
     }
 }
 
-/// A discovered device remains bound to the exact GenTLBackendConvenience implementation
-/// and interface handle that discovered it. The app still uses GenTL function
-/// calls; backend selection is not repeated at individual call sites.
+/// A discovered device remains bound to the exact GenTL implementation and
+/// interface handle that discovered it. The application receives the raw GenTL API.
 public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let backendID: String
     public let interfaceID: String
@@ -84,13 +86,10 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
     public let api: any GenTLAPI
     public let systemHandle: GenTLABI.TL_HANDLE
     public let interfaceHandle: GenTLABI.IF_HANDLE
-    private let backendInterfaceHandle: IF_HANDLE
 
     private let context: GenTLProviderContext
 
     public var id: String {
-        // Length-prefix each opaque GenTL identifier. Vendor IDs may contain
-        // separator characters, so delimiter-only concatenation can collide.
         [backendID, interfaceID, deviceID]
             .map { "\($0.utf8.count):\($0)" }
             .joined()
@@ -109,59 +108,93 @@ public struct GenTLDeviceCandidate: Sendable, Identifiable {
         self.interfaceID = interfaceID
         self.deviceID = deviceID
         self.api = context.api
-        self.systemHandle = UnsafeMutableRawPointer(bitPattern: context.systemHandle.rawValue)
-        self.interfaceHandle = UnsafeMutableRawPointer(bitPattern: interfaceHandle.rawValue)
-        self.backendInterfaceHandle = interfaceHandle
+        self.systemHandle = context.systemHandle
+        self.interfaceHandle = interfaceHandle
         self.context = context
     }
 
     public func open(accessFlags: GenTLABI.DEVICE_ACCESS_FLAGS) throws -> GenTLDeviceSession {
         let handle = try context.openDevice(
-            backendInterfaceHandle,
+            interfaceHandle,
             deviceID: deviceID,
             accessFlags: accessFlags
         )
-        return GenTLDeviceSession(context: context, api: api, backendDeviceHandle: handle)
+        return GenTLDeviceSession(context: context, api: api, deviceHandle: handle)
     }
 }
 
-/// Prevents a native Producer from being unloaded after cleanup failed with live
-/// module handles. Retention is process-lifetime by design: leaking a loaded CTI
-/// is safer than invalidating handles still owned by its Producer.
+/// Keeps a Producer loaded for process lifetime when teardown fails. Unloading
+/// a CTI while it may still own handles or callbacks is less safe than retaining it.
 private final class GenTLProviderRetainer: @unchecked Sendable {
     static let shared = GenTLProviderRetainer()
 
     private let lock = NSLock()
-    private var retainedAPIs: [any GenTLBackendConvenience] = []
+    private var retainedAPIs: [any GenTLAPI] = []
 
-    func retain(_ api: any GenTLBackendConvenience) {
+    func retain(_ api: any GenTLAPI) {
         lock.lock()
         defer { lock.unlock() }
         retainedAPIs.append(api)
     }
 }
 
-/// Owns the GenTL Library/System/Interface lifetime for one backend instance.
-/// It remains alive while any discovered candidate or opened device session uses it.
+private func checkGenTLStatus(_ status: GenTLABI.GC_ERROR) throws {
+    guard status == GenTLABI.GC_ERR_SUCCESS else {
+        throw GenTLRouterError.genTLCallFailed(Int32(status))
+    }
+}
+
+private func readGenTLString(
+    _ operation: (
+        UnsafeMutablePointer<CChar>?,
+        UnsafeMutablePointer<Int>?
+    ) -> GenTLABI.GC_ERROR
+) throws -> String {
+    var requiredSize = 0
+    let queryStatus = operation(nil, &requiredSize)
+    if queryStatus != GenTLABI.GC_ERR_SUCCESS &&
+       queryStatus != GenTLABI.GC_ERR_BUFFER_TOO_SMALL {
+        try checkGenTLStatus(queryStatus)
+    }
+    guard requiredSize > 0, requiredSize <= 1_048_576 else {
+        throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_VALUE))
+    }
+
+    var bytes = [CChar](repeating: 0, count: requiredSize)
+    var capacity = requiredSize
+    let status = bytes.withUnsafeMutableBufferPointer { buffer in
+        operation(buffer.baseAddress, &capacity)
+    }
+    try checkGenTLStatus(status)
+    guard capacity > 0, capacity <= bytes.count else {
+        throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_VALUE))
+    }
+    bytes[bytes.count - 1] = 0
+    guard let terminator = bytes.firstIndex(of: 0) else {
+        throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_VALUE))
+    }
+    return String(decoding: bytes[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self)
+}
+
+/// Owns Library/System/Interface lifetime for one backend instance. All
+/// lifecycle operations use the public raw GenTLAPI contract directly.
 private final class GenTLProviderContext: @unchecked Sendable {
     let backendID: String
-    let backendAPI: any GenTLBackendConvenience & GenTLAPI
-    var api: any GenTLAPI { backendAPI }
-    let systemHandle: TL_HANDLE
+    let api: any GenTLAPI
+    let systemHandle: GenTLABI.TL_HANDLE
 
     private let lock = NSRecursiveLock()
-    private var interfaceHandles: [IF_HANDLE] = []
+    private var interfaceHandles: [UnsafeMutableRawPointer] = []
+    private var interfaceHandlesByID: [String: UnsafeMutableRawPointer] = [:]
     private var closed = false
-
-    private var interfaceHandlesByID: [String: IF_HANDLE] = [:]
 
     init(
         backendID: String,
-        backendAPI: any GenTLBackendConvenience & GenTLAPI,
-        systemHandle: TL_HANDLE
+        api: any GenTLAPI,
+        systemHandle: UnsafeMutableRawPointer
     ) {
         self.backendID = backendID
-        self.backendAPI = backendAPI
+        self.api = api
         self.systemHandle = systemHandle
     }
 
@@ -171,7 +204,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
         return closed
     }
 
-    func interfaceHandle(for id: String) -> IF_HANDLE? {
+    func interfaceHandle(for id: String) -> GenTLABI.IF_HANDLE {
         lock.lock()
         defer { lock.unlock() }
         guard !closed else { return nil }
@@ -179,32 +212,41 @@ private final class GenTLProviderContext: @unchecked Sendable {
     }
 
     func openDevice(
-        _ interfaceHandle: IF_HANDLE,
+        _ interfaceHandle: GenTLABI.IF_HANDLE,
         deviceID: String,
-        accessFlags: Int32
-    ) throws -> DEV_HANDLE {
+        accessFlags: GenTLABI.DEVICE_ACCESS_FLAGS
+    ) throws -> UnsafeMutableRawPointer {
         lock.lock()
         defer { lock.unlock() }
         guard !closed else {
             throw GenTLRouterError.providerContextUnavailable(backendID)
         }
-        let deviceHandle = try backendAPI.IFOpenDevice(
-            interfaceHandle,
-            deviceID: deviceID,
-            accessFlags: accessFlags
-        )
-        guard deviceHandle.isValid else { throw GC_ERROR.invalidHandle }
-        return deviceHandle
+        guard let interfaceHandle else {
+            throw GenTLRouterError.interfaceHandleUnavailable(backendID)
+        }
+
+        var device: GenTLABI.DEV_HANDLE = nil
+        let status = deviceID.withCString {
+            api.IFOpenDevice(interfaceHandle, $0, accessFlags, &device)
+        }
+        try checkGenTLStatus(status)
+        guard let device else {
+            throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_HANDLE))
+        }
+        return device
     }
 
-    func closeDevice(_ deviceHandle: DEV_HANDLE) throws {
+    func closeDevice(_ deviceHandle: GenTLABI.DEV_HANDLE) throws {
         lock.lock()
         defer { lock.unlock() }
-        try backendAPI.DevClose(deviceHandle)
+        guard !closed else {
+            throw GenTLRouterError.providerContextUnavailable(backendID)
+        }
+        try checkGenTLStatus(api.DevClose(deviceHandle))
     }
 
-    /// Refreshes discovery while reusing this backend's already-open System
-    /// and Interface modules. Existing candidate handles remain valid across scans.
+    /// Refreshes discovery while reusing this backend's System and Interface
+    /// handles. Existing candidate handles remain bound to the same context.
     func discoverDevices(timeout: UInt64) throws -> [GenTLDeviceCandidate] {
         lock.lock()
         defer { lock.unlock() }
@@ -212,44 +254,62 @@ private final class GenTLProviderContext: @unchecked Sendable {
             throw GenTLRouterError.providerContextUnavailable(backendID)
         }
 
-        try backendAPI.TLUpdateInterfaceList(systemHandle, timeout: timeout)
-        let interfaceCount = try backendAPI.TLGetNumInterfaces(systemHandle)
-        guard interfaceCount <= 4_096 else { throw GC_ERROR.resourceExhausted }
+        var changed: GenTLABI.bool8_t = 0
+        try checkGenTLStatus(api.TLUpdateInterfaceList(systemHandle, &changed, timeout))
+
+        var interfaceCount: UInt32 = 0
+        try checkGenTLStatus(api.TLGetNumInterfaces(systemHandle, &interfaceCount))
+        guard interfaceCount <= 4_096 else {
+            throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_RESOURCE_EXHAUSTED))
+        }
 
         var candidates: [GenTLDeviceCandidate] = []
         var seenInterfaceIDs = Set<String>()
 
         for interfaceIndex in 0..<interfaceCount {
-            let interfaceID = try backendAPI.TLGetInterfaceID(systemHandle, index: interfaceIndex)
-            guard !interfaceID.isEmpty,
-                  seenInterfaceIDs.insert(interfaceID).inserted else {
-                throw GC_ERROR.invalidID
+            let interfaceID = try readGenTLString { buffer, size in
+                api.TLGetInterfaceID(systemHandle, interfaceIndex, buffer, size)
             }
-            let interfaceHandle: IF_HANDLE
+            guard !interfaceID.isEmpty, seenInterfaceIDs.insert(interfaceID).inserted else {
+                throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_ID))
+            }
 
+            let interfaceHandle: UnsafeMutableRawPointer
             if let existingHandle = interfaceHandlesByID[interfaceID] {
                 interfaceHandle = existingHandle
             } else {
-                let openedHandle = try backendAPI.TLOpenInterface(systemHandle, interfaceID: interfaceID)
-                guard openedHandle.isValid else { throw GC_ERROR.invalidHandle }
+                var openedHandle: GenTLABI.IF_HANDLE = nil
+                let status = interfaceID.withCString {
+                    api.TLOpenInterface(systemHandle, $0, &openedHandle)
+                }
+                try checkGenTLStatus(status)
+                guard let openedHandle else {
+                    throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_HANDLE))
+                }
                 guard !interfaceHandles.contains(openedHandle) else {
-                    throw GC_ERROR.resourceInUse
+                    throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_RESOURCE_IN_USE))
                 }
                 interfaceHandlesByID[interfaceID] = openedHandle
                 interfaceHandles.append(openedHandle)
                 interfaceHandle = openedHandle
             }
 
-            try backendAPI.IFUpdateDeviceList(interfaceHandle, timeout: timeout)
-            let deviceCount = try backendAPI.IFGetNumDevices(interfaceHandle)
-            guard deviceCount <= 65_536 else { throw GC_ERROR.resourceExhausted }
+            changed = 0
+            try checkGenTLStatus(api.IFUpdateDeviceList(interfaceHandle, &changed, timeout))
+
+            var deviceCount: UInt32 = 0
+            try checkGenTLStatus(api.IFGetNumDevices(interfaceHandle, &deviceCount))
+            guard deviceCount <= 65_536 else {
+                throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_RESOURCE_EXHAUSTED))
+            }
 
             var seenDeviceIDs = Set<String>()
             for deviceIndex in 0..<deviceCount {
-                let deviceID = try backendAPI.IFGetDeviceID(interfaceHandle, index: deviceIndex)
-                guard !deviceID.isEmpty,
-                      seenDeviceIDs.insert(deviceID).inserted else {
-                    throw GC_ERROR.invalidID
+                let deviceID = try readGenTLString { buffer, size in
+                    api.IFGetDeviceID(interfaceHandle, deviceIndex, buffer, size)
+                }
+                guard !deviceID.isEmpty, seenDeviceIDs.insert(deviceID).inserted else {
+                    throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_ID))
                 }
                 candidates.append(try GenTLDeviceCandidate(
                     backendID: backendID,
@@ -263,8 +323,6 @@ private final class GenTLProviderContext: @unchecked Sendable {
         return candidates
     }
 
-    /// Abandons teardown without unloading a Producer that may still own live
-    /// device/stream handles. Used only after a child handle could not be closed.
     func abandon() {
         lock.lock()
         defer { lock.unlock() }
@@ -279,9 +337,8 @@ private final class GenTLProviderContext: @unchecked Sendable {
         guard !closed else { return }
 
         for handle in interfaceHandles.reversed() {
-            do {
-                try backendAPI.IFClose(handle)
-            } catch {
+            let status = api.IFClose(handle)
+            guard status == GenTLABI.GC_ERR_SUCCESS else {
                 closed = true
                 GenTLProviderRetainer.shared.retain(api)
                 return
@@ -290,17 +347,13 @@ private final class GenTLProviderContext: @unchecked Sendable {
         interfaceHandles.removeAll()
         interfaceHandlesByID.removeAll()
 
-        do {
-            try backendAPI.TLClose(systemHandle)
-        } catch {
+        guard api.TLClose(systemHandle) == GenTLABI.GC_ERR_SUCCESS else {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
             return
         }
 
-        do {
-            try backendAPI.swiftGCCloseLib()
-        } catch {
+        guard api.GCCloseLib() == GenTLABI.GC_ERR_SUCCESS else {
             closed = true
             GenTLProviderRetainer.shared.retain(api)
             return
@@ -314,11 +367,10 @@ private final class GenTLProviderContext: @unchecked Sendable {
     }
 }
 
-/// Open device ownership. Close the device before releasing its GenTL route.
+/// Owns one opened device module and retains the provider context until closed.
 public final class GenTLDeviceSession: @unchecked Sendable {
     public let api: any GenTLAPI
     public let deviceHandle: GenTLABI.DEV_HANDLE
-    private let backendDeviceHandle: DEV_HANDLE
 
     private let context: GenTLProviderContext
     private let lock = NSLock()
@@ -327,19 +379,18 @@ public final class GenTLDeviceSession: @unchecked Sendable {
     fileprivate init(
         context: GenTLProviderContext,
         api: any GenTLAPI,
-        backendDeviceHandle: DEV_HANDLE
+        deviceHandle: UnsafeMutableRawPointer
     ) {
         self.context = context
         self.api = api
-        self.backendDeviceHandle = backendDeviceHandle
-        self.deviceHandle = UnsafeMutableRawPointer(bitPattern: backendDeviceHandle.rawValue)
+        self.deviceHandle = deviceHandle
     }
 
     public func close() throws {
         lock.lock()
         defer { lock.unlock() }
         guard !isClosed else { return }
-        try context.closeDevice(backendDeviceHandle)
+        try context.closeDevice(deviceHandle)
         isClosed = true
     }
 
@@ -347,8 +398,6 @@ public final class GenTLDeviceSession: @unchecked Sendable {
         do {
             try close()
         } catch {
-            // A device can still own data streams or callbacks. Do not allow
-            // the context to dlclose its Producer while those handles remain.
             context.abandon()
         }
     }
@@ -356,10 +405,10 @@ public final class GenTLDeviceSession: @unchecked Sendable {
 
 private struct BackendRegistration: Sendable {
     let identifier: String
-    let makeAPI: @Sendable () throws -> any GenTLBackendConvenience & GenTLAPI
+    let makeAPI: @Sendable () throws -> any GenTLAPI
 }
 
-/// Registers and routes to GenTLBackendConvenience implementations.
+/// Registers and routes to implementations of the common GenTLAPI contract.
 ///
 /// A native registration is one CTI Producer. An Amcam registration is the
 /// Amcam SDK-backed implementation of the same GenTL-shaped Swift API.
@@ -380,10 +429,9 @@ public final class GenTLRouter: @unchecked Sendable {
         return registrations.keys.sorted()
     }
 
-    @_spi(BackendConvenience)
     public func register(
         backendID: String,
-        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience & GenTLAPI
+        makeAPI: @escaping @Sendable () throws -> any GenTLAPI
     ) throws {
         let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty, normalized == backendID else {
@@ -404,7 +452,7 @@ public final class GenTLRouter: @unchecked Sendable {
     private func registerUniqueResource(
         backendID: String,
         resourceIdentity: String,
-        makeAPI: @escaping @Sendable () throws -> any GenTLBackendConvenience & GenTLAPI
+        makeAPI: @escaping @Sendable () throws -> any GenTLAPI & GenTLAPI
     ) throws {
         let normalized = backendID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty, normalized == backendID else {
@@ -521,26 +569,27 @@ public final class GenTLRouter: @unchecked Sendable {
             return existing
         }
 
-        let backendAPI = try registration.makeAPI()
-        try backendAPI.swiftGCInitLib()
+        let api = try registration.makeAPI()
+        try checkGenTLStatus(api.GCInitLib())
 
         do {
-            let systemHandle = try backendAPI.TLOpen()
-            guard systemHandle.isValid else { throw GC_ERROR.invalidHandle }
+            var systemHandle: GenTLABI.TL_HANDLE = nil
+            try checkGenTLStatus(api.TLOpen(&systemHandle))
+            guard let systemHandle else {
+                throw GenTLRouterError.genTLCallFailed(Int32(GenTLABI.GC_ERR_INVALID_HANDLE))
+            }
 
             let context = GenTLProviderContext(
                 backendID: registration.identifier,
-                backendAPI: backendAPI,
+                api: api,
                 systemHandle: systemHandle
             )
             providerContexts[registration.identifier] = context
             return context
         } catch {
-            do {
-                try backendAPI.swiftGCCloseLib()
-            } catch {
+            if api.GCCloseLib() != GenTLABI.GC_ERR_SUCCESS {
                 unavailableBackendIDs.insert(registration.identifier)
-                GenTLProviderRetainer.shared.retain(backendAPI)
+                GenTLProviderRetainer.shared.retain(api)
             }
             throw error
         }
