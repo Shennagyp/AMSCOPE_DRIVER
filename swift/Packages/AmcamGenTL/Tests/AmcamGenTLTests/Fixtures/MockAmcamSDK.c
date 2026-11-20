@@ -27,6 +27,7 @@ static uint32_t stop_count;
 static uint32_t pull_count;
 static int32_t auto_exposure = 1;
 static uint32_t exposure_time = 10000;
+static int ignore_exposure_write = 0;
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
 
@@ -116,7 +117,7 @@ int32_t Amcam_get_ExpoTime(void *handle, uint32_t *value) {
 }
 int32_t Amcam_put_ExpoTime(void *handle, uint32_t value) {
     if (!handle) return -1;
-    exposure_time = value;
+    if (!ignore_exposure_write) exposure_time = value;
     return 0;
 }
 int32_t Amcam_get_ExpTimeRange(void *handle, uint32_t *minimum, uint32_t *maximum, uint32_t *default_value) {
@@ -145,6 +146,10 @@ void MockAmcam_Reset(void) {
     active_context = 0;
     auto_exposure = 1;
     exposure_time = 10000;
+    ignore_exposure_write = 0;
+}
+void MockAmcam_SetIgnoreExposureWrite(int32_t enabled) {
+    ignore_exposure_write = enabled != 0;
 }
 uint32_t MockAmcam_CloseCount(void) { return close_count; }
 uint32_t MockAmcam_StopCount(void) { return stop_count; }
