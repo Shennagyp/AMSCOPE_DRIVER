@@ -133,6 +133,7 @@ Acceptance: per-format fixtures pass exact pixel-value, stride and payload tests
 - [x] Gate feature readbacks on descriptor availability and readability.
 - [x] Validate writes against availability, writability, value kind, numeric bounds/increments, advertised enumeration values and declared vector cardinality.
 - [x] Derive editable settings visibility, numeric slider ranges and enumeration choices from the active camera descriptors and model-profile capability policy.
+- [x] Refresh state-dependent writability on acquisition start/stop events; verify resolution and pixel-format writes are disabled while streaming and restored after stop.
 - [x] Clear stale settings visibility when camera state is absent or changes; expose manual exposure editing only after manual mode is read back.
 - Continue feature-by-feature from the supplied SDK wrapper and per-model runtime evidence.
 - Keep symbol availability, model capability, successful runtime probe and application implementation as separate facts.
