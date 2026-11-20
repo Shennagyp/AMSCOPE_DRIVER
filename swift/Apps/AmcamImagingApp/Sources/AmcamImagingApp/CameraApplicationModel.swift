@@ -47,6 +47,10 @@ final class CameraApplicationModel: ObservableObject {
         featureDescriptors.last(where: { $0.name == name })?.enumerationValues ?? []
     }
 
+    func numericRange(for name: String) -> CameraFeatureNumericRange? {
+        featureDescriptors.last(where: { $0.name == name })?.numericRange
+    }
+
     func initialize() {
         guard !hasInitialized else { return }
         hasInitialized = true
