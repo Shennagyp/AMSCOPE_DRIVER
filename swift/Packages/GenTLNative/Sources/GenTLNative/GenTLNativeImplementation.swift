@@ -1508,7 +1508,7 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
 
     private func decodeInfo(dataType: Int32, data: Data) throws -> GenTLInfoValue {
         guard let type = GenTLInfoDataType(rawValue: dataType) else {
-            return .raw(data)
+            return .opaque(dataType: dataType, data: data)
         }
 
         func value<T>(_ type: T.Type) throws -> T {
@@ -1517,7 +1517,9 @@ public final class GenTLNativeImplementation: GenTLBackendConvenience, @unchecke
         }
 
         switch type {
-        case .unknown, .buffer:
+        case .unknown:
+            return .opaque(dataType: dataType, data: data)
+        case .buffer:
             return .raw(data)
         case .string:
             let bytes = data.prefix { $0 != 0 }
