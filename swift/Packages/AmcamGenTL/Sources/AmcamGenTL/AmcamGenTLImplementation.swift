@@ -39,7 +39,7 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
     private let eventReadCondition = NSCondition()
     private var activeRawEventReads = Set<UInt>()
     private var eventKillGeneration: [UInt: UInt64] = [:]
-    private var pendingRawEventData: [UInt: Data] = [:
+    private var pendingRawEventData: [UInt: Data] = [:]
 
     // Each C-facing void* handle is backed by a unique allocation. Retired
     // tokens stay allocated until backend destruction so stale handles cannot
