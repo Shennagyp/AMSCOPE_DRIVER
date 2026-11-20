@@ -1,5 +1,7 @@
 import AmcamCameraModel
 import AmcamImagingCore
+import AmcamImagingApplicationCore
+import AmcamImagingGenTLAdapter
 import Foundation
 import GenTLABI
 import GenTLAPI
@@ -23,8 +25,9 @@ final class CameraApplicationModel: ObservableObject {
     private var router = GenTLRouter()
     private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
     private var deviceSession: GenTLDeviceSession?
-    private var acquisition: GenTLAcquisitionSession?
+    private let cameraLifecycle = CameraSessionLifecycle()
     private var captureTask: Task<Void, Never>?
+    private var lifecycleEventTask: Task<Void, Never>?
     private var featureDescriptors: [GenTLFeatureDescriptor] = []
     private var hasInitialized = false
     private var profileRegistry = AmcamCameraProfileRegistry()
@@ -68,6 +71,10 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshDevices() {
+        Task { await refreshDevicesOwned() }
+    }
+
+    private func refreshDevicesOwned() async {
         guard sdkPath != nil else {
             status = "Select the Amcam SDK before refreshing cameras"
             return
@@ -105,7 +112,7 @@ final class CameraApplicationModel: ObservableObject {
         candidatesByID = discoveredCandidates
 
         if !discoveredDevices.contains(where: { $0.identifier == selectedDeviceID }) {
-            guard closeSession() else {
+            guard await closeSession() else {
                 status = "Camera disappeared; previous session cleanup is incomplete"
                 return
             }
@@ -129,24 +136,33 @@ final class CameraApplicationModel: ObservableObject {
             : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
 
         if deviceSession == nil, selectedDevice != nil {
-            prepareSelectedCamera()
+            await prepareSelectedCamera()
         }
     }
 
     func selectDevice(_ identifier: String) {
+        Task { await selectDeviceOwned(identifier) }
+    }
+
+    private func selectDeviceOwned(_ identifier: String) async {
         guard identifier != selectedDeviceID else { return }
-        guard closeSession() else { return }
+        guard await closeSession() else { return }
         selectedDeviceID = identifier
         latestFrame = nil
         cameraCapabilities = nil
         controls = nil
         featureDescriptors = []
         status = selectedDevice.map { "Ready: \($0.displayName)" } ?? "No camera selected"
-        prepareSelectedCamera()
+        await prepareSelectedCamera()
     }
 
+    /// UI command. The imaging library owns the session and acquisition lifecycle.
     func start() {
-        guard let deviceSession, let device = selectedDevice else {
+        Task { await startOwned() }
+    }
+
+    private func startOwned() async {
+        guard deviceSession != nil, let device = selectedDevice else {
             errorMessage = "Select a camera and configure the Amcam SDK first."
             return
         }
@@ -155,56 +171,65 @@ final class CameraApplicationModel: ObservableObject {
             return
         }
 
-        do {
-            if let existing = acquisition {
-                try existing.close()
-                acquisition = nil
+        let events = await cameraLifecycle.events()
+        lifecycleEventTask?.cancel()
+        lifecycleEventTask = Task { [weak self] in
+            for await event in events {
+                guard !Task.isCancelled, let self else { return }
+                self.handleLifecycleEvent(event)
             }
+        }
 
-            let newAcquisition = try GenTLAcquisitionSession(device: deviceSession)
-            try newAcquisition.start()
-            acquisition = newAcquisition
+        let frames = await cameraLifecycle.frames()
+        captureTask?.cancel()
+        captureTask = Task { [weak self] in
+            for await frame in frames {
+                guard !Task.isCancelled, let self else { return }
+                self.accept(frame)
+            }
+        }
 
+        do {
+            try await cameraLifecycle.start()
             latestFrame = nil
             frameRateEstimator.reset()
             framesPerSecond = 0
-            isStreaming = true
-            status = "Live — \(device.displayName)"
+            status = "Starting — \(device.displayName)"
             errorMessage = nil
-
-            captureTask = Task.detached(priority: .userInitiated) { [weak self, newAcquisition] in
-                while !Task.isCancelled {
-                    do {
-                        let frame = try newAcquisition.nextFrame(timeoutMilliseconds: 5_000)
-                        guard !frame.isIncomplete else { continue }
-                        await self?.accept(frame)
-                    } catch let error as GenTLAcquisitionError {
-                        switch error {
-                        case .acquisitionStopped:
-                            return
-                        case .eventTimeout:
-                            continue
-                        default:
-                            await self?.handleCaptureFailure(error)
-                            return
-                        }
-                    } catch {
-                        await self?.handleCaptureFailure(error)
-                        break
-                    }
-                }
-            }
         } catch {
+            captureTask?.cancel()
+            captureTask = nil
+            lifecycleEventTask?.cancel()
+            lifecycleEventTask = nil
             isStreaming = false
             status = "Unable to start camera"
             errorMessage = error.localizedDescription
         }
     }
 
+    private func handleLifecycleEvent(_ event: CameraSessionLifecycleEvent) {
+        switch event {
+        case .streamingChanged(let streaming):
+            isStreaming = streaming
+            if !streaming, status.hasPrefix("Live") {
+                status = "Stopped — \(selectedDevice?.displayName ?? "camera")"
+            }
+        case .failure(let message):
+            status = "Camera stopped — acquisition error"
+            errorMessage = message
+        case .closed:
+            isStreaming = false
+        }
+    }
+
+    /// UI command. Stop/reader synchronization is executed by the imaging library.
     func stop() {
-        guard let acquisition, isStreaming else { return }
+        Task { await stopOwned() }
+    }
+
+    private func stopOwned() async {
         do {
-            try acquisition.stop()
+            try await cameraLifecycle.stop()
             captureTask?.cancel()
             captureTask = nil
             isStreaming = false
@@ -216,7 +241,7 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func shutdown() {
-        closeSession()
+        Task { _ = await closeSession() }
     }
 
     func refreshControls() {
@@ -293,13 +318,20 @@ final class CameraApplicationModel: ObservableObject {
         writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex")
     }
 
-    private func prepareSelectedCamera() {
+    private func prepareSelectedCamera() async {
         guard deviceSession == nil,
               let candidate = candidatesByID[selectedDeviceID],
               let device = selectedDevice else { return }
 
         do {
             let openedSession = try candidate.open(access: .exclusive)
+            do {
+                try await cameraLifecycle.attach(GenTLRuntimeSession(device: openedSession))
+            } catch {
+                try? openedSession.close()
+                throw error
+            }
+            // Borrowed for feature access only. The imaging library owns closure.
             deviceSession = openedSession
             featureDescriptors = (try? openedSession.featureDescriptors()) ?? []
             updateSelectedDeviceResolutions(from: featureDescriptors)
@@ -317,14 +349,17 @@ final class CameraApplicationModel: ObservableObject {
                 errorMessage = nil
             }
         } catch {
-            closeSession()
             status = "Unable to open camera through GenTLRouter"
             errorMessage = error.localizedDescription
         }
     }
 
     func configureSDK(at url: URL) {
-        guard closeSession() else { return }
+        Task { await configureSDKOwned(at: url) }
+    }
+
+    private func configureSDKOwned(at url: URL) async {
+        guard await closeSession() else { return }
         router = GenTLRouter()
         candidatesByID.removeAll()
         devices.removeAll()
@@ -333,7 +368,7 @@ final class CameraApplicationModel: ObservableObject {
         do {
             try router.registerAmcam(backendID: "amcam-sdk", sdkLibraryURL: url)
             sdkPath = url.path
-            refreshDevices()
+            await refreshDevicesOwned()
         } catch {
             sdkPath = url.path
             status = "Amcam GenTL backend could not be registered"
@@ -341,43 +376,29 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    /// Closes resources in ownership order. A failed child close must not be
-    /// followed by closing its parent device session: retain both handles so
-    /// cleanup can be retried without invalidating provider-owned resources.
+    /// The library performs ordered acquisition/device cleanup and retains
+    /// failed resources for retry. The UI drops its borrowed feature handle only
+    /// after the library confirms that the entire close sequence succeeded.
     @discardableResult
-    private func closeSession() -> Bool {
-        captureTask?.cancel()
-        captureTask = nil
-
-        if let acquisition {
-            do {
-                try acquisition.close()
-                self.acquisition = nil
-            } catch {
-                isStreaming = false
-                status = "Camera acquisition cleanup failed"
-                errorMessage = error.localizedDescription
-                return false
-            }
+    private func closeSession() async -> Bool {
+        do {
+            try await cameraLifecycle.close()
+            captureTask?.cancel()
+            captureTask = nil
+            lifecycleEventTask?.cancel()
+            lifecycleEventTask = nil
+            deviceSession = nil
+            isStreaming = false
+            cameraCapabilities = nil
+            controls = nil
+            featureDescriptors = []
+            return true
+        } catch {
+            isStreaming = false
+            status = "Camera resource cleanup failed"
+            errorMessage = error.localizedDescription
+            return false
         }
-
-        if let deviceSession {
-            do {
-                try deviceSession.close()
-                self.deviceSession = nil
-            } catch {
-                isStreaming = false
-                status = "Camera device cleanup failed"
-                errorMessage = error.localizedDescription
-                return false
-            }
-        }
-
-        isStreaming = false
-        cameraCapabilities = nil
-        controls = nil
-        featureDescriptors = []
-        return true
     }
 
     private func writeFeature(_ value: GenTLFeatureValue, named name: String) {
@@ -397,14 +418,6 @@ final class CameraApplicationModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    private func handleCaptureFailure(_ error: Error) {
-        guard isStreaming else { return }
-        isStreaming = false
-        status = "Camera stopped — acquisition error"
-        errorMessage = error.localizedDescription
-        closeSession()
     }
 
     private func capabilityFeature(for name: String) -> AmcamCameraFeature? {
@@ -721,7 +734,7 @@ final class CameraApplicationModel: ObservableObject {
         return String(cString: bytes)
     }
 
-    private func accept(_ frame: GenTLFrame) {
+    private func accept(_ frame: CameraFramePayload) {
         do {
             latestFrame = try RGB8Frame.decode(
                 width: frame.width,
