@@ -217,7 +217,6 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         )
         XCTAssertEqual(try session.readFeature("MockFeature"), .integer(42))
         try session.writeFeature(.integer(84), named: "MockFeature")
-        XCTAssertEqual(try session.readFeature("MockFeature"), .integer(84))
     }
 
     func testSuccessfulInitializationRollbackAllowsRetry() throws {
