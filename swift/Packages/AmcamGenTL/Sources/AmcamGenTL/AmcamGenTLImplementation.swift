@@ -1144,7 +1144,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
     private func infoBytes(_ value: GenTLInfoValue) -> (GenTLABI.INFO_DATATYPE, Data) {
         switch value {
         case .string(let string):
-            return (GenTLABI.INFO_DATATYPE_STRING.rawValue, Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
+            return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_STRING.rawValue), Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
         case .stringList(let strings):
             var bytes: [UInt8] = []
             for string in strings {
@@ -1152,20 +1152,20 @@ extension AmcamGenTLImplementation: GenTLAPI {
                 bytes.append(0)
             }
             bytes.append(0)
-            return (GenTLABI.INFO_DATATYPE_STRINGLIST.rawValue, Data(bytes))
-        case .int16(let value): return (GenTLABI.INFO_DATATYPE_INT16.rawValue, dataBytes(of: value))
-        case .uint16(let value): return (GenTLABI.INFO_DATATYPE_UINT16.rawValue, dataBytes(of: value))
-        case .int32(let value): return (GenTLABI.INFO_DATATYPE_INT32.rawValue, dataBytes(of: value))
-        case .uint32(let value): return (GenTLABI.INFO_DATATYPE_UINT32.rawValue, dataBytes(of: value))
-        case .int64(let value): return (GenTLABI.INFO_DATATYPE_INT64.rawValue, dataBytes(of: value))
-        case .uint64(let value): return (GenTLABI.INFO_DATATYPE_UINT64.rawValue, dataBytes(of: value))
-        case .float64(let value): return (GenTLABI.INFO_DATATYPE_FLOAT64.rawValue, dataBytes(of: value))
-        case .pointer(let value): return (GenTLABI.INFO_DATATYPE_PTR.rawValue, dataBytes(of: value))
-        case .bool8(let value): return (GenTLABI.INFO_DATATYPE_BOOL8.rawValue, dataBytes(of: UInt8(value ? 1 : 0)))
-        case .size(let value): return (GenTLABI.INFO_DATATYPE_SIZET.rawValue, dataBytes(of: UInt(value)))
-        case .raw(let data): return (GenTLABI.INFO_DATATYPE_BUFFER.rawValue, data)
+            return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_STRINGLIST.rawValue), Data(bytes))
+        case .int16(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_INT16.rawValue), dataBytes(of: value))
+        case .uint16(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_UINT16.rawValue), dataBytes(of: value))
+        case .int32(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_INT32.rawValue), dataBytes(of: value))
+        case .uint32(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_UINT32.rawValue), dataBytes(of: value))
+        case .int64(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_INT64.rawValue), dataBytes(of: value))
+        case .uint64(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_UINT64.rawValue), dataBytes(of: value))
+        case .float64(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_FLOAT64.rawValue), dataBytes(of: value))
+        case .pointer(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_PTR.rawValue), dataBytes(of: value))
+        case .bool8(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_BOOL8.rawValue), dataBytes(of: UInt8(value ? 1 : 0)))
+        case .size(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_SIZET.rawValue), dataBytes(of: UInt(value)))
+        case .raw(let data): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_BUFFER.rawValue), data)
         case .opaque(let dataType, let data): return (dataType, data)
-        case .pointerDifference(let value): return (GenTLABI.INFO_DATATYPE_PTRDIFF.rawValue, dataBytes(of: value))
+        case .pointerDifference(let value): return (Int32(bitPattern: GenTLABI.INFO_DATATYPE_PTRDIFF.rawValue), dataBytes(of: value))
         }
     }
 
@@ -2128,7 +2128,6 @@ extension AmcamGenTLImplementation: GenTLAPI {
     }
 
     public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
-        guard let hEvent else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE) }
         let key = UInt(bitPattern: hEvent)
         lock.lock()
         let isRegistered = events[key] != nil
