@@ -515,4 +515,15 @@ This initial fixture is intentionally not a simulated camera. Most exports retur
 
 The first execution gate is to run \texttt{swift test --package-path swift/Packages/GenTLNative} and \texttt{swift test --package-path swift/Packages/GenTLAPI} on macOS with Xcode command-line tools. Record the exact toolchain, architecture, command, and output before proceeding.
 
+
+
+\section{Exhaustive operation dispatch matrix added}
+The mock fixture has been expanded from the required base set to all 64 GenTL function exports declared by the pinned header. Each ordinary stub returns a distinct negative result derived from its operation index. This is intentional: if a native function-table entry is accidentally associated with the wrong export, the test receives the other function's code and fails. The fixture also exports a test-only call-count query, not part of GenTL, so the test can independently establish that each native C function was actually entered.
+
+The dispatch test invokes the 60 non-lifecycle protocol operations through an \texttt{any GenTLAPI} value backed by \texttt{GenTLNativeImplementation}. It separately exercises Producer initialization/closure and event registration/unregistration, because those operations have lifecycle state and must return success for the remainder of the test to execute. Event registration returns a known non-null C handle. Event unregistration internally calls \texttt{EventKill}; the test accounts for the expected second invocation of that C export.
+
+The optional-export build variant omits all 17 later-revision exports while retaining the 47 required GenTL 1.0 base exports. The test verifies that a missing optional operation returns \texttt{GC\_ERR\_NOT\_IMPLEMENTED} and does not modify the caller's output sentinel. The required-export negative variant omits \texttt{GCGetInfo} and expects loader rejection.
+
+A source-level audit currently reports 64 header declarations, 64 protocol requirements, 64 mock exports, 60 unique-return dispatch assertions, and four explicit lifecycle assertions. This audit does not establish successful compilation or runtime dispatch. All native test source remains unexecuted until the macOS CI workflow or a local Xcode toolchain runs it.
+
 \end{document}
