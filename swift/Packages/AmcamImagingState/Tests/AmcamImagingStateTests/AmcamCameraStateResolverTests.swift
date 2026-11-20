@@ -81,9 +81,18 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 name: "ExposureAuto", displayName: "Auto exposure", kind: .enumeration,
                 isAvailable: true, isReadable: true, isWritable: false
             ),
+            // An older duplicate must not override the latest unreadable descriptor.
+            CameraFeatureDescriptor(
+                name: "ExposureTime", displayName: "Legacy exposure", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: true
+            ),
             CameraFeatureDescriptor(
                 name: "ExposureTime", displayName: "Exposure", kind: .integer,
                 isAvailable: true, isReadable: false, isWritable: true
+            ),
+            CameraFeatureDescriptor(
+                name: "AmcamAnalogGainPercent", displayName: "Legacy gain", kind: .integer,
+                isAvailable: true, isReadable: true, isWritable: true
             ),
             CameraFeatureDescriptor(
                 name: "AmcamAnalogGainPercent", displayName: "Gain", kind: .integer,
@@ -120,6 +129,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         let snapshot = await resolver.controlSnapshot(descriptors: descriptors) { name in
             throw CameraFeatureAccessError.featureUnavailable(name)
         }
+        XCTAssertNil(snapshot.exposure?.readbackMicroseconds)
         XCTAssertNil(snapshot.gain)
         XCTAssertNil(snapshot.whiteBalance)
         XCTAssertFalse(snapshot.frameRate.supported)
