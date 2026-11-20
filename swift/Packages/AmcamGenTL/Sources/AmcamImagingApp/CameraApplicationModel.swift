@@ -91,6 +91,10 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "Select a camera and configure the Amcam SDK first."
             return
         }
+        guard cameraCapabilities?.availability(of: .liveCapture).isUsable == true else {
+            errorMessage = "Live capture is disabled by this camera's capability profile or is not available."
+            return
+        }
         do {
             if session == nil {
                 prepareSelectedCamera()
