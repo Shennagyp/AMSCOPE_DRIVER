@@ -101,8 +101,7 @@ jobs:
           PLIST
           codesign --force --deep --sign - "$app_bundle"
           codesign --verify --deep --strict "$app_bundle"
-          file "$app_bundle/Contents/MacOS/amcam-imaging"
-          lipo -verify_arch arm64 "$app_bundle/Contents/MacOS/amcam-imaging"
+          file "$app_bundle/Contents/MacOS/amcam-imaging" | grep -q "Mach-O 64-bit executable arm64"
           ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$app_root/Amcam-Imaging-macos-arm64.zip"
           cat > "$app_root/RUN-THIS-TODAY.txt" <<'README'
           AmScope Imaging — Apple Silicon
