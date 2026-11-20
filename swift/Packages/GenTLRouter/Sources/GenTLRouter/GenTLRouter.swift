@@ -13,6 +13,7 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case providerContextUnavailable(String)
     case genTLCallFailed(Int32)
     case featureAccessUnavailable(String)
+    case deviceSessionClosed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
             return "A GenTL API call failed with GC_ERROR \(code)."
         case .featureAccessUnavailable(let id):
             return "Backend '\(id)' does not expose typed feature access."
+        case .deviceSessionClosed(let id):
+            return "The device session for backend '\(id)' is closed."
         }
     }
 }
@@ -398,24 +401,35 @@ public final class GenTLDeviceSession: @unchecked Sendable {
     }
 
     public func featureDescriptors() throws -> [GenTLFeatureDescriptor] {
-        guard let provider = api as? any GenTLFeatureAccess else {
-            throw GenTLRouterError.featureAccessUnavailable(context.backendID)
+        try withFeatureAccess { provider in
+            try provider.featureDescriptors(for: featureDeviceHandle)
         }
-        return try provider.featureDescriptors(for: featureDeviceHandle)
     }
 
     public func readFeature(_ name: String) throws -> GenTLFeatureValue {
-        guard let provider = api as? any GenTLFeatureAccess else {
-            throw GenTLRouterError.featureAccessUnavailable(context.backendID)
+        try withFeatureAccess { provider in
+            try provider.readFeature(name, from: featureDeviceHandle)
         }
-        return try provider.readFeature(name, from: featureDeviceHandle)
     }
 
     public func writeFeature(_ value: GenTLFeatureValue, named name: String) throws {
+        try withFeatureAccess { provider in
+            try provider.writeFeature(value, named: name, to: featureDeviceHandle)
+        }
+    }
+
+    private func withFeatureAccess<T>(
+        _ operation: (any GenTLFeatureAccess) throws -> T
+    ) throws -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isClosed else {
+            throw GenTLRouterError.deviceSessionClosed(context.backendID)
+        }
         guard let provider = api as? any GenTLFeatureAccess else {
             throw GenTLRouterError.featureAccessUnavailable(context.backendID)
         }
-        try provider.writeFeature(value, named: name, to: featureDeviceHandle)
+        return try operation(provider)
     }
 
     public func close() throws {
