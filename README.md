@@ -11,6 +11,26 @@ The application uses one GenTL API contract with two interchangeable implementat
 
 **GenTLRouter** selects and manages the backend. The imaging app uses GenTLAPI through GenTLRouter for discovery, device lifecycle, typed feature access and GenTL acquisition. Camera presentation models are isolated in AmcamCameraModel; the app package has no dependency on the Amcam backend implementation.
 
+## Run
+
+From the repository root on an Apple Silicon Mac running macOS 13 or later:
+
+```sh
+gh auth login
+make run
+```
+
+`make run` downloads and launches the latest hosted macOS imaging-app artifact. It does not compile locally and does not require Xcode. It requires the GitHub CLI (`gh`) and an authenticated GitHub session. The vendor `libamcam.dylib` is still required for camera access and is not bundled.
+
+Other targets:
+
+- `make run-probe` — download and run the hosted camera diagnostic.
+- `make build-local` — build locally (requires a compatible Xcode/Swift toolchain).
+- `make run-local` — build and launch locally.
+- `make test-local` — run all Swift package test suites locally.
+
+See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for package boundaries, acceptance criteria and the implementation sequence.
+
 ## Packages
 
 - **GenTLABI** — shared imported C declarations from the pinned EMVA GenTL header, including ABI structure-layout checks. This is the single ABI source of truth.
