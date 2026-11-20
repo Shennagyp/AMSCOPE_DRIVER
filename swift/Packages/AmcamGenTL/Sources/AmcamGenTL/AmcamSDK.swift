@@ -26,6 +26,7 @@ private typealias GetExposureGainFunction = @convention(c) (UnsafeMutableRawPoin
 private typealias SetExposureGainFunction = @convention(c) (UnsafeMutableRawPointer?, UInt16) -> Int32
 private typealias GetExposureGainRangeFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?, UnsafeMutablePointer<UInt16>?, UnsafeMutablePointer<UInt16>?) -> Int32
 private typealias GetTemperatureTintFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?, UnsafeMutablePointer<Int32>?) -> Int32
+private typealias SetTemperatureTintFunction = @convention(c) (UnsafeMutableRawPointer?, Int32, Int32) -> Int32
 private typealias GetWhiteBalanceGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?) -> Int32
 typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
@@ -59,6 +60,10 @@ final class AmcamSDK: @unchecked Sendable {
     static let optionColorMatrix: UInt32 = 0x0d
     static let optionWhiteBalanceGain: UInt32 = 0x0e
     static let optionPixelFormat: UInt32 = 0x1a
+    static let temperatureMinimum: Int32 = 2_000
+    static let temperatureMaximum: Int32 = 15_000
+    static let tintMinimum: Int32 = 200
+    static let tintMaximum: Int32 = 2_500
 
     private struct API {
         let version: VersionFunction
@@ -85,6 +90,7 @@ final class AmcamSDK: @unchecked Sendable {
         let setExposureGain: SetExposureGainFunction?
         let getExposureGainRange: GetExposureGainRangeFunction?
         let getTemperatureTint: GetTemperatureTintFunction?
+        let setTemperatureTint: SetTemperatureTintFunction?
         let getWhiteBalanceGain: GetWhiteBalanceGainFunction?
     }
 
@@ -130,6 +136,7 @@ final class AmcamSDK: @unchecked Sendable {
                 setExposureGain: try? load("Amcam_put_ExpoAGain", as: SetExposureGainFunction.self),
                 getExposureGainRange: try? load("Amcam_get_ExpoAGainRange", as: GetExposureGainRangeFunction.self),
                 getTemperatureTint: try? load("Amcam_get_TempTint", as: GetTemperatureTintFunction.self),
+                setTemperatureTint: try? load("Amcam_put_TempTint", as: SetTemperatureTintFunction.self),
                 getWhiteBalanceGain: try? load("Amcam_get_WhiteBalanceGain", as: GetWhiteBalanceGainFunction.self)
             )
             guard let versionPointer = resolved.version() else {
@@ -399,8 +406,8 @@ final class AmcamSDK: @unchecked Sendable {
         try checkControlResult("Amcam_put_ExpoAGain", setGain(handle, percent))
     }
 
-    var whiteBalanceReadAvailable: Bool {
-        api.getTemperatureTint != nil || api.getWhiteBalanceGain != nil
+    var whiteBalanceControlAvailable: Bool {
+        api.getTemperatureTint != nil && api.setTemperatureTint != nil
     }
 
     func readTemperatureTint(_ handle: UnsafeMutableRawPointer) throws -> (temperature: Int32, tint: Int32) {
@@ -411,6 +418,13 @@ final class AmcamSDK: @unchecked Sendable {
         var tint: Int32 = 0
         try checkControlResult("Amcam_get_TempTint", getter(handle, &temperature, &tint))
         return (temperature, tint)
+    }
+
+    func setTemperatureTint(_ handle: UnsafeMutableRawPointer, temperature: Int32, tint: Int32) throws {
+        guard let setter = api.setTemperatureTint else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose temperature/tint white-balance control.")
+        }
+        try checkControlResult("Amcam_put_TempTint", setter(handle, temperature, tint))
     }
 
     func readWhiteBalanceGain(_ handle: UnsafeMutableRawPointer) throws -> [Int32] {
