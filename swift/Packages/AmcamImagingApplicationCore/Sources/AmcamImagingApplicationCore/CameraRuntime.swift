@@ -51,4 +51,5 @@ public enum CameraSessionLifecycleError: Error, Equatable, Sendable {
     case sessionNotAttached
     case sessionAlreadyAttached
     case acquisitionAlreadyRunning
+    case operationInProgress
 }
