@@ -9,7 +9,7 @@ final class GenTLNativeIntegrationTests: XCTestCase {
     private func buildMockProducer(omittingGetInfo: Bool = false, omittingOptionalExports: Bool = false) throws -> URL {
         let testDirectory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
-        let source = testDirectory.appendingPathComponent("Fixtures/MockGenTLProducer.c")
+        let source = testDirectory.appendingPathComponent("../MockGenTLProducer/MockGenTLProducer.c")
         let packageDirectory = testDirectory
             .deletingLastPathComponent()
             .deletingLastPathComponent()
