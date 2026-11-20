@@ -3,8 +3,6 @@ import AmcamImagingCore
 import AmcamImagingRuntime
 import AmcamImagingGenTLAdapter
 import Foundation
-import GenTLABI
-import GenTLRouter
 import Combine
 
 @MainActor
@@ -20,8 +18,8 @@ final class CameraApplicationModel: ObservableObject {
     @Published var isSettingsPresented = false
     @Published private(set) var framesPerSecond = 0.0
 
-    private var router = GenTLRouter()
-    private var candidatesByID: [String: GenTLDeviceCandidate] = [:]
+    private var cameraProvider: AmcamCameraProvider?
+    private var candidatesByID: [String: AmcamCameraCandidate] = [:]
     private let cameraLifecycle = CameraSessionLifecycle()
     private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?
@@ -48,33 +46,15 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     private func refreshDevicesOwned() async {
-        let report = router.discover()
-        var discoveredDevices: [AmcamDevice] = []
-        var discoveredCandidates: [String: GenTLDeviceCandidate] = [:]
-
-        for candidate in report.devices {
-            let displayName = (try? readDeviceString(
-                candidate,
-                command: Int32(GenTLABI.DEVICE_INFO_DISPLAYNAME.rawValue)
-            )).flatMap { $0.isEmpty ? nil : $0 } ?? candidate.deviceID
-            let modelName = try? readDeviceString(
-                candidate,
-                command: Int32(GenTLABI.DEVICE_INFO_MODEL.rawValue)
-            )
-
-            discoveredDevices.append(
-                AmcamDevice(
-                    identifier: candidate.id,
-                    displayName: displayName,
-                    modelName: modelName,
-                    modelFlags: nil,
-                    maximumSpeedLevel: nil,
-                    sensorPixelSizeMicrometers: nil,
-                    previewResolutions: []
-                )
-            )
-            discoveredCandidates[candidate.id] = candidate
+        guard let cameraProvider else {
+            status = "AmScope camera provider is unavailable"
+            return
         }
+        let report = await cameraProvider.discover()
+        let discoveredDevices = report.devices.map(\.device)
+        let discoveredCandidates = Dictionary(
+            uniqueKeysWithValues: report.devices.map { ($0.id, $0) }
+        )
 
         devices = discoveredDevices
         candidatesByID = discoveredCandidates
@@ -298,7 +278,7 @@ final class CameraApplicationModel: ObservableObject {
               let device = selectedDevice else { return }
 
         do {
-            try await cameraLifecycle.open(GenTLRuntimeDevice(candidate: candidate))
+            try await cameraLifecycle.open(candidate.runtimeDevice)
             featureDescriptors = (try? await cameraLifecycle.featureDescriptors()) ?? []
             updateSelectedDeviceResolutions(from: featureDescriptors)
             await updateCurrentResolution()
@@ -327,13 +307,13 @@ final class CameraApplicationModel: ObservableObject {
 
     private func configureSDKOwned() async {
         guard await closeSession() else { return }
-        router = GenTLRouter()
+        cameraProvider = nil
         candidatesByID.removeAll()
         devices.removeAll()
         selectedDeviceID = ""
 
         do {
-            try router.registerAmcam(backendID: "amcam-sdk")
+            cameraProvider = try AmcamCameraProvider()
             await refreshDevicesOwned()
         } catch {
             status = "AmScope camera provider is unavailable"
@@ -607,59 +587,6 @@ final class CameraApplicationModel: ObservableObject {
             return nil
         }
         return UInt16(value.rounded(.towardZero))
-    }
-
-    private func readDeviceString(
-        _ candidate: GenTLDeviceCandidate,
-        command: Int32
-    ) throws -> String {
-        var dataType: GenTLABI.INFO_DATATYPE = 0
-        var requiredSize = 0
-        let queryStatus = candidate.api.IFGetDeviceInfo(
-            candidate.interfaceHandle,
-            candidate.deviceID.withCString { $0 },
-            command,
-            &dataType,
-            nil,
-            &requiredSize
-        )
-        let success = GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
-        let bufferTooSmall = GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_BUFFER_TOO_SMALL)
-        guard queryStatus == success || queryStatus == bufferTooSmall else {
-            throw GenTLAcquisitionError.genTLCallFailed(
-                operation: "IFGetDeviceInfo(size)",
-                code: Int32(queryStatus)
-            )
-        }
-        guard requiredSize > 1, requiredSize <= 1_048_576 else {
-            throw GenTLAcquisitionError.invalidDataStreamID
-        }
-
-        var bytes = [CChar](repeating: 0, count: requiredSize)
-        var capacity = requiredSize
-        let status = bytes.withUnsafeMutableBufferPointer { buffer in
-            candidate.api.IFGetDeviceInfo(
-                candidate.interfaceHandle,
-                candidate.deviceID.withCString { $0 },
-                command,
-                &dataType,
-                buffer.baseAddress,
-                &capacity
-            )
-        }
-        guard status == success else {
-            throw GenTLAcquisitionError.genTLCallFailed(
-                operation: "IFGetDeviceInfo",
-                code: Int32(status)
-            )
-        }
-        guard dataType == Int32(GenTLABI.INFO_DATATYPE_STRING.rawValue),
-              capacity > 0, capacity <= bytes.count else {
-            throw GenTLAcquisitionError.invalidDataStreamID
-        }
-
-        bytes[min(capacity, bytes.count) - 1] = 0
-        return String(cString: bytes)
     }
 
     private func accept(_ frame: CameraFramePayload) {
