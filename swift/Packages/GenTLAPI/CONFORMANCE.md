@@ -4,15 +4,13 @@ This document records the behavior implemented on the current branch. It is not 
 
 ## Shared API surface — current state
 
-The current public Swift contract follows the GenTL 1.6 function groups and uses typed opaque handles, Swift values and Swift error propagation for GenTL errors. Its names and module boundaries are GenTL-shaped.
+The public GenTLAPI protocol mirrors all 64 C function declarations in the pinned GenTL 1.6 header. It uses imported GenTL ABI types, opaque pointer handles, explicit C output parameters and GC_ERROR return values.
 
-**Important architectural gap:** this contract is currently hand-authored in Swift. It has not yet been converted into a binding that derives its ABI-relevant types and declarations from the imported GenTL C header. The ABI target has now been extracted into the standalone GenTLABI package and is a declared dependency of GenTLAPI, GenTLNative and AmcamGenTL. The native implementation's C function-pointer aliases now reference the imported PGC/P* typedefs. The public GenTLAPI protocol and custom type system remain to be converted. Until that work is complete, this document describes the existing implementation, not the final API binding.
+A source-level comparison was performed using the header's 64 GC_API declarations. The protocol matched every function name, parameter type and return type exactly. The same comparison confirmed that GenTLNative and AmcamGenTL each implement all 64 protocol signatures.
 
-The Swift protocol is not a C ABI and is not a GenTL Producer. Only GenTLNative calls the C ABI exported by third-party CTI Producers. AmcamGenTL implements the common Swift contract by using the Amcam SDK directly.
+The public protocol is a Swift contract over imported C declarations. It is not itself a C ABI and does not export GenTL Producer symbols.
 
-The current protocol grouping follows GenTL module ownership: register-stack operations belong to the Port module (GenTL 1.1), while chunk/multipart/flow/segment methods are Data Stream extensions (GenTL 1.3–1.6).
-
-The current Swift genTLVersion property identifies the revision represented by the API surface. It does not claim that every loaded CTI Producer implements every function in that revision. The native backend resolves later-revision entry points opportunistically, and the Producer's own supported revision is read from GCGetInfo / TL_INFO_GENTL_VER_MAJOR and TL_INFO_GENTL_VER_MINOR where available.
+The earlier Swift convenience protocol groups, custom typed handles, decoded info values and Swift-throws wrappers remain behind explicit BackendConvenience SPI. This is a transitional internal implementation layer, not a second application-facing API. It is still present and must be removed after the remaining backend/router internals are migrated.
 
 ## GenTLNative
 
@@ -29,7 +27,7 @@ GenTLNative forwards GenTL function calls to a manufacturer-supplied CTI Produce
 - EVENT_SIZE_MAX is a GenTL 1.2 EventGetInfo command. When a GenTL 1.0 Producer rejects that command, the native Consumer can still receive the standard fixed-size New Buffer event structure (two pointers). It does not guess a maximum for variable Error-event payloads and returns GC_ERR_NOT_IMPLEMENTED for that legacy case.
 - Producer handles remain opaque; this implementation does not synthesize handle IDs.
 - If the native implementation is deallocated before a successful GCCloseLib, its CTI library is retained for process lifetime rather than unloaded with potentially live Producer state.
-- The pinned GenTL 1.6 header is compiled through the standalone GenTLABI package, with layout checks for the packed GenTL structures used by this consumer. Native function-pointer aliases now refer to the PGC/P* typedefs imported from that header. This target will be extracted into the shared GenTLABI package as specified by the implementation plan.
+- The pinned GenTL 1.6 header is compiled through the standalone GenTLABI package, with layout checks for the packed GenTL structures used by this consumer. The native function table uses the PGC/P* typedefs imported from that header, and all 64 public GenTLAPI operations have corresponding native implementation methods. This target will be extracted into the shared GenTLABI package as specified by the implementation plan.
 
 Actual camera capability and compatibility still depend on the selected CTI Producer, its macOS architecture and its implementation of the standard.
 
@@ -78,6 +76,6 @@ That is a separate integration milestone. It must be implemented using a verifie
 
 ## Conformance status
 
-The current test suite covers selected API defaults, native Producer catalog and library validation, Amcam RGB24 memory layout, and router/lifecycle behavior. These tests are implementation checks, not proof of full standard conformance.
+The repository contains tests for legacy backend conveniences, raw API unsupported defaults, native Producer catalog/library validation, Amcam RGB24 memory layout, and router lifecycle behavior. No Swift build or test suite has been run during this continuation. The source-level signature comparison is not proof of ABI runtime compatibility or formal GenTL conformance.
 
-The next conformance milestone is to run shared contract tests against both backends, add imported-header ABI checks, verify exact required/optional CTI symbol sets with mock Producers, and explicitly track every GenTL operation that remains unimplemented.
+Remaining verification: build all Swift packages on macOS; run unit tests; test exact required/optional CTI symbol resolution with mock Producers; exercise native calls against real vendor CTIs; verify Amcam behavior with the actual SDK and cameras; and record any remaining operation-level limitations.
