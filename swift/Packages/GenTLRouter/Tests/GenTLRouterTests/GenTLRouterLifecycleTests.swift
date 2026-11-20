@@ -220,10 +220,9 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         try session.close()
 
         XCTAssertThrowsError(try session.featureDescriptors()) { error in
-            XCTAssertEqual(
-                error as? GenTLRouterError,
-                .deviceSessionClosed("feature-backend")
-            )
+            guard case GenTLRouterError.deviceSessionClosed("feature-backend") = error else {
+                return XCTFail("Expected a closed-session error, received \\(error)")
+            }
         }
     }
 
