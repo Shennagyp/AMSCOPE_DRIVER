@@ -147,7 +147,7 @@ public struct AmcamCameraStateResolver: Sendable {
         // Preserve the descriptor's exact endpoint when floating-point
         // arithmetic places an otherwise valid grid endpoint a few ULPs above it.
         let maximumValidValue = gridMaximum > range.maximum
-            && gridMaximum - range.maximum <= stepTolerance * max(1, abs(increment))
+            && gridMaximum - range.maximum <= stepTolerance * increment
             ? range.maximum
             : gridMaximum
         guard maximumValidValue <= range.maximum else { return nil }
