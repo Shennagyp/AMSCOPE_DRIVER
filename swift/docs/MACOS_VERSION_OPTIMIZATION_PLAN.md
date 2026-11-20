@@ -314,3 +314,8 @@ This branch is complete when:
 - The GitHub status endpoint currently reports no status checks for the latest workflow commit, and the available workflow-run lookup does not return push-triggered runs. Compilation and tests therefore remain pending hosted macOS CI.
 - The app source has been moved but is not yet migrated: `CameraApplicationModel` still directly creates `AmcamCameraDriver` and `AmcamCameraSession`. The next implementation task is the routed application acquisition/session path, followed by migration of the existing controls to `GenTLDeviceSession` feature access.
 
+**Additional lifecycle hardening**
+- Routed feature calls are serialized against `GenTLDeviceSession.close()`.
+- Feature access after session closure now fails deterministically with `deviceSessionClosed`, rather than forwarding a stale handle to the backend.
+- Router lifecycle tests cover the owning device-handle identity and the closed-session boundary.
+
