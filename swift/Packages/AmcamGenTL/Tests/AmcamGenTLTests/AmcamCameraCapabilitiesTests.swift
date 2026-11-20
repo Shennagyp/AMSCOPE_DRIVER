@@ -130,6 +130,24 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
         XCTAssertTrue(capabilities.availableGroups.contains(.accessories))
     }
 
+    func testModelProfileCanDisableLiveCaptureWithoutDisablingOtherControls() {
+        let profile = AmcamCameraModelProfile(
+            modelCode: "FixedCaptureModel",
+            allowedFeatures: [.resolution]
+        )
+        let capabilities = AmcamCameraProfileRegistry(profiles: [profile]).resolve(
+            modelCode: "FixedCaptureModel",
+            modelFlags: 0,
+            maximumSpeedLevel: nil,
+            probes: [.resolution: true],
+            implemented: [.liveCapture, .resolution]
+        )
+
+        XCTAssertFalse(capabilities.availability(of: .liveCapture).available)
+        XCTAssertFalse(capabilities.availability(of: .liveCapture).isUsable)
+        XCTAssertTrue(capabilities.availability(of: .resolution).isUsable)
+    }
+
     func testAvailableGroupsContainOnlyUsableFeatures() {
         let capabilities = AmcamCameraProfileRegistry().resolve(
             modelCode: "ModelA", modelFlags: 0x0000004000000000,
