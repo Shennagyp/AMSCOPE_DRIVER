@@ -1,3 +1,4 @@
+import AmcamABI
 import Darwin
 import Foundation
 import XCTest
@@ -1110,7 +1111,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/clang")
-        process.arguments = [
+        var compilerArguments = [
             "-dynamiclib",
             "-fPIC",
             "-Wall",
@@ -1118,10 +1119,11 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             "-Werror",
             "-I", includeDirectory.path
         ]
-        if disableV4 { process.arguments.append("-DMOCK_DISABLE_V4") }
-        if disableV3 { process.arguments.append("-DMOCK_DISABLE_V3") }
-        if disableRowPitchV2 { process.arguments.append("-DMOCK_DISABLE_ROW_PITCH_V2") }
-        process.arguments += [source.path, "-o", output.path]
+        if disableV4 { compilerArguments.append("-DMOCK_DISABLE_V4") }
+        if disableV3 { compilerArguments.append("-DMOCK_DISABLE_V3") }
+        if disableRowPitchV2 { compilerArguments.append("-DMOCK_DISABLE_ROW_PITCH_V2") }
+        compilerArguments += [source.path, "-o", output.path]
+        process.arguments = compilerArguments
         let errorPipe = Pipe()
         process.standardError = errorPipe
         try process.run()
