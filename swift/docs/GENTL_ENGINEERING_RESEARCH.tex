@@ -581,4 +581,12 @@ The CI compiler exposed two distinct test-contract defects after the typed \text
 
 The latest source commit is \texttt{8b34d21787069109027c1e8665acad01709ac3b9}. Its workflow run \texttt{44676161807} is pending/in progress; macOS package jobs have not yet produced a verified result. The native mock-producer test still compiles with \texttt{xcrun} on macOS. Linux/Windows native-loader validation and cross-platform mock compilation remain future work. No all-platform support claim is made.
 
+
+\section{C ABI boundary correction --- 2026-11-20}
+Further macOS compiler diagnostics exposed a structural collision between the convenience handle/status wrappers declared in \texttt{GenTLTypes.swift} and identically named imported C ABI types re-exported by \texttt{GenTLAPI}. The native implementation now keeps its high-level wrapper-based implementation in the class body and qualifies C ABI types only in its raw \texttt{GenTLAPI} conformance extension. The redundant direct \texttt{GenTLABI} import was removed from that implementation to avoid ambiguous unqualified convenience types.
+
+The protocol and default implementations now model output handle parameters as pointers to nullable handle values (for example, \texttt{UnsafeMutablePointer<TL\_HANDLE?>?}), matching the imported C function-pointer ABI. The Amcam and native adapters were updated to the same pointer semantics. A C ABI helper, \texttt{GenTLABI\_ErrorFromCode}, explicitly converts the official \texttt{GC\_ERROR\_LIST} enum to the ABI's \texttt{GC\_ERROR} scalar type. Amcam's duplicate raw-handle helpers were removed; the remaining helper validates token identity.
+
+The initial Linux API test pass remains valid evidence for commit \texttt{430ccf9da3b098cedb79fd932874c031943317cd}. The latest source commit is \texttt{6364f89117ea3fc76fe4cb62663913eab100f6a1}; workflow run \texttt{44676898035} has been created, but its Linux Swift setup is still in progress and its macOS jobs are queued. These new ABI changes are not yet verified by CI.
+
 \end{document}
