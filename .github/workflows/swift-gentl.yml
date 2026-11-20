@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   portable-imaging-core-linux:
-    name: AmcamImagingCore Linux tests
+    name: Portable imaging and application-core Linux tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -49,6 +49,9 @@ jobs:
       - name: Build and test portable imaging core
         run: swift test --package-path swift/Packages/AmcamImagingCore
 
+      - name: Build and test portable application lifecycle core
+        run: swift test --package-path swift/Packages/AmcamImagingApplicationCore
+
   package-tests:
     name: ${{ matrix.package }} tests
     runs-on: macos-15
@@ -61,6 +64,8 @@ jobs:
             path: swift/Packages/AmcamCameraModel
           - package: AmcamImagingCore
             path: swift/Packages/AmcamImagingCore
+          - package: AmcamImagingApplicationCore
+            path: swift/Packages/AmcamImagingApplicationCore
           - package: GenTLAPI
             path: swift/Packages/GenTLAPI
           - package: GenTLNative
