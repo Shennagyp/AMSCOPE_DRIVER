@@ -75,7 +75,9 @@ public struct AmcamCameraStateResolver: Sendable {
     }
 
     public func resolutions(from descriptors: [CameraFeatureDescriptor]) -> [AmcamResolution] {
-        let options = descriptors.first(where: { $0.name == "AmcamResolutionIndex" })?.enumerationValues ?? []
+        let resolutionDescriptor = descriptors.first(where: { $0.name == "AmcamResolutionIndex" })
+        guard resolutionDescriptor?.isAvailable == true else { return [] }
+        let options = resolutionDescriptor?.enumerationValues ?? []
         return options.compactMap { symbol -> AmcamResolution? in
             guard let separator = symbol.firstIndex(of: ":"),
                   let resolutionSeparator = symbol[symbol.index(after: separator)...].firstIndex(of: "x"),
@@ -90,9 +92,13 @@ public struct AmcamCameraStateResolver: Sendable {
 
     public func currentResolution(
         for device: AmcamDevice?,
+        descriptors: [CameraFeatureDescriptor],
         readFeature: FeatureReader
     ) async -> AmcamResolution? {
         guard let device,
+              let descriptor = descriptors.first(where: { $0.name == "AmcamResolutionIndex" }),
+              descriptor.isAvailable,
+              descriptor.isReadable,
               case .enumeration(let symbol)? = try? await readFeature("AmcamResolutionIndex"),
               let separator = symbol.firstIndex(of: ":"),
               let index = Int(symbol[..<separator]) else {
@@ -144,7 +150,7 @@ public struct AmcamCameraStateResolver: Sendable {
         }
 
         let gainDescriptor = descriptorsByName["AmcamAnalogGainPercent"]
-        let gainValue = await readIntegerFeature("AmcamAnalogGainPercent", readFeature: readFeature)
+        let gainValue = await readIntegerFeature("AmcamAnalogGainPercent", readFeature: safeReadFeature)
         let gain: AmcamGainControl?
         if let gainDescriptor,
            let current = unsigned16(gainValue),
@@ -182,7 +188,7 @@ public struct AmcamCameraStateResolver: Sendable {
             : nil
 
         let colorMatrix: Bool?
-        if case .boolean(let value)? = try? await readFeature("AmcamColorMatrixEnabled") {
+        if case .boolean(let value)? = try? await safeReadFeature("AmcamColorMatrixEnabled") {
             colorMatrix = value
         } else {
             colorMatrix = nil
