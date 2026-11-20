@@ -1121,7 +1121,6 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ pointer: UnsafeMutableRawPointer?,
         as type: Tag.Type
     ) throws -> GenTLHandle<Tag> {
-        guard let pointer else { try fail(.invalidHandle) }
         let rawValue = UInt(bitPattern: pointer)
         lock.lock()
         let isKnown = rawValue == UInt(bitPattern: systemToken) ||
@@ -1145,7 +1144,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
     private func infoBytes(_ value: GenTLInfoValue) -> (GenTLABI.INFO_DATATYPE, Data) {
         switch value {
         case .string(let string):
-            return (GenTLABI.INFO_DATATYPE_STRING, Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
+            return (GenTLABI.INFO_DATATYPE_STRING.rawValue, Data(string.utf8CString.map { UInt8(bitPattern: $0) }))
         case .stringList(let strings):
             var bytes: [UInt8] = []
             for string in strings {
@@ -1153,20 +1152,20 @@ extension AmcamGenTLImplementation: GenTLAPI {
                 bytes.append(0)
             }
             bytes.append(0)
-            return (GenTLABI.INFO_DATATYPE_STRINGLIST, Data(bytes))
-        case .int16(let value): return (GenTLABI.INFO_DATATYPE_INT16, dataBytes(of: value))
-        case .uint16(let value): return (GenTLABI.INFO_DATATYPE_UINT16, dataBytes(of: value))
-        case .int32(let value): return (GenTLABI.INFO_DATATYPE_INT32, dataBytes(of: value))
-        case .uint32(let value): return (GenTLABI.INFO_DATATYPE_UINT32, dataBytes(of: value))
-        case .int64(let value): return (GenTLABI.INFO_DATATYPE_INT64, dataBytes(of: value))
-        case .uint64(let value): return (GenTLABI.INFO_DATATYPE_UINT64, dataBytes(of: value))
-        case .float64(let value): return (GenTLABI.INFO_DATATYPE_FLOAT64, dataBytes(of: value))
-        case .pointer(let value): return (GenTLABI.INFO_DATATYPE_PTR, dataBytes(of: value))
-        case .bool8(let value): return (GenTLABI.INFO_DATATYPE_BOOL8, dataBytes(of: UInt8(value ? 1 : 0)))
-        case .size(let value): return (GenTLABI.INFO_DATATYPE_SIZET, dataBytes(of: UInt(value)))
-        case .raw(let data): return (GenTLABI.INFO_DATATYPE_BUFFER, data)
+            return (GenTLABI.INFO_DATATYPE_STRINGLIST.rawValue, Data(bytes))
+        case .int16(let value): return (GenTLABI.INFO_DATATYPE_INT16.rawValue, dataBytes(of: value))
+        case .uint16(let value): return (GenTLABI.INFO_DATATYPE_UINT16.rawValue, dataBytes(of: value))
+        case .int32(let value): return (GenTLABI.INFO_DATATYPE_INT32.rawValue, dataBytes(of: value))
+        case .uint32(let value): return (GenTLABI.INFO_DATATYPE_UINT32.rawValue, dataBytes(of: value))
+        case .int64(let value): return (GenTLABI.INFO_DATATYPE_INT64.rawValue, dataBytes(of: value))
+        case .uint64(let value): return (GenTLABI.INFO_DATATYPE_UINT64.rawValue, dataBytes(of: value))
+        case .float64(let value): return (GenTLABI.INFO_DATATYPE_FLOAT64.rawValue, dataBytes(of: value))
+        case .pointer(let value): return (GenTLABI.INFO_DATATYPE_PTR.rawValue, dataBytes(of: value))
+        case .bool8(let value): return (GenTLABI.INFO_DATATYPE_BOOL8.rawValue, dataBytes(of: UInt8(value ? 1 : 0)))
+        case .size(let value): return (GenTLABI.INFO_DATATYPE_SIZET.rawValue, dataBytes(of: UInt(value)))
+        case .raw(let data): return (GenTLABI.INFO_DATATYPE_BUFFER.rawValue, data)
         case .opaque(let dataType, let data): return (dataType, data)
-        case .pointerDifference(let value): return (GenTLABI.INFO_DATATYPE_PTRDIFF, dataBytes(of: value))
+        case .pointerDifference(let value): return (GenTLABI.INFO_DATATYPE_PTRDIFF.rawValue, dataBytes(of: value))
         }
     }
 
@@ -1228,7 +1227,6 @@ extension AmcamGenTLImplementation: GenTLAPI {
     }
 
     private func validBuffer(_ pointer: GenTLABI.BUFFER_HANDLE, in stream: DS_HANDLE) -> BUFFER_HANDLE? {
-        guard let pointer else { return nil }
         let rawValue = UInt(bitPattern: pointer)
         lock.lock()
         let isValid = bufferHandlesByStream[stream.rawValue]?.contains(rawValue) == true
@@ -2023,7 +2021,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ hEvent: GenTLABI.EVENT_HANDLE, _ pBuffer: UnsafeMutableRawPointer?,
         _ piSize: UnsafeMutablePointer<Int>?, _ iTimeout: UInt64
     ) -> GenTLABI.GC_ERROR {
-        guard let piSize, let hEvent else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
+        guard let piSize else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
         let key = UInt(bitPattern: hEvent)
         let capacity = piSize.pointee
 
@@ -2090,7 +2088,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ iInfoCmd: GenTLABI.EVENT_DATA_INFO_CMD, _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?,
         _ pOutBuffer: UnsafeMutableRawPointer?, _ piOutSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
-        guard let hEvent, let pInBuffer, iInSize > 0 else {
+        guard let pInBuffer, iInSize > 0 else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
         }
         let event = EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))
@@ -2106,10 +2104,10 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ piType: UnsafeMutablePointer<GenTLABI.INFO_DATATYPE>?, _ pBuffer: UnsafeMutableRawPointer?,
         _ piSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
-        guard let hEvent else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_HANDLE) }
+        
         do {
             var value = try EventGetInfo(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent)), command: iInfoCmd)
-            if iInfoCmd == GenTLABI.EVENT_NUM_IN_QUEUE, case .size(let queued) = value {
+            if iInfoCmd == GenTLABI.EVENT_NUM_IN_QUEUE.rawValue, case .size(let queued) = value {
                 eventReadCondition.lock()
                 let hasPendingPayload = pendingRawEventData[UInt(bitPattern: hEvent)] != nil
                 eventReadCondition.unlock()
