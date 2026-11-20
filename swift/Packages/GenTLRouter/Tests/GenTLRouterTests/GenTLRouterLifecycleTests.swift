@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 import GenTLABI
-import GenTLAPI
+@_spi(BackendConvenience) import GenTLAPI
 @testable import GenTLRouter
 
 private struct CallCounts {
