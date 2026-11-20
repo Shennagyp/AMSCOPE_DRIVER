@@ -1359,7 +1359,7 @@ public final class GenTLNativeImplementation: GenTLAPI, @unchecked Sendable {
                 guard registration.eventType == GenTLEventType.newBuffer.rawValue else {
                     throw GC_ERROR.notImplemented
                 }
-                return 2 * MemoryLayout<UnsafeMutableRawPointer>.size
+                return MemoryLayout<EVENT_NEW_BUFFER_DATA>.size
             }
         }
 
