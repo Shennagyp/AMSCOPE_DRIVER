@@ -123,6 +123,10 @@ jobs:
             echo "The frontend must not open, own, or read from GenTL acquisition resources directly." >&2
             exit 1
           fi
+          if grep -R -nE 'import GenTLAPI|GenTLDeviceSession|GenTLFeatureKind|GenTLFeatureValue|GenTLFeatureDescriptor|GenTLFeatureAccess' swift/Apps/AmcamImagingApp/Sources; then
+            echo "The application must use the imaging runtime feature contract, not GenTL feature/session types." >&2
+            exit 1
+          fi
           grep -q 'AmcamImagingRuntime' swift/Apps/AmcamImagingApp/Package.swift
           grep -q 'AmcamImagingGenTLAdapter' swift/Apps/AmcamImagingApp/Package.swift
           if grep -q 'AmcamGenTL' swift/Apps/AmcamImagingApp/Package.swift; then
