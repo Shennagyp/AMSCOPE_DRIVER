@@ -81,19 +81,6 @@ public actor CameraSessionLifecycle {
         return openedSession
     }
 
-    /// Attaches a session that has already been opened by a test or specialized
-    /// host. Production frontends should use open(_:) so the library owns it.
-    public func attach(_ newSession: any CameraRuntimeSession) throws {
-        guard !lifecycleOperationInProgress else {
-            throw CameraSessionLifecycleError.operationInProgress
-        }
-        guard session == nil, acquisition == nil, captureTask == nil else {
-            throw CameraSessionLifecycleError.sessionAlreadyAttached
-        }
-        session = newSession
-        lastDeliveredFrameSequence = nil
-    }
-
     public func start() async throws {
         guard !lifecycleOperationInProgress else {
             throw CameraSessionLifecycleError.operationInProgress
