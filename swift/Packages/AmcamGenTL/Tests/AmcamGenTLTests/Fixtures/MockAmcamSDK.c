@@ -115,6 +115,7 @@ int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
     return 0;
 }
 int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
+    (void)value;
     return handle && option ? 0 : -1;
 }
 
@@ -130,3 +131,6 @@ void MockAmcam_Reset(void) {
 uint32_t MockAmcam_CloseCount(void) { return close_count; }
 uint32_t MockAmcam_StopCount(void) { return stop_count; }
 uint32_t MockAmcam_PullCount(void) { return pull_count; }
+void MockAmcam_EmitEvent(uint32_t event) {
+    if (active_callback) active_callback(event, active_context);
+}
