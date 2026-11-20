@@ -64,11 +64,11 @@ final class CameraApplicationModel: ObservableObject {
                 selectedDeviceID = found.first?.identifier ?? ""
                 closeSession()
             }
+            status = found.isEmpty ? "No AmScope cameras detected" : "\(found.count) camera(s) detected"
+            errorMessage = nil
             if session == nil, selectedDevice != nil {
                 prepareSelectedCamera()
             }
-            status = found.isEmpty ? "No AmScope cameras detected" : "\(found.count) camera(s) detected"
-            errorMessage = nil
         } catch {
             status = "Camera discovery failed"
             errorMessage = error.localizedDescription
