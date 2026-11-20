@@ -72,6 +72,16 @@ app_bundle="$destination"
 mkdir -p "$app_bundle/Contents/MacOS"
 
 cp "$executable" "$app_bundle/Contents/MacOS/$APP_PRODUCT"
+
+# Vendor SDKs are deployment inputs, not user-selected files. Keep each vendor
+# isolated under Contents/Frameworks/Vendors/<vendor>/... so native loader
+# dependencies can resolve relative to their packaged location.
+vendor_source="$REPOSITORY_ROOT/vendor"
+vendor_destination="$app_bundle/Contents/Frameworks/Vendors"
+if [[ -d "$vendor_source" ]]; then
+  mkdir -p "$vendor_destination"
+  cp -R "$vendor_source/." "$vendor_destination/"
+fi
 cat > "$app_bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -90,6 +100,14 @@ cat > "$app_bundle/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+# Sign each packaged vendor dylib before signing the containing application.
+if [[ -d "$vendor_destination" ]]; then
+  while IFS= read -r -d '' library; do
+    codesign --force --sign - "$library"
+    codesign --verify --strict "$library"
+  done < <(find "$vendor_destination" -type f -name '*.dylib' -print0)
+fi
 
 codesign --force --deep --sign - "$app_bundle"
 codesign --verify --deep --strict "$app_bundle"
