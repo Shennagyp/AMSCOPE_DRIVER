@@ -552,4 +552,11 @@ The fixture supports an independent compile-time omission switch for every one o
 \section{Pinned ABI version and layout gate}
 The native integration suite now asserts the compiled header version code is \texttt{0x01060000} (GenTL 1.6.0) and that \texttt{GenTLABI\_LayoutValid()} returns success. The ABI C target also contains compile-time \texttt{\_Static\_assert} checks for packed event data, port register stack entries, chunk metadata, and GenTL 1.6 stacked buffer information structures. The runtime test verifies that the linked validation entry point is callable in the test process.
 
+
+
+\section{CI execution evidence and current infrastructure blocker}
+The macOS workflow was triggered on push (run 54, commit \texttt{8512306e3c8d0cbc731fe32869bae82fb0f3278a}). All four matrix jobs were marked failed within seconds. The GitHub job records report \texttt{runner\_id: 0}, empty step arrays, and no downloadable runner logs; rerunning the failed jobs produced the same result. The available evidence therefore indicates that no runner acquired the jobs and no Swift build or test command executed. This is not evidence that the source failed to compile or that a test assertion failed.
+
+The GitHub Actions/macOS runner availability or repository billing/permissions must be repaired, or the exact package commands must be run locally on macOS with Xcode command-line tools. Until a job contains executed steps and logs, the CI conclusion must not be interpreted as a code test result.
+
 \end{document}
