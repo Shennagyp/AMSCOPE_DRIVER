@@ -21,7 +21,7 @@ private final class AmcamOpenDeviceRecord: @unchecked Sendable {
 /// GenTL Consumer function model to Amcam SDK operations where corresponding
 /// behavior exists. Unsupported register/GenApi operations are not fabricated.
 @_spi(BackendFactory)
-public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked Sendable {
+public final class AmcamGenTLImplementation: @unchecked Sendable {
     private let sdkLibraryURL: URL
     private let lock = NSRecursiveLock()
 
