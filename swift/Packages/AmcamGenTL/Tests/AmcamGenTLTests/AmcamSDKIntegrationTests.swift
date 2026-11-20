@@ -217,7 +217,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
                 return
             }
         }
-        XCTAssertEqual(try session.readControls().exposure.readbackMicroseconds, 20_000)
+        XCTAssertEqual(try session.readControls().exposure?.readbackMicroseconds, 20_000)
 
         XCTAssertThrowsError(try session.setExposureTime(microseconds: 1_000_001))
 
