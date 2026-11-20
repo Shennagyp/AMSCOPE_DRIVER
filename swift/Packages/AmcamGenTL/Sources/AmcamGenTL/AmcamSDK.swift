@@ -559,10 +559,6 @@ final class AmcamSDK: @unchecked Sendable {
 
     func close(_ handle: UnsafeMutableRawPointer) { api.close(handle) }
     func startPull(_ handle: UnsafeMutableRawPointer, callback: AmcamEventCallback, context: UnsafeMutableRawPointer) -> Int32 { api.startPull(handle, callback, context) }
-    var pullImageUsesTightlyPackedRows: Bool {
-        api.pullImageV4 != nil || api.pullImageV3 != nil || api.pullImageWithRowPitchV2 != nil
-    }
-
     var pullImageOperationName: String {
         if api.pullImageV4 != nil { return "Amcam_PullImageV4" }
         if api.pullImageV3 != nil { return "Amcam_PullImageV3" }
@@ -575,7 +571,8 @@ final class AmcamSDK: @unchecked Sendable {
         buffer: UnsafeMutableRawPointer,
         frameInfo: UnsafeMutablePointer<AmcamFrameInfoV2>,
         metadata: UnsafeMutablePointer<AmcamFrameMetadata?>? = nil,
-        operationName: UnsafeMutablePointer<String?>? = nil
+        operationName: UnsafeMutablePointer<String?>? = nil,
+        tightlyPackedRows: UnsafeMutablePointer<Bool>? = nil
     ) -> Int32 {
         // Amcam documents rowPitch = -1 as zero padding (tightly packed rows).
         // E_NOTIMPL is model-specific: retry the next API generation only for
@@ -587,6 +584,7 @@ final class AmcamSDK: @unchecked Sendable {
             if result != Self.notImplementedHRESULT {
                 guard result >= 0 else { return result }
                 copy(info.v3, to: frameInfo)
+                tightlyPackedRows?.pointee = true
                 metadata?.pointee = Self.metadata(from: info)
                 return result
             }
@@ -598,6 +596,7 @@ final class AmcamSDK: @unchecked Sendable {
             if result != Self.notImplementedHRESULT {
                 guard result >= 0 else { return result }
                 copy(info, to: frameInfo)
+                tightlyPackedRows?.pointee = true
                 metadata?.pointee = Self.metadata(from: info)
                 return result
             }
@@ -616,6 +615,7 @@ final class AmcamSDK: @unchecked Sendable {
         operationName?.pointee = "Amcam_PullImageV2"
         let result = pullV2(handle, buffer, Self.requestedPullBits, frameInfo)
         if result >= 0 {
+            tightlyPackedRows?.pointee = false
             metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
         }
         return result
