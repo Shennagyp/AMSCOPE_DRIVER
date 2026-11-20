@@ -200,6 +200,26 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 }
 
 final class GenTLRouterLifecycleTests: XCTestCase {
+    func testDeviceSessionForwardsTypedFeatureAccessToItsOwningBackend() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "feature-backend") { api }
+
+        let report = router.discover()
+        let candidate = try XCTUnwrap(report.devices.first)
+        let session = try candidate.open(accessFlags: GenTLDeviceAccess.exclusive.rawValue)
+        defer { try? session.close() }
+
+        XCTAssertTrue(session.supportsFeatureAccess)
+        XCTAssertEqual(
+            try session.featureDescriptors().map(\\.name),
+            ["MockFeature"]
+        )
+        XCTAssertEqual(try session.readFeature("MockFeature"), .integer(42))
+        try session.writeFeature(.integer(84), named: "MockFeature")
+        XCTAssertEqual(try session.readFeature("MockFeature"), .integer(84))
+    }
+
     func testSuccessfulInitializationRollbackAllowsRetry() throws {
         let api = RecordingGenTLAPI(failSystemOpen: true)
         let router = GenTLRouter()
@@ -343,5 +363,42 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(finalCounts.interfaceClose, 1)
         XCTAssertEqual(finalCounts.tlClose, 1)
         XCTAssertEqual(finalCounts.gcClose, 1)
+    }
+}
+
+
+extension RecordingGenTLAPI: GenTLFeatureAccess {
+    func featureDescriptors(for device: DEV_HANDLE) throws -> [GenTLFeatureDescriptor] {
+        guard device.rawValue == UInt(bitPattern: deviceToken) else {
+            throw GenTLFeatureAccessError.featureUnavailable("wrong-device-handle")
+        }
+        return [
+            GenTLFeatureDescriptor(
+                name: "MockFeature",
+                displayName: "Mock Feature",
+                kind: .integer,
+                isAvailable: true,
+                isReadable: true,
+                isWritable: true
+            )
+        ]
+    }
+
+    func readFeature(_ name: String, from device: DEV_HANDLE) throws -> GenTLFeatureValue {
+        guard name == "MockFeature", device.rawValue == UInt(bitPattern: deviceToken) else {
+            throw GenTLFeatureAccessError.featureNotFound(name)
+        }
+        return .integer(42)
+    }
+
+    func writeFeature(
+        _ value: GenTLFeatureValue,
+        named name: String,
+        to device: DEV_HANDLE
+    ) throws {
+        guard name == "MockFeature", device.rawValue == UInt(bitPattern: deviceToken),
+              value.kind == .integer else {
+            throw GenTLFeatureAccessError.invalidValue(name)
+        }
     }
 }
