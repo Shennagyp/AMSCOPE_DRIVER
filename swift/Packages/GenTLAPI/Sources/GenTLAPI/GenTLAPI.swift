@@ -64,7 +64,7 @@ public protocol GenTLAPI: Sendable {
     func GCRegisterEvent(
         _ hEventSrc: GenTLABI.EVENTSRC_HANDLE,
         _ iEventID: GenTLABI.EVENT_TYPE,
-        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE>?
+        _ phEvent: UnsafeMutablePointer<GenTLABI.EVENT_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func GCUnregisterEvent(
@@ -102,7 +102,7 @@ public protocol GenTLAPI: Sendable {
 
     // MARK: System
 
-    func TLOpen(_ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?) -> GenTLABI.GC_ERROR
+    func TLOpen(_ phTL: UnsafeMutablePointer<GenTLABI.TL_HANDLE?>?) -> GenTLABI.GC_ERROR
     func TLClose(_ hTL: GenTLABI.TL_HANDLE) -> GenTLABI.GC_ERROR
 
     func TLGetInfo(
@@ -137,7 +137,7 @@ public protocol GenTLAPI: Sendable {
     func TLOpenInterface(
         _ hTL: GenTLABI.TL_HANDLE,
         _ sIfaceID: UnsafePointer<CChar>?,
-        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func TLUpdateInterfaceList(
@@ -189,14 +189,14 @@ public protocol GenTLAPI: Sendable {
         _ hIface: GenTLABI.IF_HANDLE,
         _ sDeviceID: UnsafePointer<CChar>?,
         _ iOpenFlag: GenTLABI.DEVICE_ACCESS_FLAGS,
-        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     // MARK: Device
 
     func DevGetPort(
         _ hDevice: GenTLABI.DEV_HANDLE,
-        _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE>?
+        _ phRemoteDevice: UnsafeMutablePointer<GenTLABI.PORT_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DevGetNumDataStreams(
@@ -214,7 +214,7 @@ public protocol GenTLAPI: Sendable {
     func DevOpenDataStream(
         _ hDevice: GenTLABI.DEV_HANDLE,
         _ sDataStreamID: UnsafePointer<CChar>?,
-        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE>?
+        _ phDataStream: UnsafeMutablePointer<GenTLABI.DS_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DevGetInfo(
@@ -234,14 +234,14 @@ public protocol GenTLAPI: Sendable {
         _ pBuffer: UnsafeMutableRawPointer?,
         _ iSize: Int,
         _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DSAllocAndAnnounceBuffer(
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iSize: Int,
         _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DSFlushQueue(
@@ -271,7 +271,7 @@ public protocol GenTLAPI: Sendable {
     func DSGetBufferID(
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iIndex: UInt32,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DSClose(_ hDataStream: GenTLABI.DS_HANDLE) -> GenTLABI.GC_ERROR
@@ -338,17 +338,17 @@ public protocol GenTLAPI: Sendable {
 
     func IFGetParentTL(
         _ hIface: GenTLABI.IF_HANDLE,
-        _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE>?
+        _ phSystem: UnsafeMutablePointer<GenTLABI.TL_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DevGetParentIF(
         _ hDevice: GenTLABI.DEV_HANDLE,
-        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE>?
+        _ phIface: UnsafeMutablePointer<GenTLABI.IF_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DSGetParentDev(
         _ hDataStream: GenTLABI.DS_HANDLE,
-        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE>?
+        _ phDevice: UnsafeMutablePointer<GenTLABI.DEV_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     // MARK: GenTL 1.5
@@ -377,7 +377,7 @@ public protocol GenTLAPI: Sendable {
         _ ppSegments: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
         _ piSizes: UnsafeMutablePointer<Int>?,
         _ pPrivate: UnsafeMutableRawPointer?,
-        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE>?
+        _ phBuffer: UnsafeMutablePointer<GenTLABI.BUFFER_HANDLE?>?
     ) -> GenTLABI.GC_ERROR
 
     func DSGetBufferInfoStacked(
