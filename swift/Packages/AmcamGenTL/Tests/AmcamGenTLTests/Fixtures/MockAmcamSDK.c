@@ -35,6 +35,8 @@ static int32_t white_balance_temperature = 6503;
 static int32_t white_balance_tint = 1000;
 static int32_t white_balance_rgb[3] = {100, 100, 100};
 static int32_t precise_frame_rate_tenths = 150;
+static int32_t color_matrix_enabled = 1;
+static int32_t pixel_format_code = 8;
 
 const char *Amcam_Version(void) { return "58.28273.20250415"; }
 
@@ -137,6 +139,14 @@ int32_t Amcam_get_ExpTimeRange(void *handle, uint32_t *minimum, uint32_t *maximu
     *default_value = 10000;
     return 0;
 }
+int32_t Amcam_get_PixelFormatSupport(void *handle, uint32_t index, int32_t *value) {
+    if (!handle || !value) return -1;
+    if (index == 0xff) *value = 2;
+    else if (index == 0) *value = 0;
+    else if (index == 1) *value = 8;
+    else return -1;
+    return 0;
+}
 int32_t Amcam_get_TempTint(void *handle, int32_t *temperature, int32_t *tint) {
     if (!handle || !temperature || !tint) return -1;
     *temperature = white_balance_temperature;
@@ -188,7 +198,8 @@ int32_t Amcam_get_ExpoAGainRange(void *handle, uint16_t *minimum, uint16_t *maxi
 int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
     if (!handle || !value) return -1;
     if (option == 0x0d) *value = 1;
-    else if (option == 0x1a) *value = 0;
+    else if (option == 0x1a) *value = pixel_format_code;
+    else if (option == 0x0d) *value = color_matrix_enabled;
     else if (option == 0x32) *value = 1;
     else if (option == 0x2c) *value = 300;
     else if (option == 0x2d) *value = precise_frame_rate_tenths;
@@ -197,6 +208,14 @@ int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
 }
 int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
     if (!handle) return -1;
+    if (option == 0x0d && (value == 0 || value == 1)) {
+        color_matrix_enabled = value;
+        return 0;
+    }
+    if (option == 0x1a && (value == 8 || value == 0)) {
+        pixel_format_code = value;
+        return 0;
+    }
     if (option == 0x2d && value >= 1 && value <= 300) {
         precise_frame_rate_tenths = value;
         return 0;
