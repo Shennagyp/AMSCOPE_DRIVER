@@ -10,6 +10,9 @@ on:
       - "swift/Packages/**"
       - "swift/Apps/**"
       - "swift/docs/**"
+      - "scripts/**"
+      - "vendor/**"
+      - "README.md"
       - ".github/workflows/swift-gentl.yml"
   pull_request:
     branches:
@@ -29,7 +32,7 @@ permissions:
 # Keep only the newest pending validation run for this branch. A currently
 # running run is allowed to finish; superseded queued runs are replaced.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-lifecycle-v3
+  group: ${{ github.workflow }}-${{ github.ref }}-vendor-sdk-v4
   cancel-in-progress: false
 
 jobs:
