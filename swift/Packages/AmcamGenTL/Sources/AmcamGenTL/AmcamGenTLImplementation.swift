@@ -1151,6 +1151,7 @@ extension AmcamGenTLImplementation: GenTLAPI {
         case .bool8(let value): return (11, dataBytes(of: UInt8(value ? 1 : 0)))
         case .size(let value): return (12, dataBytes(of: UInt(value)))
         case .raw(let data): return (13, data)
+        case .opaque(let dataType, let data): return (dataType, data)
         case .pointerDifference(let value): return (14, dataBytes(of: value))
         }
     }
