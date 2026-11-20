@@ -988,11 +988,11 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
         retiredHandleTokens.append(token)
     }
 
-    private func rawHandle<Tag>(_ handle: GenTLHandle<Tag>) -> UnsafeMutableRawPointer? {
+    private func rawHandle<Tag: Hashable & Sendable>(_ handle: GenTLHandle<Tag>) -> UnsafeMutableRawPointer? {
         UnsafeMutableRawPointer(bitPattern: handle.rawValue)
     }
 
-    private func typedHandle<Tag>(
+    private func typedHandle<Tag: Hashable & Sendable>(
         _ pointer: UnsafeMutableRawPointer?,
         as type: Tag.Type
     ) throws -> GenTLHandle<Tag> {
