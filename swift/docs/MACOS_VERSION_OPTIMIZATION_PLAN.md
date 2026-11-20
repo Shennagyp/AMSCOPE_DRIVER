@@ -391,7 +391,7 @@ This is hosted software validation only. No local Xcode run or physical camera a
 **TDD**
 - Added a fake Producer failure injection for `DSRevokeBuffer`.
 - The new test asserts that a failed revoke does not close the data stream, then retries close after clearing the injected failure and verifies successful buffer revocation and stream close.
-- Hosted validation for this latest increment is pending; earlier model-package extraction and routed app build/test run passed.
+- Hosted macOS validation passed in [run 44704623402](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402): all five package test jobs, routed dependency guard, camera probe build and imaging app release build/artifact upload.
 
 **Consequence**
 - Cleanup errors remain visible and retryable. The application does not trade a locally convenient state reset for a provider handle leak or an invalid parent-before-child close.
@@ -407,4 +407,14 @@ This is hosted software validation only. No local Xcode run or physical camera a
 
 **TDD**
 - The fake Producer can force an event timeout. The new test starts acquisition, observes the typed timeout, disables the fault, then receives a valid frame on the same acquisition session without restarting.
-- Hosted macOS validation for this increment is pending.
+- Hosted macOS validation passed in [run 44704623402](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402). The GenTLRouter timeout regression test and all other package tests passed; the app release build and artifact upload also passed.
+
+
+### 2026-11-20 — Hosted validation after lifecycle and timeout corrections
+
+- Successful run: [44704623402](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44704623402), commit `92ecde1a5a415899af8a35b518fa8160cf98b05c`.
+- All five package test jobs passed.
+- Routed application dependency guard passed.
+- Camera probe and imaging app release builds passed; the arm64 app bundle was signed and uploaded.
+- App artifact ID: `14613609245`; SHA-256: `1a85f5f8b280c9e9ef70f448e1f36410ba7cef74d1e952f44a8473536149400a`.
+- No local Xcode build or test was run. Physical camera acceptance remains outstanding.
