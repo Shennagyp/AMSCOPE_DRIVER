@@ -52,7 +52,7 @@ public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendabl
 }
 
 public enum AmcamCameraFeatureGroup: String, CaseIterable, Codable, Hashable, Sendable, Identifiable {
-    case capture, exposureAndGain, frameRate, image, trigger, focus, thermal, calibration, accessories
+    case capture, exposureAndGain, frameRate, image, trigger, focus, thermal, calibration, accessories, sensor, transport
     public var id: String { rawValue }
 
     public var title: String {
@@ -272,6 +272,8 @@ public struct AmcamCameraProfileRegistry: Sendable {
         case .frameBuffer: return 0x01000000
         case .ddrFrameBuffer: return 0x02000000
         case .conversionGain: return 0x04000000
+        case .conversionGainHDR: return 0x0000000800000000
+        case .globalShutter: return 0x0000001000000000
         case .preciseFrameRate: return 0x0000004000000000
         case .focusMotor: return 0x0000002000000000
         case .heatAntiFog: return 0x0000008000000000
