@@ -111,8 +111,9 @@ public struct AmcamCameraStateResolver: Sendable {
         descriptors: [CameraFeatureDescriptor],
         readFeature: FeatureReader
     ) async -> AmcamControlSnapshot {
+        // Unavailable features must not contribute controls, ranges or advertised options.
         let descriptorsByName = Dictionary(
-            descriptors.map { ($0.name, $0) },
+            descriptors.filter(\.isAvailable).map { ($0.name, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
         let readableFeatureNames = Set(
