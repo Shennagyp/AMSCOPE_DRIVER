@@ -55,8 +55,8 @@ typedef struct {
     AmcamFrameInfoV3 v3;
     uint32_t reserved;
     uint32_t uLum;
-    uint32_t uFV;
-    uint32_t timecount;
+    int64_t uFV;
+    int64_t timecount;
     uint32_t framecount;
     uint32_t tricount;
     AmcamGps gps;
