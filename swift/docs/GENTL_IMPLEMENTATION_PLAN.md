@@ -264,3 +264,8 @@ No build or test command has been executed as part of this documentation update.
 ### Immediate next phase
 
 Proceed with T0 in `GENTL_TEST_DEVELOPMENT_PLAN.md`: inspect the actual source and test target layout, establish a reproducible package build baseline, and derive the 64-operation and required/optional symbol inventories from the pinned header. Only then implement the C mock fixture and native dispatch tests. Do not create a parallel package hierarchy if the existing package test targets can host the fixture cleanly.
+
+
+### Raw protocol-default test update (2026-11-20)
+
+`swift/Packages/GenTLAPI/Tests/GenTLAPITests/GenTLAPITests.swift` now contains an empty `GenTLAPI` conformer and one explicit assertion for each of the 64 protocol requirements. Each default operation is expected to return `GenTLABI.GC_ERR_NOT_IMPLEMENTED`. A source-level name comparison found 64/64 operations represented exactly once. This test has not yet been compiled or run; it is source coverage, not passing test evidence.
