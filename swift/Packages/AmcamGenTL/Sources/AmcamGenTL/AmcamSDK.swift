@@ -12,6 +12,9 @@ private typealias PutResolutionFunction = @convention(c) (UnsafeMutableRawPointe
 private typealias GetResolutionIndexFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt32>?) -> Int32
 private typealias StartPullFunction = @convention(c) (UnsafeMutableRawPointer?, AmcamEventCallback?, UnsafeMutableRawPointer?) -> Int32
 private typealias PullImageFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, UnsafeMutablePointer<AmcamFrameInfoV2>?) -> Int32
+private typealias PullImageWithRowPitchV2Function = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, Int32, UnsafeMutablePointer<AmcamFrameInfoV2>?) -> Int32
+private typealias PullImageV3Function = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, Int32, Int32, UnsafeMutablePointer<AmcamFrameInfoV3>?) -> Int32
+private typealias PullImageV4Function = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, Int32, Int32, UnsafeMutablePointer<AmcamFrameInfoV4>?) -> Int32
 private typealias StopFunction = @convention(c) (UnsafeMutableRawPointer?) -> Int32
 private typealias GetAutoExposureFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?) -> Int32
 private typealias SetAutoExposureFunction = @convention(c) (UnsafeMutableRawPointer?, Int32) -> Int32
@@ -77,7 +80,10 @@ final class AmcamSDK: @unchecked Sendable {
         let putResolution: PutResolutionFunction?
         let getResolutionIndex: GetResolutionIndexFunction?
         let startPull: StartPullFunction
-        let pullImage: PullImageFunction
+        let pullImage: PullImageFunction?
+        let pullImageWithRowPitchV2: PullImageWithRowPitchV2Function?
+        let pullImageV3: PullImageV3Function?
+        let pullImageV4: PullImageV4Function?
         let stop: StopFunction
         let getAutoExposure: GetAutoExposureFunction
         let setAutoExposure: SetAutoExposureFunction
@@ -125,7 +131,10 @@ final class AmcamSDK: @unchecked Sendable {
                 putResolution: try? load("Amcam_put_eSize", as: PutResolutionFunction.self),
                 getResolutionIndex: try? load("Amcam_get_eSize", as: GetResolutionIndexFunction.self),
                 startPull: try load("Amcam_StartPullModeWithCallback", as: StartPullFunction.self),
-                pullImage: try load("Amcam_PullImageV2", as: PullImageFunction.self),
+                pullImage: try? load("Amcam_PullImageV2", as: PullImageFunction.self),
+                pullImageWithRowPitchV2: try? load("Amcam_PullImageWithRowPitchV2", as: PullImageWithRowPitchV2Function.self),
+                pullImageV3: try? load("Amcam_PullImageV3", as: PullImageV3Function.self),
+                pullImageV4: try? load("Amcam_PullImageV4", as: PullImageV4Function.self),
                 stop: try load("Amcam_Stop", as: StopFunction.self),
                 getAutoExposure: try load("Amcam_get_AutoExpoEnable", as: GetAutoExposureFunction.self),
                 setAutoExposure: try load("Amcam_put_AutoExpoEnable", as: SetAutoExposureFunction.self),
@@ -146,6 +155,10 @@ final class AmcamSDK: @unchecked Sendable {
                 setWhiteBalanceGain: try? load("Amcam_put_WhiteBalanceGain", as: SetWhiteBalanceGainFunction.self),
                 pixelFormatSupport: try? load("Amcam_get_PixelFormatSupport", as: PixelFormatSupportFunction.self)
             )
+            guard resolved.pullImageV4 != nil || resolved.pullImageV3 != nil ||
+              resolved.pullImageWithRowPitchV2 != nil || resolved.pullImage != nil else {
+                throw AmcamCameraError.missingSymbol("Amcam_PullImageV4/V3/WithRowPitchV2/V2")
+            }
             guard let versionPointer = resolved.version() else {
                 throw AmcamCameraError.incompatibleSDK(expected: expectedVersion, actual: "null")
             }
@@ -536,8 +549,41 @@ final class AmcamSDK: @unchecked Sendable {
 
     func close(_ handle: UnsafeMutableRawPointer) { api.close(handle) }
     func startPull(_ handle: UnsafeMutableRawPointer, callback: AmcamEventCallback, context: UnsafeMutableRawPointer) -> Int32 { api.startPull(handle, callback, context) }
+    var pullImageOperationName: String {
+        if api.pullImageV4 != nil { return "Amcam_PullImageV4" }
+        if api.pullImageV3 != nil { return "Amcam_PullImageV3" }
+        if api.pullImageWithRowPitchV2 != nil { return "Amcam_PullImageWithRowPitchV2" }
+        return "Amcam_PullImageV2"
+    }
+
     func pullImage(_ handle: UnsafeMutableRawPointer, buffer: UnsafeMutableRawPointer, frameInfo: UnsafeMutablePointer<AmcamFrameInfoV2>) -> Int32 {
-        api.pullImage(handle, buffer, Self.requestedPullBits, frameInfo)
+        // A negative row pitch explicitly requests tightly packed rows. This matches
+        // Amcam's documented RGB24 layout (width * 3) and avoids DIB row padding.
+        if let pullV4 = api.pullImageV4 {
+            var info = AmcamFrameInfoV4()
+            let result = pullV4(handle, buffer, 0, Self.requestedPullBits, -1, &info)
+            frameInfo.pointee.width = info.v3.width
+            frameInfo.pointee.height = info.v3.height
+            frameInfo.pointee.flag = info.v3.flag
+            frameInfo.pointee.seq = info.v3.seq
+            frameInfo.pointee.timestamp = info.v3.timestamp
+            return result
+        }
+        if let pullV3 = api.pullImageV3 {
+            var info = AmcamFrameInfoV3()
+            let result = pullV3(handle, buffer, 0, Self.requestedPullBits, -1, &info)
+            frameInfo.pointee.width = info.width
+            frameInfo.pointee.height = info.height
+            frameInfo.pointee.flag = info.flag
+            frameInfo.pointee.seq = info.seq
+            frameInfo.pointee.timestamp = info.timestamp
+            return result
+        }
+        if let pullWithPitch = api.pullImageWithRowPitchV2 {
+            return pullWithPitch(handle, buffer, Self.requestedPullBits, -1, frameInfo)
+        }
+        guard let pullV2 = api.pullImage else { return -1 }
+        return pullV2(handle, buffer, Self.requestedPullBits, frameInfo)
     }
     func stop(_ handle: UnsafeMutableRawPointer) -> Int32 { api.stop(handle) }
 }
