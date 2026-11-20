@@ -3,12 +3,23 @@ import AmcamImagingCore
 import Foundation
 import GenTLRouter
 
+public enum GenTLRuntimeAdapterError: Error, Equatable, LocalizedError {
+    case unexpectedSessionType
+
+    public var errorDescription: String? {
+        switch self {
+        case .unexpectedSessionType:
+            return "The GenTL backend returned a session that is not owned by the GenTL runtime adapter."
+        }
+    }
+}
+
 /// Adapts one already-open GenTL device session to the portable lifecycle contract.
 /// The caller delegates device close responsibility to this wrapper. It may retain
 /// the session reference for feature access, but must not close it independently.
 public final class GenTLRuntimeDevice: CameraRuntimeDevice, @unchecked Sendable {
     private let candidate: GenTLDeviceCandidate
-    private let access: GenTLDeviceAccess
+    private let access: GenTLDeviceAccessMode
 
     public init(candidate: GenTLDeviceCandidate, access: GenTLDeviceAccess = .exclusive) {
         self.candidate = candidate
