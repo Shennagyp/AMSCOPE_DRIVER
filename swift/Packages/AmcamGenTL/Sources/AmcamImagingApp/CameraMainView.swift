@@ -71,7 +71,6 @@ struct CameraMainView: View {
                 .frame(width: 440, height: 560)
                 .preferredColorScheme(.dark)
         }
-        .onDisappear { model.shutdown() }
         .alert("Camera error", isPresented: Binding(
             get: { model.errorMessage != nil && model.latestImage != nil },
             set: { if !$0 { model.errorMessage = nil } }
