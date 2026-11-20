@@ -2158,6 +2158,7 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
         let exposureAvailability = capabilities.availability(of: .exposureManual)
         let gainAvailability = capabilities.availability(of: .analogGain)
         let whiteBalanceAvailability = capabilities.availability(of: .whiteBalance)
+        let rgbGainAvailable = whiteBalanceAvailability.isUsable && controls.whiteBalance?.rgbGain?.count == 3
         let colorMatrixAvailable = capabilities.availability(of: .colorCorrection).isUsable
             && controls.image?.colorMatrixEnabled != nil
         let pixelFormats = controls.image?.supportedPixelFormats ?? []
@@ -2364,6 +2365,11 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
                 throw GenTLFeatureAccessError.featureNotReadable(name)
             }
             return .integer(Int64(value))
+        case "AmcamWhiteBalanceRGBGain":
+            guard let values = controls.whiteBalance?.rgbGain, values.count == 3 else {
+                throw GenTLFeatureAccessError.featureNotReadable(name)
+            }
+            return .integerVector(values.map(Int64.init))
         case "AmcamFixedFrameRate":
             guard let value = controls.frameRate.readbackFramesPerSecond else {
                 throw GenTLFeatureAccessError.featureNotReadable(name)
@@ -2463,6 +2469,16 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
                 temperature: temperature,
                 tint: Int32(rawTint)
             )
+
+        case ("AmcamWhiteBalanceRGBGain", .integerVector(let rawValues)):
+            guard rawValues.count == 3 else {
+                throw GenTLFeatureAccessError.invalidValue("AmcamWhiteBalanceRGBGain requires exactly three channel values.")
+            }
+            let values = rawValues.compactMap { Int32(exactly: $0) }
+            guard values.count == 3 else {
+                throw GenTLFeatureAccessError.invalidValue("AmcamWhiteBalanceRGBGain values must fit signed 32-bit SDK values.")
+            }
+            _ = try record.session.setWhiteBalanceRGBGain(values)
 
         case ("AmcamFixedFrameRate", .floatingPoint(let framesPerSecond)):
             _ = try record.session.setFixedFrameRate(framesPerSecond: framesPerSecond)

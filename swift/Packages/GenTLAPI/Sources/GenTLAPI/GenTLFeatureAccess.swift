@@ -4,6 +4,7 @@
 public enum GenTLFeatureKind: String, Codable, Equatable, Sendable {
     case boolean
     case integer
+    case integerVector
     case floatingPoint
     case string
     case enumeration
@@ -14,6 +15,7 @@ public enum GenTLFeatureKind: String, Codable, Equatable, Sendable {
 public enum GenTLFeatureValue: Equatable, Sendable {
     case boolean(Bool)
     case integer(Int64)
+    case integerVector([Int64])
     case floatingPoint(Double)
     case string(String)
     case enumeration(String)
@@ -22,6 +24,7 @@ public enum GenTLFeatureValue: Equatable, Sendable {
         switch self {
         case .boolean: return .boolean
         case .integer: return .integer
+        case .integerVector: return .integerVector
         case .floatingPoint: return .floatingPoint
         case .string: return .string
         case .enumeration: return .enumeration
@@ -54,6 +57,7 @@ public struct GenTLFeatureDescriptor: Equatable, Sendable, Identifiable {
     public let isReadable: Bool
     public let isWritable: Bool
     public let numericRange: GenTLFeatureNumericRange?
+    public let elementCount: Int?
     public let enumerationValues: [String]
 
     public var id: String { name }
@@ -67,6 +71,7 @@ public struct GenTLFeatureDescriptor: Equatable, Sendable, Identifiable {
         isReadable: Bool,
         isWritable: Bool,
         numericRange: GenTLFeatureNumericRange? = nil,
+        elementCount: Int? = nil,
         enumerationValues: [String] = []
     ) {
         self.name = name
@@ -77,6 +82,7 @@ public struct GenTLFeatureDescriptor: Equatable, Sendable, Identifiable {
         self.isReadable = isReadable
         self.isWritable = isWritable
         self.numericRange = numericRange
+        self.elementCount = elementCount
         self.enumerationValues = enumerationValues
     }
 }

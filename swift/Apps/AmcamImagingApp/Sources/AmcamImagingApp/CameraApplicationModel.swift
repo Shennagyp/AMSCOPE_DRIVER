@@ -38,7 +38,7 @@ final class CameraApplicationModel: ObservableObject {
         .exposureAuto: ["ExposureAuto"],
         .exposureManual: ["ExposureTime"],
         .analogGain: ["AmcamAnalogGainPercent"],
-        .whiteBalance: ["AmcamWhiteBalanceTemperature", "AmcamWhiteBalanceTint"],
+        .whiteBalance: ["AmcamWhiteBalanceTemperature", "AmcamWhiteBalanceTint", "AmcamWhiteBalanceRGBGain"],
         .colorCorrection: ["AmcamColorMatrixEnabled"],
         .pixelFormatSelection: ["AmcamPixelFormat"],
         .preciseFrameRate: ["AmcamFixedFrameRate"],
@@ -279,7 +279,7 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "White-balance RGB gain requires exactly three channel values."
             return
         }
-        errorMessage = "RGB white-balance controls are not yet exposed by the routed feature provider."
+        writeFeature(.integerVector(values.map(Int64.init)), named: "AmcamWhiteBalanceRGBGain")
     }
 
     func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) {
@@ -405,6 +405,11 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "Open a camera before changing its features."
             return
         }
+        if let feature = capabilityFeature(for: name),
+           cameraCapabilities?.availability(of: feature).isUsable != true {
+            errorMessage = "\(name) is not available under the selected camera's capability and model-profile policy."
+            return
+        }
         do {
             try deviceSession.writeFeature(value, named: name)
             refreshControls()
@@ -420,6 +425,22 @@ final class CameraApplicationModel: ObservableObject {
         status = "Camera stopped — acquisition error"
         errorMessage = error.localizedDescription
         closeSession()
+    }
+
+    private func capabilityFeature(for name: String) -> AmcamCameraFeature? {
+        switch name {
+        case "ExposureAuto": return .exposureAuto
+        case "ExposureTime": return .exposureManual
+        case "AmcamAnalogGainPercent": return .analogGain
+        case "AmcamColorMatrixEnabled": return .colorCorrection
+        case "AmcamPixelFormat": return .pixelFormatSelection
+        case "AmcamWhiteBalanceTemperature", "AmcamWhiteBalanceTint", "AmcamWhiteBalanceRGBGain":
+            return .whiteBalance
+        case "AmcamFixedFrameRate": return .preciseFrameRate
+        case "AmcamFrameSpeedLevel": return .discreteFrameSpeed
+        case "AmcamResolutionIndex": return .resolution
+        default: return nil
+        }
     }
 
     private func deviceHasDataStream(_ session: GenTLDeviceSession) -> Bool {
@@ -536,8 +557,17 @@ final class CameraApplicationModel: ObservableObject {
             .flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
         let whiteTint = readIntegerFeature("AmcamWhiteBalanceTint", from: session)
             .flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
-        let whiteBalance = (whiteTemperature != nil || whiteTint != nil)
-            ? AmcamWhiteBalanceControl(temperature: whiteTemperature, tint: whiteTint)
+        let whiteRGB = readIntegerVectorFeature("AmcamWhiteBalanceRGBGain", from: session).flatMap { values -> [Int32]? in
+            guard values.count == 3 else { return nil }
+            let converted = values.compactMap { Int32(exactly: $0) }
+            return converted.count == 3 ? converted : nil
+        }
+        let whiteBalance = (whiteTemperature != nil || whiteTint != nil || whiteRGB != nil)
+            ? AmcamWhiteBalanceControl(
+                temperature: whiteTemperature,
+                tint: whiteTint,
+                rgbGain: whiteRGB
+            )
             : nil
 
         let colorMatrix: Bool?
@@ -580,6 +610,11 @@ final class CameraApplicationModel: ObservableObject {
             image: image,
             frameRate: frameRate
         )
+    }
+
+    private func readIntegerVectorFeature(_ name: String, from session: GenTLDeviceSession) -> [Int64]? {
+        guard case .integerVector(let values)? = try? session.readFeature(name) else { return nil }
+        return values
     }
 
     private func readEnumerationFeature(_ name: String, from session: GenTLDeviceSession) -> String? {
