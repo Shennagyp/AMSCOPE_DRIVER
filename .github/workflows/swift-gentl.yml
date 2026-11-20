@@ -42,6 +42,8 @@ jobs:
         include:
           - package: AmcamCameraModel
             path: swift/Packages/AmcamCameraModel
+          - package: AmcamImagingCore
+            path: swift/Packages/AmcamImagingCore
           - package: GenTLAPI
             path: swift/Packages/GenTLAPI
           - package: GenTLNative
