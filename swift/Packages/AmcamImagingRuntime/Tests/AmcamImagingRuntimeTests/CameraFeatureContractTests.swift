@@ -1,6 +1,13 @@
 import XCTest
 @testable import AmcamImagingRuntime
 
+private actor FeaturelessRuntimeSession: CameraRuntimeSession {
+    func makeAcquisition() async throws -> any CameraRuntimeAcquisition {
+        throw CameraFeatureAccessError.unsupported
+    }
+    func close() async throws {}
+}
+
 final class CameraFeatureContractTests: XCTestCase {
     func testFeatureValueReportsItsSemanticKind() {
         XCTAssertEqual(CameraFeatureValue.boolean(true).kind, .boolean)
@@ -45,5 +52,16 @@ final class CameraFeatureContractTests: XCTestCase {
             CameraFeatureAccessError.valueTypeMismatch(feature: "Gain", expected: .integer, actual: .string).errorDescription,
             "Camera feature 'Gain' expects integer, received string."
         )
+    }
+    func testFeaturelessBackendUsesExplicitUnsupportedContract() async {
+        let session = FeaturelessRuntimeSession()
+        XCTAssertFalse(await session.supportsAcquisition())
+
+        do {
+            _ = try await session.featureDescriptors()
+            XCTFail("A backend without feature access must not return fabricated descriptors.")
+        } catch {
+            XCTAssertEqual(error as? CameraFeatureAccessError, .unsupported)
+        }
     }
 }
