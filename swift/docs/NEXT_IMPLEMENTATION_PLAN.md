@@ -34,8 +34,10 @@ AmcamImagingApp
   -> AmcamImagingRuntime
   -> AmcamImagingGenTLAdapter
   -> AmcamImagingState
-       -> AmcamCameraModel
-       -> AmcamImagingRuntime
+
+AmcamImagingState
+  -> AmcamCameraModel
+  -> AmcamImagingRuntime
 
 AmcamImagingGenTLAdapter
   -> AmcamCameraModel
@@ -52,13 +54,17 @@ amcam-camera-probe
   -> GenTLAPI + GenTLABI
 ```
 
-Library-owned camera lifecycle boundary:
+Library-owned camera lifecycle and discovery boundary:
 
 ```text
 AmcamImagingApp
-  -> AmcamImagingRuntime
-  -> AmcamImagingGenTLAdapter
+  -> CameraSessionLifecycle (AmcamImagingRuntime)
+       <- GenTLRuntimeDevice (AmcamImagingGenTLAdapter)
+
+AmcamImagingApp
+  -> AmcamCameraProvider (AmcamImagingGenTLAdapter)
        -> GenTLRouter
+            -> AmcamGenTL
 ```
 
 Rules:
