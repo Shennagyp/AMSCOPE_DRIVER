@@ -155,6 +155,7 @@ private struct CameraHardwareDock: View {
 private struct CameraSettingsView: View {
     @ObservedObject var model: CameraApplicationModel
     @State private var exposureDraft = 10_000.0
+    @State private var gainDraft = 100.0
     @State private var frameRateDraft = 15.0
 
     private var capabilities: AmcamCameraCapabilities? { model.cameraCapabilities }
@@ -186,6 +187,7 @@ private struct CameraSettingsView: View {
                         ForEach(capabilities.availableGroups) { group in
                             FeatureGroupView(group: group, model: model,
                                              exposureDraft: $exposureDraft,
+                                             gainDraft: $gainDraft,
                                              frameRateDraft: $frameRateDraft)
                         }
                     }
@@ -213,10 +215,14 @@ private struct CameraSettingsView: View {
         }
         .onAppear {
             exposureDraft = Double(controls?.exposure.readbackMicroseconds ?? 10_000)
+            gainDraft = Double(controls?.gain?.readbackPercent ?? 100)
             frameRateDraft = controls?.frameRate.readbackFramesPerSecond ?? 15
         }
         .onChange(of: controls?.exposure.readbackMicroseconds) { value in
             if let value { exposureDraft = Double(value) }
+        }
+        .onChange(of: controls?.gain?.readbackPercent) { value in
+            if let value { gainDraft = Double(value) }
         }
         .onChange(of: controls?.frameRate.readbackFramesPerSecond) { value in
             if let value { frameRateDraft = value }
@@ -228,6 +234,7 @@ private struct FeatureGroupView: View {
     let group: AmcamCameraFeatureGroup
     @ObservedObject var model: CameraApplicationModel
     @Binding var exposureDraft: Double
+    @Binding var gainDraft: Double
     @Binding var frameRateDraft: Double
 
     private var capability: AmcamCameraCapabilities? { model.cameraCapabilities }
@@ -341,8 +348,30 @@ private struct FeatureGroupView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
-        if capability?.availability(of: .analogGain).available == true {
-            featureStatus(.analogGain)
+        if capability?.availability(of: .analogGain).isUsable == true,
+           let gain = controls?.gain {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Analog gain")
+                    Spacer()
+                    Text("\(Int(gainDraft.rounded()))%")
+                        .monospacedDigit()
+                }
+                Slider(
+                    value: $gainDraft,
+                    in: Double(gain.minimumPercent)...Double(gain.maximumPercent),
+                    onEditingChanged: { editing in
+                        if !editing { model.setExposureGain(UInt16(gainDraft.rounded())) }
+                    }
+                )
+                HStack {
+                    Text("\(gain.minimumPercent)%")
+                    Spacer()
+                    Text("\(gain.maximumPercent)%")
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            }
         }
     }
 
