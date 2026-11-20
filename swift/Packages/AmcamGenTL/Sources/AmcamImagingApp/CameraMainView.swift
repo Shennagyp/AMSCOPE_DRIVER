@@ -332,6 +332,26 @@ private struct FeatureGroupView: View {
         if capability?.availability(of: .binningAndSkipping).available == true {
             featureStatus(.binningAndSkipping)
         }
+        if capability?.availability(of: .pixelFormatSelection).isUsable == true,
+           let image = controls?.image,
+           let pixelFormat = image.pixelFormatCode,
+           !image.supportedPixelFormats.isEmpty {
+            HStack {
+                Text("Pixel format")
+                Spacer()
+                Picker("Pixel format", selection: Binding(
+                    get: { pixelFormat },
+                    set: { model.setPixelFormat($0) }
+                )) {
+                    ForEach(image.supportedPixelFormats, id: \.self) { code in
+                        Text(AmcamPixelFormatCode(rawValue: code)?.title ?? "Format \(code)")
+                            .tag(code)
+                    }
+                }
+                .labelsHidden()
+                .disabled(model.isStreaming)
+            }
+        }
     }
 
     @ViewBuilder
@@ -477,25 +497,6 @@ private struct FeatureGroupView: View {
                     set: { model.setColorMatrixEnabled($0) }
                 )
             )
-        }
-        if let image = controls?.image,
-           let pixelFormat = image.pixelFormatCode,
-           !image.supportedPixelFormats.isEmpty {
-            HStack {
-                Text("Pixel format")
-                Spacer()
-                Picker("Pixel format", selection: Binding(
-                    get: { pixelFormat },
-                    set: { model.setPixelFormat($0) }
-                )) {
-                    ForEach(image.supportedPixelFormats, id: \.self) { code in
-                        Text(AmcamPixelFormatCode(rawValue: code)?.title ?? "Format \(code)")
-                            .tag(code)
-                    }
-                }
-                .labelsHidden()
-                .disabled(model.isStreaming)
-            }
         }
         ForEach([AmcamCameraFeature.imageLevelRange, .blackLevel,
                  .conversionGain, .lowNoiseMode].filter {
