@@ -78,7 +78,7 @@ final class CameraApplicationModel: ObservableObject {
             return
         }
 
-        status = "\(discoveredDevices.count) camera(s) detected through GenTLRouter"
+        status = "\(discoveredDevices.count) camera(s) detected through the AmScope camera provider"
         errorMessage = report.failures.isEmpty
             ? nil
             : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
@@ -296,7 +296,7 @@ final class CameraApplicationModel: ObservableObject {
             }
         } catch {
             _ = await closeSession()
-            status = "Unable to open camera through GenTLRouter"
+            status = "Unable to open camera through the AmScope camera provider"
             errorMessage = error.localizedDescription
         }
     }
