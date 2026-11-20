@@ -32,6 +32,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  portable-imaging-core-linux:
+    name: AmcamImagingCore Linux tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "5.10"
+
+      - name: Build and test portable imaging core
+        run: swift test --package-path swift/Packages/AmcamImagingCore
+
   package-tests:
     name: ${{ matrix.package }} tests
     runs-on: macos-15
