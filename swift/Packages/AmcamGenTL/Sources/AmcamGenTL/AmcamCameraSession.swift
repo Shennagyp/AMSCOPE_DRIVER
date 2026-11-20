@@ -289,9 +289,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         probes[.analogGain] = sdk.exposureGainControlAvailable &&
             (try? sdk.readExposureGain(activeHandle)) != nil
-        probes[.whiteBalance] = sdk.whiteBalanceReadAvailable &&
-            ((try? sdk.readTemperatureTint(activeHandle)) != nil ||
-             (try? sdk.readWhiteBalanceGain(activeHandle)) != nil)
+        probes[.whiteBalance] = sdk.whiteBalanceControlAvailable &&
+            (try? sdk.readTemperatureTint(activeHandle)) != nil
         probes[.colorCorrection] =
             (try? sdk.readOption(activeHandle, option: AmcamSDK.optionColorMatrix)) != nil
         let pixelFormatFlags: UInt64 =
@@ -304,7 +303,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             (try? sdk.readOption(activeHandle, option: AmcamSDK.optionPixelFormat)) != nil
         probes[.resolution] = !resolutions.isEmpty && sdk.resolutionChangeAvailable
         let implemented: Set<AmcamCameraFeature> = [
-            .liveCapture, .resolution, .exposureAuto, .exposureManual, .analogGain,
+            .liveCapture, .resolution, .exposureAuto, .exposureManual, .analogGain, .whiteBalance,
             .preciseFrameRate, .discreteFrameSpeed
         ]
         return registry.resolve(
@@ -379,6 +378,36 @@ public final class AmcamCameraSession: @unchecked Sendable {
             )
         }
         requestedExposureMicroseconds = microseconds
+        return snapshot
+    }
+
+    public func setWhiteBalanceTemperatureTint(temperature: Int32, tint: Int32) throws -> AmcamControlSnapshot {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        let activeHandle = try controlHandle()
+        guard temperature >= AmcamSDK.temperatureMinimum,
+              temperature <= AmcamSDK.temperatureMaximum,
+              tint >= AmcamSDK.tintMinimum,
+              tint <= AmcamSDK.tintMaximum else {
+            throw AmcamCameraError.unsupportedControl(
+                "White-balance temperature must be 2000…15000 K and tint must be 200…2500."
+            )
+        }
+        try sdk.setTemperatureTint(activeHandle, temperature: temperature, tint: tint)
+        let snapshot = try readControls(
+            using: activeHandle,
+            requestedExposure: requestedExposureMicroseconds,
+            requestedFrameRate: requestedFrameRate,
+            requestedSpeedLevel: requestedSpeedLevel
+        )
+        guard snapshot.whiteBalance?.temperature == temperature,
+              snapshot.whiteBalance?.tint == tint else {
+            throw AmcamCameraError.controlReadbackMismatch(
+                control: "white balance temperature/tint",
+                requested: "\(temperature) K / \(tint)",
+                actual: snapshot.whiteBalance.map { "\($0.temperature) K / \($0.tint)" } ?? "unavailable"
+            )
+        }
         return snapshot
     }
 
@@ -523,6 +552,10 @@ public final class AmcamCameraSession: @unchecked Sendable {
         } else {
             exposure = nil
         }
+        let whiteBalanceReadback = try? sdk.readTemperatureTint(handle)
+        let whiteBalance = whiteBalanceReadback.map {
+            AmcamWhiteBalanceControl(temperature: $0.temperature, tint: $0.tint)
+        }
         let gainReadback = try? sdk.readExposureGain(handle)
         let gain = gainReadback.map {
             AmcamGainControl(
@@ -589,7 +622,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             deviceMeasurementWindowMilliseconds: recentRate?.windowMilliseconds,
             deviceTotalFrameCount: recentRate?.totalFrameCount
         )
-        return AmcamControlSnapshot(exposure: exposure, gain: gain, frameRate: frameRate)
+        return AmcamControlSnapshot(exposure: exposure, gain: gain, whiteBalance: whiteBalance, frameRate: frameRate)
     }
 
     private func handle(event: UInt32) {
