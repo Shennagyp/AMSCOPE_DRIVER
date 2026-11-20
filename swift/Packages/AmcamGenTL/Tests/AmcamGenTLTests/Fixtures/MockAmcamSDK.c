@@ -103,7 +103,9 @@ int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameIn
     if (!handle || !buffer || !info || bits != 24) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
     const uint32_t height = resolution_heights[current_resolution_index];
-    const size_t size = (size_t)width * (size_t)height * 3u;
+    const size_t packed_row_bytes = (size_t)width * 3u;
+    const size_t default_row_bytes = (packed_row_bytes + 3u) & ~(size_t)3u;
+    const size_t size = default_row_bytes * (size_t)height;
     memset(buffer, 0x5a, size);
     info->width = width;
     info->height = height;
