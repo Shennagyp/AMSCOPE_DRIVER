@@ -25,6 +25,8 @@ private typealias GetFrameRateFunction = @convention(c) (UnsafeMutableRawPointer
 private typealias GetExposureGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?) -> Int32
 private typealias SetExposureGainFunction = @convention(c) (UnsafeMutableRawPointer?, UInt16) -> Int32
 private typealias GetExposureGainRangeFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt16>?, UnsafeMutablePointer<UInt16>?, UnsafeMutablePointer<UInt16>?) -> Int32
+private typealias GetTemperatureTintFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?, UnsafeMutablePointer<Int32>?) -> Int32
+private typealias GetWhiteBalanceGainFunction = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<Int32>?) -> Int32
 typealias AmcamEventCallback = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
 
 /// Keeps an Amcam SDK loaded when a camera handle could not be closed safely.
@@ -54,6 +56,9 @@ final class AmcamSDK: @unchecked Sendable {
     static let optionMaximumPreciseFrameRate: UInt32 = 0x2c
     static let optionPreciseFrameRate: UInt32 = 0x2d
     static let optionMinimumPreciseFrameRate: UInt32 = 0x32
+    static let optionColorMatrix: UInt32 = 0x0d
+    static let optionWhiteBalanceGain: UInt32 = 0x0e
+    static let optionPixelFormat: UInt32 = 0x1a
 
     private struct API {
         let version: VersionFunction
@@ -79,6 +84,8 @@ final class AmcamSDK: @unchecked Sendable {
         let getExposureGain: GetExposureGainFunction?
         let setExposureGain: SetExposureGainFunction?
         let getExposureGainRange: GetExposureGainRangeFunction?
+        let getTemperatureTint: GetTemperatureTintFunction?
+        let getWhiteBalanceGain: GetWhiteBalanceGainFunction?
     }
 
     private let library: UnsafeMutableRawPointer
@@ -121,7 +128,9 @@ final class AmcamSDK: @unchecked Sendable {
                 getFrameRate: try? load("Amcam_get_FrameRate", as: GetFrameRateFunction.self),
                 getExposureGain: try? load("Amcam_get_ExpoAGain", as: GetExposureGainFunction.self),
                 setExposureGain: try? load("Amcam_put_ExpoAGain", as: SetExposureGainFunction.self),
-                getExposureGainRange: try? load("Amcam_get_ExpoAGainRange", as: GetExposureGainRangeFunction.self)
+                getExposureGainRange: try? load("Amcam_get_ExpoAGainRange", as: GetExposureGainRangeFunction.self),
+                getTemperatureTint: try? load("Amcam_get_TempTint", as: GetTemperatureTintFunction.self),
+                getWhiteBalanceGain: try? load("Amcam_get_WhiteBalanceGain", as: GetWhiteBalanceGainFunction.self)
             )
             guard let versionPointer = resolved.version() else {
                 throw AmcamCameraError.incompatibleSDK(expected: expectedVersion, actual: "null")
@@ -388,6 +397,32 @@ final class AmcamSDK: @unchecked Sendable {
             throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose exposure analog-gain control.")
         }
         try checkControlResult("Amcam_put_ExpoAGain", setGain(handle, percent))
+    }
+
+    var whiteBalanceReadAvailable: Bool {
+        api.getTemperatureTint != nil || api.getWhiteBalanceGain != nil
+    }
+
+    func readTemperatureTint(_ handle: UnsafeMutableRawPointer) throws -> (temperature: Int32, tint: Int32) {
+        guard let getter = api.getTemperatureTint else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose temperature/tint white-balance readback.")
+        }
+        var temperature: Int32 = 0
+        var tint: Int32 = 0
+        try checkControlResult("Amcam_get_TempTint", getter(handle, &temperature, &tint))
+        return (temperature, tint)
+    }
+
+    func readWhiteBalanceGain(_ handle: UnsafeMutableRawPointer) throws -> [Int32] {
+        guard let getter = api.getWhiteBalanceGain else {
+            throw AmcamCameraError.unsupportedControl("The loaded Amcam SDK does not expose RGB white-balance gain readback.")
+        }
+        var values = [Int32](repeating: 0, count: 3)
+        let result = values.withUnsafeMutableBufferPointer { buffer in
+            getter(handle, buffer.baseAddress)
+        }
+        try checkControlResult("Amcam_get_WhiteBalanceGain", result)
+        return values
     }
 
     func readOption(_ handle: UnsafeMutableRawPointer, option: UInt32) throws -> Int32 {
