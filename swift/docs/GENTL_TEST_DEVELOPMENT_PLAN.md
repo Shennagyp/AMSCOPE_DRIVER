@@ -472,3 +472,17 @@ Added a test that writes a regular file with a `.cti` suffix but invalid Mach-O 
 
 
 The latest code-test workflow attempt is run `44674821941` for commit `4c108885fb95c4bf7912da5997d0e42db2d33f43`. All five jobs (four macOS package jobs plus the Ubuntu ABI/API job) again terminated with `runner_id: 0` and empty steps. This confirms the current source/test additions still have no executed CI evidence.
+
+
+### CI evidence update — 2026-11-20
+
+Hosted runners are now being allocated and workflow steps execute.
+
+- Run [44676082932](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44676082932), commit `430ccf9da3b098cedb79fd932874c031943317cd`: **Linux ABI/API job passed** on Ubuntu 24.04.
+- The job built the pinned GenTL ABI package and ran the GenTLAPI contract suite. **All 9 tests passed**, including the test invoking all 64 protocol default operations.
+- This verifies the Linux C ABI module build and portable Swift API contract. It does not verify the native dynamic-library loader.
+- CI exposed test-only type errors: comparing imported `GC_ERROR_LIST` against `GC_ERROR`, and passing `nil` to non-optional raw GenTL handles. Tests now use the ABI shim's correctly typed status and non-null opaque handle sentinels, while preserving `nil` for optional output pointers. Native dispatch integration tests received the same handle correction.
+- Latest source commit: `8b34d21787069109027c1e8665acad01709ac3b9`; workflow run [44676161807](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44676161807) is still pending/in progress. macOS package results are not yet verified.
+- The native mock-producer test still uses `xcrun` on macOS. Linux/Windows native-loader validation and cross-platform mock compilation remain future work.
+
+Do not claim all-platform support from the Linux API result.
