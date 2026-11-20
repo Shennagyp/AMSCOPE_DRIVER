@@ -112,7 +112,7 @@ The SDK wrapper now preserves all three values instead of collapsing every nonze
 
 This is distinct from analog gain. Gain is a separate control with its own API and range query; it must not be inferred from exposure support. The Swift implementation loads gain functions as optional symbols, requires the complete get/set/range API, probes the current camera, validates the model-reported range, and verifies exact readback after a write. The mock integration suite also injects a successful-but-ignored gain write and requires a readback-mismatch error.
 
-White balance is also independent of exposure and gain. The app probes the two modes separately: temperature/tint and RGB channel gains. It shows only the mode whose getter and setter symbols are both present and whose read-only query succeeds. Temperature and tint use the documented ranges 2000–15000 K and 200–2500. RGB gains are sent as three integer values and accepted only after exact readback; no undocumented min/max range is invented.
+White balance is also independent of exposure and gain. The app probes temperature/tint and RGB channel gains separately and exposes only descriptors confirmed available by the backend. Temperature and tint editors use the numeric ranges supplied by the active camera feature descriptors; they are not shown as editable when a writable range is unavailable. RGB gains are sent as exactly three integer values and accepted only after exact readback; the SDK does not publish a numeric range for those values, so none is invented. All settings controls are hidden until a camera snapshot is available, are filtered by current feature availability and writability, and refresh when the selected camera or descriptor state changes. Enumeration pickers are populated from the camera's advertised values rather than a fixed UI list.
 
 ## Model profile configuration
 
@@ -177,7 +177,7 @@ Other commands:
 
 - `make build-local` — build all packages and assemble the app without launching it.
 - `make run-probe` — build and run the camera diagnostic from source.
-- `make test-local` — run all six Swift package test suites.
+- `make test-local` — run all ten Swift package test suites (including the GenTL ABI package). Hosted CI runs nine package test jobs and separately builds the GenTL ABI package.
 
 The vendor SDK is proprietary and is not bundled. For physical AmScope camera access, place a compatible arm64 `libamcam.dylib` under `vendor/amcam/macos/libamcam.dylib`, or install it in one of the backend's standard per-user/system locations. The build script copies a local vendor SDK into the app bundle; `AMCAM_SDK_SOURCE=/absolute/path/to/libamcam.dylib` can specify a source file at build time. The backend resolves the bundled SDK first. There is no SDK file picker in the UI. Without a compatible SDK, the app can launch but the AmScope provider is unavailable. The app is ad-hoc signed for local testing, not notarized.
 
