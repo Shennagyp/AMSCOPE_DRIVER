@@ -118,13 +118,14 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func selectDevice(_ identifier: String) {
-        Task { await selectDeviceOwned(identifier) }
-    }
-
-    private func selectDeviceOwned(_ identifier: String) async {
         guard identifier != selectedDeviceID else { return }
         let operation = beginCameraSelectionOperation()
-        guard await closeSession(),
+        Task { await selectDeviceOwned(identifier, operation: operation) }
+    }
+
+    private func selectDeviceOwned(_ identifier: String, operation: UInt64) async {
+        guard isCurrentCameraSelectionOperation(operation),
+              await closeSession(),
               isCurrentCameraSelectionOperation(operation) else { return }
         selectedDeviceID = identifier
         latestFrame = nil
@@ -263,23 +264,23 @@ final class CameraApplicationModel: ObservableObject {
         case .once: symbol = "Once"
         case .continuous: symbol = "Continuous"
         }
-        Task { await writeFeature(.enumeration(symbol), named: "ExposureAuto") }
+        submitFeatureWrite(.enumeration(symbol), named: "ExposureAuto")
     }
 
     func setExposureTime(_ microseconds: UInt32) {
-        Task { await writeFeature(.integer(Int64(microseconds)), named: "ExposureTime") }
+        submitFeatureWrite(.integer(Int64(microseconds)), named: "ExposureTime")
     }
 
     func setExposureGain(_ percent: UInt16) {
-        Task { await writeFeature(.integer(Int64(percent)), named: "AmcamAnalogGainPercent") }
+        submitFeatureWrite(.integer(Int64(percent)), named: "AmcamAnalogGainPercent")
     }
 
     func setColorMatrixEnabled(_ enabled: Bool) {
-        Task { await writeFeature(.boolean(enabled), named: "AmcamColorMatrixEnabled") }
+        submitFeatureWrite(.boolean(enabled), named: "AmcamColorMatrixEnabled")
     }
 
     func setPixelFormat(_ code: Int32) {
-        Task { await writeFeature(.enumeration(String(code)), named: "AmcamPixelFormat") }
+        submitFeatureWrite(.enumeration(String(code)), named: "AmcamPixelFormat")
     }
 
     func setWhiteBalanceRGBGain(_ values: [Int32]) {
@@ -287,27 +288,23 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "White-balance RGB gain requires exactly three channel values."
             return
         }
-        Task { await writeFeature(.integerVector(values.map(Int64.init)), named: "AmcamWhiteBalanceRGBGain") }
+        submitFeatureWrite(.integerVector(values.map(Int64.init)), named: "AmcamWhiteBalanceRGBGain")
     }
 
     func setWhiteBalanceTemperature(_ temperature: Int32) {
-        Task {
-            await writeFeature(.integer(Int64(temperature)), named: "AmcamWhiteBalanceTemperature")
-        }
+        submitFeatureWrite(.integer(Int64(temperature)), named: "AmcamWhiteBalanceTemperature")
     }
 
     func setWhiteBalanceTint(_ tint: Int32) {
-        Task {
-            await writeFeature(.integer(Int64(tint)), named: "AmcamWhiteBalanceTint")
-        }
+        submitFeatureWrite(.integer(Int64(tint)), named: "AmcamWhiteBalanceTint")
     }
 
     func setFixedFrameRate(_ framesPerSecond: Double) {
-        Task { await writeFeature(.floatingPoint(framesPerSecond), named: "AmcamFixedFrameRate") }
+        submitFeatureWrite(.floatingPoint(framesPerSecond), named: "AmcamFixedFrameRate")
     }
 
     func setFrameSpeedLevel(_ level: Int) {
-        Task { await writeFeature(.integer(Int64(level)), named: "AmcamFrameSpeedLevel") }
+        submitFeatureWrite(.integer(Int64(level)), named: "AmcamFrameSpeedLevel")
     }
 
     func setResolution(_ index: Int) {
@@ -318,7 +315,7 @@ final class CameraApplicationModel: ObservableObject {
             errorMessage = "The selected resolution is not advertised by this camera."
             return
         }
-        Task { await writeFeature(.enumeration(symbol), named: "AmcamResolutionIndex") }
+        submitFeatureWrite(.enumeration(symbol), named: "AmcamResolutionIndex")
     }
 
     private func prepareSelectedCamera(expectedGeneration: UInt64) async {
@@ -417,9 +414,30 @@ final class CameraApplicationModel: ObservableObject {
         }
     }
 
-    private func writeFeature(_ value: CameraFeatureValue, named name: String) async {
+    private func submitFeatureWrite(_ value: CameraFeatureValue, named name: String) {
+        // Capture identity and generation at the UI command boundary. Capturing
+        // them only after the Task starts can retarget an old control action to
+        // a newly selected camera.
         let operation = cameraSelectionGeneration
+        let deviceID = selectedDeviceID
+        Task {
+            await writeFeature(
+                value,
+                named: name,
+                expectedGeneration: operation,
+                expectedDeviceID: deviceID
+            )
+        }
+    }
+
+    private func writeFeature(
+        _ value: CameraFeatureValue,
+        named name: String,
+        expectedGeneration operation: UInt64,
+        expectedDeviceID: String
+    ) async {
         guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID,
               (await cameraLifecycle.snapshot()).hasSession,
               isCurrentCameraSelectionOperation(operation) else {
             errorMessage = "Open a camera before changing its features."
