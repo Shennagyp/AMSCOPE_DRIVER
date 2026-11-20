@@ -3,6 +3,18 @@ import AmcamCameraModel
 import AmcamImagingRuntime
 @testable import AmcamImagingState
 
+private actor FeatureReadRecorder {
+    private var names: [String] = []
+
+    func record(_ name: String) {
+        names.append(name)
+    }
+
+    func recordedNames() -> [String] {
+        names
+    }
+}
+
 final class AmcamCameraStateResolverTests: XCTestCase {
     func testControlSnapshotMapsTypedReadbacksAndRanges() async {
         let resolver = AmcamCameraStateResolver()
@@ -98,12 +110,12 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                 kind: .integer, isAvailable: false, isReadable: true, isWritable: false
             )
         ]
-        var attemptedReads: [String] = []
+        let recorder = FeatureReadRecorder()
         _ = await resolver.controlSnapshot(descriptors: descriptors) { name in
-            attemptedReads.append(name)
-            XCTFail("Unavailable or unreadable feature was read: \\(name)")
+            await recorder.record(name)
             throw CameraFeatureAccessError.featureUnavailable(name)
         }
+        let attemptedReads = await recorder.recordedNames()
         XCTAssertTrue(attemptedReads.isEmpty)
     }
 
@@ -115,7 +127,7 @@ final class AmcamCameraStateResolverTests: XCTestCase {
             sensorPixelSizeMicrometers: nil,
             previewResolutions: [AmcamResolution(index: 3, width: 1920, height: 1080)]
         )
-        var didRead = false
+        let recorder = FeatureReadRecorder()
         let result = await resolver.currentResolution(
             for: device,
             descriptors: [
@@ -124,12 +136,13 @@ final class AmcamCameraStateResolverTests: XCTestCase {
                     isAvailable: false, isReadable: true, isWritable: false
                 )
             ]
-        ) { _ in
-            didRead = true
+        ) { name in
+            await recorder.record(name)
             return .enumeration("3:1920x1080")
         }
+        let attemptedReads = await recorder.recordedNames()
         XCTAssertNil(result)
-        XCTAssertFalse(didRead)
+        XCTAssertTrue(attemptedReads.isEmpty)
     }
 
     func testMalformedResolutionOptionsAreIgnored() {
