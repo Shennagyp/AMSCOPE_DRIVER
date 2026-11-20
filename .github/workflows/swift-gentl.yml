@@ -35,7 +35,7 @@ permissions:
 # Keep only the newest pending validation run for this branch. A currently
 # running run is allowed to finish; superseded queued runs are replaced.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-vendor-sdk-v4
+  group: ${{ github.workflow }}-${{ github.ref }}-runtime-feature-v5
   cancel-in-progress: false
 
 jobs:
