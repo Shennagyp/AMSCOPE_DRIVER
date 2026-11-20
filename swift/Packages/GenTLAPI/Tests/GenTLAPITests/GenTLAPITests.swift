@@ -52,6 +52,35 @@ final class GenTLAPITests: XCTestCase {
         XCTAssertEqual(GenTLInfoDataType.pointerDifference.rawValue, 14)
     }
 
+    func testStandardGenTLValueEnumsMatchHeader() {
+        XCTAssertEqual(GenTLCharacterEncoding.ascii.rawValue, 0)
+        XCTAssertEqual(GenTLCharacterEncoding.utf8.rawValue, 1)
+
+        XCTAssertEqual(GenTLPayloadType.image.rawValue, 1)
+        XCTAssertEqual(GenTLPayloadType.multiPart.rawValue, 10)
+        XCTAssertEqual(GenTLPayloadType.genDC.rawValue, 11)
+
+        XCTAssertEqual(GenTLPixelFormatNamespace.gev.rawValue, 1)
+        XCTAssertEqual(GenTLPixelFormatNamespace.pfnc16Bit.rawValue, 3)
+        XCTAssertEqual(GenTLPixelFormatNamespace.pfnc32Bit.rawValue, 4)
+
+        XCTAssertEqual(GenTLPixelEndianness.unknown.rawValue, 0)
+        XCTAssertEqual(GenTLPixelEndianness.little.rawValue, 1)
+        XCTAssertEqual(GenTLPixelEndianness.big.rawValue, 2)
+
+        XCTAssertEqual(GenTLPartDataType.image2D.rawValue, 1)
+        XCTAssertEqual(GenTLPartDataType.confidenceMap.rawValue, 9)
+        XCTAssertEqual(GenTLPartDataType.jpeg2000.rawValue, 11)
+
+        XCTAssertEqual(GenTLURLScheme.local.rawValue, 0)
+        XCTAssertEqual(GenTLURLScheme.http.rawValue, 1)
+        XCTAssertEqual(GenTLURLScheme.file.rawValue, 2)
+
+        XCTAssertEqual(GenTLAcquisitionStartFlag.normal.rawValue, 0)
+        XCTAssertEqual(GenTLAcquisitionStopFlag.normal.rawValue, 0)
+        XCTAssertEqual(GenTLAcquisitionStopFlag.kill.rawValue, 1)
+    }
+
     func testInfoCommandIdentifiersMatchGenTL16() {
         XCTAssertEqual(GenTLInfoCommand.TransportLayer.charEncoding.rawValue, 8)
         XCTAssertEqual(GenTLInfoCommand.TransportLayer.genTLVersionMajor.rawValue, 9)
