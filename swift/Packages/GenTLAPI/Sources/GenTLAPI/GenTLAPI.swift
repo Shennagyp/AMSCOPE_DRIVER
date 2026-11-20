@@ -424,20 +424,3 @@ public protocol GenTLAPI: Sendable {
         _ piSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR
 }
-
-/// Internal-style Swift conveniences retained temporarily for router and
-/// backend implementation code during migration. This SPI is not the
-/// application-facing GenTL contract; new integrations must use GenTLAPI.
-@_spi(BackendConvenience)
-public protocol GenTLBackendConvenience:
-    GenTLLibraryFunctions,
-    GenTLSystemFunctions,
-    GenTLInterfaceFunctions,
-    GenTLDeviceFunctions,
-    GenTLDataStreamFunctions,
-    GenTLDataStreamExtensionFunctions,
-    GenTLPortFunctions,
-    GenTLSignalingFunctions
-{
-    var genTLVersion: GenTLVersion { get }
-}
