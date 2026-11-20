@@ -1,0 +1,240 @@
+import AmcamCameraModel
+import AmcamImagingRuntime
+import Foundation
+
+/// Converts backend-neutral camera observations into AmScope application state.
+/// It has no AppKit, GenTL, vendor SDK, or device-lifecycle ownership.
+public struct AmcamCameraStateResolver: Sendable {
+    public typealias FeatureReader = @Sendable (String) async throws -> CameraFeatureValue
+
+    private let profileRegistry: AmcamCameraProfileRegistry
+
+    public init(profileRegistry: AmcamCameraProfileRegistry = AmcamCameraProfileRegistry()) {
+        self.profileRegistry = profileRegistry
+    }
+
+    public func capabilities(
+        for device: AmcamDevice?,
+        descriptors: [CameraFeatureDescriptor],
+        hasDataStream: Bool
+    ) -> AmcamCameraCapabilities? {
+        guard let device else { return nil }
+        let availabilityByName = Dictionary(
+            descriptors.map { ($0.name, $0.isAvailable) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        let maximumSpeedLevel = descriptors.first(where: { $0.name == "AmcamFrameSpeedLevel" })?
+            .numericRange.flatMap { Int(exactly: $0.maximum) }
+        return profileRegistry.resolveRuntime(
+            device: device,
+            featureAvailabilityByName: availabilityByName,
+            hasDataStream: hasDataStream,
+            maximumSpeedLevel: maximumSpeedLevel
+        )
+    }
+
+    public func capabilityFeature(for name: String) -> AmcamCameraFeature? {
+        switch name {
+        case "ExposureAuto": return .exposureAuto
+        case "ExposureTime": return .exposureManual
+        case "AmcamAnalogGainPercent": return .analogGain
+        case "AmcamColorMatrixEnabled": return .colorCorrection
+        case "AmcamPixelFormat": return .pixelFormatSelection
+        case "AmcamWhiteBalanceTemperature", "AmcamWhiteBalanceTint", "AmcamWhiteBalanceRGBGain":
+            return .whiteBalance
+        case "AmcamFixedFrameRate": return .preciseFrameRate
+        case "AmcamFrameSpeedLevel": return .discreteFrameSpeed
+        case "AmcamResolutionIndex": return .resolution
+        default: return nil
+        }
+    }
+
+    public func resolutions(from descriptors: [CameraFeatureDescriptor]) -> [AmcamResolution] {
+        let options = descriptors.first(where: { $0.name == "AmcamResolutionIndex" })?.enumerationValues ?? []
+        return options.compactMap { symbol -> AmcamResolution? in
+            guard let separator = symbol.firstIndex(of: ":"),
+                  let resolutionSeparator = symbol[symbol.index(after: separator)...].firstIndex(of: "x"),
+                  let index = Int(symbol[..<separator]),
+                  let width = Int(symbol[symbol.index(after: separator)..<resolutionSeparator]),
+                  let height = Int(symbol[symbol.index(after: resolutionSeparator)...]) else {
+                return nil
+            }
+            return AmcamResolution(index: index, width: width, height: height)
+        }
+    }
+
+    public func currentResolution(
+        for device: AmcamDevice?,
+        readFeature: FeatureReader
+    ) async -> AmcamResolution? {
+        guard let device,
+              case .enumeration(let symbol)? = try? await readFeature("AmcamResolutionIndex"),
+              let separator = symbol.firstIndex(of: ":"),
+              let index = Int(symbol[..<separator]) else {
+            return nil
+        }
+        return device.previewResolutions.first { $0.index == index }
+    }
+
+    public func controlSnapshot(
+        descriptors: [CameraFeatureDescriptor],
+        readFeature: FeatureReader
+    ) async -> AmcamControlSnapshot {
+        let descriptorsByName = Dictionary(
+            descriptors.map { ($0.name, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+
+        let autoMode: AmcamAutoExposureMode?
+        if case .enumeration(let symbol)? = try? await readFeature("ExposureAuto") {
+            switch symbol {
+            case "Off": autoMode = .manual
+            case "Once": autoMode = .once
+            case "Continuous": autoMode = .continuous
+            default: autoMode = nil
+            }
+        } else {
+            autoMode = nil
+        }
+
+        let exposureDescriptor = descriptorsByName["ExposureTime"]
+        let exposureValue = await readIntegerFeature("ExposureTime", readFeature: readFeature)
+        let exposure = exposureDescriptor.map { descriptor in
+            AmcamExposureControl(
+                autoMode: autoMode,
+                readbackMicroseconds: unsigned32(exposureValue),
+                minimumMicroseconds: unsigned32(descriptor.numericRange?.minimum),
+                maximumMicroseconds: unsigned32(descriptor.numericRange?.maximum),
+                defaultMicroseconds: nil
+            )
+        }
+
+        let gainDescriptor = descriptorsByName["AmcamAnalogGainPercent"]
+        let gainValue = await readIntegerFeature("AmcamAnalogGainPercent", readFeature: readFeature)
+        let gain: AmcamGainControl?
+        if let gainDescriptor,
+           let current = unsigned16(gainValue),
+           let minimum = unsigned16(gainDescriptor.numericRange?.minimum),
+           let maximum = unsigned16(gainDescriptor.numericRange?.maximum) {
+            gain = AmcamGainControl(
+                readbackPercent: current,
+                minimumPercent: minimum,
+                maximumPercent: maximum,
+                defaultPercent: minimum
+            )
+        } else {
+            gain = nil
+        }
+
+        let whiteTemperature = await readIntegerFeature(
+            "AmcamWhiteBalanceTemperature", readFeature: readFeature
+        ).flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
+        let whiteTint = await readIntegerFeature(
+            "AmcamWhiteBalanceTint", readFeature: readFeature
+        ).flatMap { $0 >= Int64(Int32.min) && $0 <= Int64(Int32.max) ? Int32($0) : nil }
+        let whiteRGB = await readIntegerVectorFeature(
+            "AmcamWhiteBalanceRGBGain", readFeature: readFeature
+        ).flatMap { values -> [Int32]? in
+            guard values.count == 3 else { return nil }
+            let converted = values.compactMap { Int32(exactly: $0) }
+            return converted.count == 3 ? converted : nil
+        }
+        let whiteBalance = (whiteTemperature != nil || whiteTint != nil || whiteRGB != nil)
+            ? AmcamWhiteBalanceControl(
+                temperature: whiteTemperature,
+                tint: whiteTint,
+                rgbGain: whiteRGB
+            )
+            : nil
+
+        let colorMatrix: Bool?
+        if case .boolean(let value)? = try? await readFeature("AmcamColorMatrixEnabled") {
+            colorMatrix = value
+        } else {
+            colorMatrix = nil
+        }
+        let pixelFormat = await readEnumerationFeature(
+            "AmcamPixelFormat", readFeature: readFeature
+        ).flatMap(Int32.init)
+        let supportedPixelFormats = descriptorsByName["AmcamPixelFormat"]?
+            .enumerationValues.compactMap(Int32.init) ?? []
+        let image = (colorMatrix != nil || pixelFormat != nil || !supportedPixelFormats.isEmpty)
+            ? AmcamCameraImageControls(
+                colorMatrixEnabled: colorMatrix,
+                pixelFormatCode: pixelFormat,
+                supportedPixelFormats: supportedPixelFormats
+            )
+            : nil
+
+        let fixedRateDescriptor = descriptorsByName["AmcamFixedFrameRate"]
+        let speedDescriptor = descriptorsByName["AmcamFrameSpeedLevel"]
+        let fixedRateReadback = await readFloatingPointFeature(
+            "AmcamFixedFrameRate", readFeature: readFeature
+        )
+        let currentSpeed = await readIntegerFeature(
+            "AmcamFrameSpeedLevel", readFeature: readFeature
+        ).flatMap(Int.init(exactly:))
+        let frameRate = AmcamFrameRateControl(
+            supported: fixedRateDescriptor?.isAvailable == true,
+            minimumFramesPerSecond: fixedRateDescriptor?.numericRange?.minimum,
+            maximumFramesPerSecond: fixedRateDescriptor?.numericRange?.maximum,
+            readbackFramesPerSecond: fixedRateReadback,
+            unsupportedReason: fixedRateDescriptor?.isAvailable == true
+                ? nil
+                : "Precise fixed frame rate is not available for this camera.",
+            speedLevelSupported: speedDescriptor?.isAvailable == true,
+            currentSpeedLevel: currentSpeed,
+            maximumSpeedLevel: speedDescriptor?.numericRange.flatMap { Int(exactly: $0.maximum) }
+        )
+
+        return AmcamControlSnapshot(
+            exposure: exposure,
+            gain: gain,
+            whiteBalance: whiteBalance,
+            image: image,
+            frameRate: frameRate
+        )
+    }
+
+    private func readIntegerFeature(_ name: String, readFeature: FeatureReader) async -> Int64? {
+        guard case .integer(let value)? = try? await readFeature(name) else { return nil }
+        return value
+    }
+
+    private func readIntegerVectorFeature(_ name: String, readFeature: FeatureReader) async -> [Int64]? {
+        guard case .integerVector(let values)? = try? await readFeature(name) else { return nil }
+        return values
+    }
+
+    private func readEnumerationFeature(_ name: String, readFeature: FeatureReader) async -> String? {
+        guard case .enumeration(let value)? = try? await readFeature(name) else { return nil }
+        return value
+    }
+
+    private func readFloatingPointFeature(_ name: String, readFeature: FeatureReader) async -> Double? {
+        guard case .floatingPoint(let value)? = try? await readFeature(name), value.isFinite else {
+            return nil
+        }
+        return value
+    }
+
+    private func unsigned32(_ value: Int64?) -> UInt32? {
+        guard let value, value >= 0, value <= Int64(UInt32.max) else { return nil }
+        return UInt32(value)
+    }
+
+    private func unsigned32(_ value: Double?) -> UInt32? {
+        guard let value, value.isFinite, value >= 0, value <= Double(UInt32.max) else { return nil }
+        return UInt32(value.rounded(.towardZero))
+    }
+
+    private func unsigned16(_ value: Int64?) -> UInt16? {
+        guard let value, value >= 0, value <= Int64(UInt16.max) else { return nil }
+        return UInt16(value)
+    }
+
+    private func unsigned16(_ value: Double?) -> UInt16? {
+        guard let value, value.isFinite, value >= 0, value <= Double(UInt16.max) else { return nil }
+        return UInt16(value.rounded(.towardZero))
+    }
+}
