@@ -151,7 +151,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             0
         )
         XCTAssertEqual(operationName, "Amcam_PullImageV4")
-        XCTAssertTrue(tightlyPackedRows)
+        XCTAssertFalse(tightlyPackedRows, "V4 must follow the vendor sample's default DWORD-aligned row layout.")
         XCTAssertEqual(frameInfo.width, 640)
         XCTAssertEqual(frameInfo.height, 480)
         XCTAssertEqual(frameInfo.seq, 1)
