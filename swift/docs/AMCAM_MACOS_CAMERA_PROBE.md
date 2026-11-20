@@ -2,7 +2,7 @@
 
 This is a hardware smoke-test executable for the Amcam SDK backend. Build it from the repository root with `make run-probe`. The full Xcode application is not required; Apple's Swift compiler and macOS SDK are required.
 
-The probe uses the actual \`AmcamGenTLImplementation\` and GenTL-style acquisition path. It does not substitute a mock SDK at runtime. It does not modify exposure, gain, or frame-rate settings.
+The probe uses the actual `AmcamGenTLImplementation` and GenTL-style acquisition path. It does not substitute a mock SDK at runtime. It does not modify exposure, gain, or frame-rate settings.
 
 ## Build the probe from source
 
@@ -18,14 +18,14 @@ The probe requires an explicit SDK path because it is a diagnostic tool. Unlike 
 
 ## Find the vendor SDK
 
-Supply the actual Amcam SDK dynamic library, normally named \`libamcam.dylib\`. Known deployment locations include:
+Supply the actual Amcam SDK dynamic library, normally named `libamcam.dylib`. Known deployment locations include:
 
-- \`vendor/amcam/macos/libamcam.dylib\` in a local application checkout;
-- \`~/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib\`;
-- \`/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib\`;
-- \`/Library/Frameworks/libamcam.dylib\`;
-- \`/usr/local/lib/libamcam.dylib\`;
-- \`/opt/homebrew/lib/libamcam.dylib\`.
+- `vendor/amcam/macos/libamcam.dylib` in a local application checkout;
+- `~/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib`;
+- `/Library/Application Support/AmScopeMicroscope/SDK/libamcam.dylib`;
+- `/Library/Frameworks/libamcam.dylib`;
+- `/usr/local/lib/libamcam.dylib`;
+- `/opt/homebrew/lib/libamcam.dylib`.
 
 Do not download or use an arbitrary third-party SDK binary. Use the SDK supplied for the camera by AmScope or its SDK vendor.
 
@@ -52,7 +52,7 @@ The camera timestamp rate is calculated from SDK frame timestamps in microsecond
 
 If the SDK fails to load, record the full error and the SDK path. If no device is enumerated, record the USB VID:PID and negotiated link speed from macOS IORegistry. Do not infer usable bandwidth from the hub's advertised USB version.
 
-The previous MU503 hardware record identified VID:PID \`0547:4511\` and a Mac connection operating at USB 2.0 High Speed (480 Mbit/s) through the observed hub path. A historical 101 fps result at 640×480 on a Windows USB 3 connection is a comparison target, not an expectation for this Mac connection. Record the actual result before changing the transport path.
+The previous MU503 hardware record identified VID:PID `0547:4511` and a Mac connection operating at USB 2.0 High Speed (480 Mbit/s) through the observed hub path. A historical 101 fps result at 640×480 on a Windows USB 3 connection is a comparison target, not an expectation for this Mac connection. Record the actual result before changing the transport path.
 
 ## Safety and limitations
 
