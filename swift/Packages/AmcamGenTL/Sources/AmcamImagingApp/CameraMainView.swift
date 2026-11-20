@@ -156,6 +156,8 @@ private struct CameraSettingsView: View {
     @ObservedObject var model: CameraApplicationModel
     @State private var exposureDraft = 10_000.0
     @State private var gainDraft = 100.0
+    @State private var temperatureDraft = 6_503.0
+    @State private var tintDraft = 1_000.0
     @State private var frameRateDraft = 15.0
 
     private var capabilities: AmcamCameraCapabilities? { model.cameraCapabilities }
@@ -188,6 +190,8 @@ private struct CameraSettingsView: View {
                             FeatureGroupView(group: group, model: model,
                                              exposureDraft: $exposureDraft,
                                              gainDraft: $gainDraft,
+                                             temperatureDraft: $temperatureDraft,
+                                             tintDraft: $tintDraft,
                                              frameRateDraft: $frameRateDraft)
                         }
                     }
@@ -216,6 +220,8 @@ private struct CameraSettingsView: View {
         .onAppear {
             exposureDraft = Double(controls?.exposure?.readbackMicroseconds ?? 10_000)
             gainDraft = Double(controls?.gain?.readbackPercent ?? 100)
+            temperatureDraft = Double(controls?.whiteBalance?.temperature ?? 6_503)
+            tintDraft = Double(controls?.whiteBalance?.tint ?? 1_000)
             frameRateDraft = controls?.frameRate.readbackFramesPerSecond ?? 15
         }
         .onChange(of: controls?.exposure?.readbackMicroseconds) { value in
@@ -223,6 +229,12 @@ private struct CameraSettingsView: View {
         }
         .onChange(of: controls?.gain?.readbackPercent) { value in
             if let value { gainDraft = Double(value) }
+        }
+        .onChange(of: controls?.whiteBalance?.temperature) { value in
+            if let value { temperatureDraft = Double(value) }
+        }
+        .onChange(of: controls?.whiteBalance?.tint) { value in
+            if let value { tintDraft = Double(value) }
         }
         .onChange(of: controls?.frameRate.readbackFramesPerSecond) { value in
             if let value { frameRateDraft = value }
@@ -235,6 +247,8 @@ private struct FeatureGroupView: View {
     @ObservedObject var model: CameraApplicationModel
     @Binding var exposureDraft: Double
     @Binding var gainDraft: Double
+    @Binding var temperatureDraft: Double
+    @Binding var tintDraft: Double
     @Binding var frameRateDraft: Double
 
     private var capability: AmcamCameraCapabilities? { model.cameraCapabilities }
@@ -253,6 +267,8 @@ private struct FeatureGroupView: View {
                 exposureControls
             case .frameRate:
                 frameRateControls
+            case .image:
+                imageControls
             default:
                 ForEach(group.features.filter { capability?.availability(of: $0).available == true }) { feature in
                     let availability = capability?.availability(of: feature)
@@ -372,6 +388,54 @@ private struct FeatureGroupView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var imageControls: some View {
+        if capability?.availability(of: .whiteBalance).isUsable == true,
+           let whiteBalance = controls?.whiteBalance {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Color temperature")
+                    Spacer()
+                    Text("\(Int(temperatureDraft.rounded())) K")
+                        .monospacedDigit()
+                }
+                Slider(value: $temperatureDraft, in: 2_000...15_000) { editing in
+                    if !editing {
+                        model.setWhiteBalanceTemperatureTint(
+                            temperature: Int32(temperatureDraft.rounded()),
+                            tint: Int32(tintDraft.rounded())
+                        )
+                    }
+                }
+                HStack {
+                    Text("Tint")
+                    Spacer()
+                    Text("\(Int(tintDraft.rounded()))")
+                        .monospacedDigit()
+                }
+                Slider(value: $tintDraft, in: 200...2_500) { editing in
+                    if !editing {
+                        model.setWhiteBalanceTemperatureTint(
+                            temperature: Int32(temperatureDraft.rounded()),
+                            tint: Int32(tintDraft.rounded())
+                        )
+                    }
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                Text("Current readback: \(whiteBalance.temperature) K / \(whiteBalance.tint)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        ForEach([AmcamCameraFeature.colorCorrection, .imageLevelRange, .blackLevel,
+                 .conversionGain, .lowNoiseMode].filter {
+            capability?.availability(of: $0).available == true
+        }) { feature in
+            featureStatus(feature)
         }
     }
 
