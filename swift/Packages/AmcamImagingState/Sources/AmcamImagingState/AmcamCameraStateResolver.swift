@@ -33,6 +33,31 @@ public struct AmcamCameraStateResolver: Sendable {
         )
     }
 
+
+    public func validateWrite(
+        _ value: CameraFeatureValue,
+        named name: String,
+        descriptors: [CameraFeatureDescriptor]
+    ) -> CameraFeatureAccessError? {
+        guard let descriptor = descriptors.first(where: { $0.name == name }) else {
+            return .featureNotFound(name)
+        }
+        guard descriptor.isAvailable else {
+            return .featureUnavailable(name)
+        }
+        guard descriptor.isWritable else {
+            return .featureNotWritable(name)
+        }
+        guard descriptor.kind == value.kind else {
+            return .valueTypeMismatch(
+                feature: name,
+                expected: descriptor.kind,
+                actual: value.kind
+            )
+        }
+        return nil
+    }
+
     public func capabilityFeature(for name: String) -> AmcamCameraFeature? {
         switch name {
         case "ExposureAuto": return .exposureAuto
