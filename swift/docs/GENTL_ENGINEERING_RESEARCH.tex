@@ -537,4 +537,9 @@ Three native operations now have deliberate argument and memory probes beyond ne
 \end{itemize}
 The complete matrix therefore has 58 unique per-operation return-code assertions, two custom port argument/memory tests, and four stateful lifecycle operations. Test-only invocation counters cover all 64 protocol operations. This proves operation-to-export mapping and selected scalar/pointer forwarding paths; it is not yet exhaustive argument permutation coverage for every operation. Later test increments must add per-operation sentinel checks for info buffers, event payloads, stream buffers, and composite/stacked structures.
 
+
+
+\section{Optional-export absence verification}
+The missing-optional-export build variant now exercises all 17 later-revision Swift protocol methods. Each call must return exactly \texttt{GC\_ERR\_NOT\_IMPLEMENTED}. For operations with output parameters, the test seeds output storage with sentinel values and verifies that absent function pointers do not modify those values. This checks both loader tolerance and the raw protocol's absent-symbol behavior across all optional operations.
+
 \end{document}
