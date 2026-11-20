@@ -35,6 +35,13 @@ final class GenTLAPITests: XCTestCase {
         XCTAssertEqual(GenTLQueueOperation.inputToOutput.rawValue, 0)
         XCTAssertEqual(GenTLQueueOperation.allDiscard.rawValue, 4)
         XCTAssertEqual(GenTLDeviceAccess.exclusive.rawValue, 4)
+        XCTAssertEqual(GenTLDeviceAccessStatus.unknown.rawValue, 0)
+        XCTAssertEqual(GenTLDeviceAccessStatus.readWrite.rawValue, 1)
+        XCTAssertEqual(GenTLDeviceAccessStatus.readOnly.rawValue, 2)
+        XCTAssertEqual(GenTLDeviceAccessStatus.noAccess.rawValue, 3)
+        XCTAssertEqual(GenTLDeviceAccessStatus.busy.rawValue, 4)
+        XCTAssertEqual(GenTLDeviceAccessStatus.openReadWrite.rawValue, 5)
+        XCTAssertEqual(GenTLDeviceAccessStatus.openReadOnly.rawValue, 6)
     }
 
     func testInfoDataTypeIdentifiersMatchGenTL16() {
