@@ -204,15 +204,19 @@ public struct AmcamCameraStateResolver: Sendable {
         }
 
         let exposureDescriptor = descriptorsByName["ExposureTime"]
+        let autoExposureDescriptor = descriptorsByName["ExposureAuto"]
         let exposureValue = await readIntegerFeature("ExposureTime", readFeature: safeReadFeature)
-        let exposure = exposureDescriptor.map { descriptor in
-            AmcamExposureControl(
+        let exposure: AmcamExposureControl?
+        if exposureDescriptor != nil || autoExposureDescriptor != nil {
+            exposure = AmcamExposureControl(
                 autoMode: autoMode,
                 readbackMicroseconds: unsigned32(exposureValue),
-                minimumMicroseconds: unsigned32(descriptor.numericRange?.minimum),
-                maximumMicroseconds: unsigned32(descriptor.numericRange?.maximum),
+                minimumMicroseconds: unsigned32(exposureDescriptor?.numericRange?.minimum),
+                maximumMicroseconds: unsigned32(exposureDescriptor?.numericRange?.maximum),
                 defaultMicroseconds: nil
             )
+        } else {
+            exposure = nil
         }
 
         let gainDescriptor = descriptorsByName["AmcamAnalogGainPercent"]
