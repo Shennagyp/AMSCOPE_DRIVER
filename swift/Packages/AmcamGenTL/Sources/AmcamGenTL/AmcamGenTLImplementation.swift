@@ -38,7 +38,8 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
     private var bufferHandlesByStream: [UInt: Set<UInt>] = [:]
     private let eventReadCondition = NSCondition()
     private var activeRawEventReads = Set<UInt>()
-    private var pendingRawEventData: [UInt: Data] = [:]
+    private var eventKillGeneration: [UInt: UInt64] = [:]
+    private var pendingRawEventData: [UInt: Data] = [:
 
     // Each C-facing void* handle is backed by a unique allocation. Retired
     // tokens stay allocated until backend destruction so stale handles cannot
@@ -617,6 +618,10 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
             record.source == .dataStream(hDS)
         }
         for (eventHandle, record) in streamEvents {
+            eventReadCondition.lock()
+            eventKillGeneration[eventHandle, default: 0] &+= 1
+            eventReadCondition.broadcast()
+            eventReadCondition.unlock()
             stream.unregisterEvent(record)
             events.removeValue(forKey: eventHandle)
             eventReadCondition.lock()
@@ -801,6 +806,10 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
               let stream = dataStreams[streamHandle.rawValue] else {
             try fail(.invalidHandle)
         }
+        eventReadCondition.lock()
+        eventKillGeneration[match.key, default: 0] &+= 1
+        eventReadCondition.broadcast()
+        eventReadCondition.unlock()
         stream.unregisterEvent(match.value)
         events.removeValue(forKey: match.key)
         eventReadCondition.lock()
@@ -2014,8 +2023,13 @@ extension AmcamGenTLImplementation: GenTLAPI {
         // Serialize retrieval per event so an undersized destination can retain
         // the dequeued payload for the caller's retry instead of losing it.
         eventReadCondition.lock()
+        let startingGeneration = eventKillGeneration[key, default: 0]
         while activeRawEventReads.contains(key) {
             eventReadCondition.wait()
+        }
+        guard eventKillGeneration[key, default: 0] == startingGeneration else {
+            eventReadCondition.unlock()
+            return GenTLABI.GC_ERR_ABORT
         }
         activeRawEventReads.insert(key)
         let pending = pendingRawEventData.removeValue(forKey: key)
@@ -2103,6 +2117,11 @@ extension AmcamGenTLImplementation: GenTLAPI {
 
     public func EventKill(_ hEvent: GenTLABI.EVENT_HANDLE) -> GenTLABI.GC_ERROR {
         guard let hEvent else { return GenTLABI.GC_ERR_INVALID_HANDLE }
-        rawStatus { try EventKill(EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))) }
+        let key = UInt(bitPattern: hEvent)
+        eventReadCondition.lock()
+        eventKillGeneration[key, default: 0] &+= 1
+        eventReadCondition.broadcast()
+        eventReadCondition.unlock()
+        return rawStatus { try EventKill(EVENT_HANDLE(rawValue: key)) }
     }
 }
