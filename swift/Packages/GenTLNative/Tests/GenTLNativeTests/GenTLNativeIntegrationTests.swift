@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 import GenTLABI
 import GenTLAPI
-@_spi(BackendFactory) import GenTLNative
+@_spi(BackendFactory) @testable import GenTLNative
 
 final class GenTLNativeIntegrationTests: XCTestCase {
     private func buildMockProducer(omittingGetInfo: Bool = false) throws -> URL {
