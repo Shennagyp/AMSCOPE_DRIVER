@@ -429,25 +429,27 @@ final class CameraSettingsViewController: NSViewController {
         if let white = controls.whiteBalance {
             if let temperature = white.temperature {
                 temperatureSlider?.doubleValue = Double(temperature)
-                if let range = model.numericRange(for: "AmcamWhiteBalanceTemperature") {
-                    temperatureSlider?.minValue = range.minimum
-                    temperatureSlider?.maxValue = range.maximum
+                let temperatureRange = model.numericRange(for: "AmcamWhiteBalanceTemperature")
+                if let temperatureRange {
+                    temperatureSlider?.minValue = temperatureRange.minimum
+                    temperatureSlider?.maxValue = temperatureRange.maximum
                 }
                 temperatureSlider?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
                     || !model.isFeatureWritable("AmcamWhiteBalanceTemperature")
-                    || model.numericRange(for: "AmcamWhiteBalanceTemperature").map { $0.maximum <= $0.minimum } != false
+                    || temperatureRange.map { $0.maximum > $0.minimum } != true
                 temperatureValue.stringValue = "Current: \(temperature) K"
                 temperatureValue.isHidden = false
             }
             if let tint = white.tint {
                 tintSlider?.doubleValue = Double(tint)
-                if let range = model.numericRange(for: "AmcamWhiteBalanceTint") {
-                    tintSlider?.minValue = range.minimum
-                    tintSlider?.maxValue = range.maximum
+                let tintRange = model.numericRange(for: "AmcamWhiteBalanceTint")
+                if let tintRange {
+                    tintSlider?.minValue = tintRange.minimum
+                    tintSlider?.maxValue = tintRange.maximum
                 }
                 tintSlider?.isHidden = !capabilities.availability(of: .whiteBalance).isUsable
                     || !model.isFeatureWritable("AmcamWhiteBalanceTint")
-                    || model.numericRange(for: "AmcamWhiteBalanceTint").map { $0.maximum <= $0.minimum } != false
+                    || tintRange.map { $0.maximum > $0.minimum } != true
                 tintValue.stringValue = "Current: \(tint)"
                 tintValue.isHidden = false
             }
