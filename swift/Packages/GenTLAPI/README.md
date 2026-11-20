@@ -24,7 +24,7 @@ The Swift surface uses typed opaque handles and Swift values while preserving Ge
 
 `GenTLRouter` creates one initialized GenTL System context per registered backend and reuses it across discovery refreshes. Interface handles are opened once per interface ID and retained with the context, so a refresh does not reload the same `.cti` or reopen a Producer's module hierarchy while earlier candidates or sessions still exist.
 
-Candidates and opened device sessions retain their provider context. Device sessions close their Device modules before the final context release closes Interfaces, the System, and the GenTL library. If a child handle cannot be closed, the Producer library is deliberately retained rather than unloaded underneath live native handles.
+Candidates and opened device sessions retain their provider context. Device sessions close their Device modules before the final context release closes Interfaces, the System, and the GenTL library. If a child handle cannot be closed, the Producer library is deliberately retained rather than unloaded underneath live native handles. Direct use of `GenTLNativeImplementation` has the same safety rule: releasing it before a successful `GCCloseLib` retains its `.cti` library for process lifetime.
 
 Manual registration also canonicalizes CTI and Amcam SDK paths. The same library cannot be registered twice under different backend IDs through the native/Amcam registration methods.
 
