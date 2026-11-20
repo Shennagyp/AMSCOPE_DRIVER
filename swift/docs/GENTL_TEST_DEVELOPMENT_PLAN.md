@@ -469,3 +469,6 @@ These cases test that argument validation failures and custom Producer errors cr
 ### Loader invalid-binary failure case
 
 Added a test that writes a regular file with a `.cti` suffix but invalid Mach-O contents and asserts the loader reports `loadFailed`, distinguishing an existing but unloadable file from a missing file or non-regular path.
+
+
+The latest code-test workflow attempt is run `44674821941` for commit `4c108885fb95c4bf7912da5997d0e42db2d33f43`. All five jobs (four macOS package jobs plus the Ubuntu ABI/API job) again terminated with `runner_id: 0` and empty steps. This confirms the current source/test additions still have no executed CI evidence.
