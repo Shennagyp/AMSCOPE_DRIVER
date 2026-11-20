@@ -386,6 +386,9 @@ final class AmcamCameraStateResolverTests: XCTestCase {
         let offsetRange = CameraFeatureNumericRange(minimum: 2, maximum: 11, increment: 4)!
         XCTAssertEqual(resolver.normalizedNumericValue(11, range: offsetRange), 10)
 
+        let decimalRange = CameraFeatureNumericRange(minimum: 0, maximum: 0.3, increment: 0.1)!
+        XCTAssertEqual(resolver.normalizedNumericValue(0.3, range: decimalRange), 0.3)
+
         let continuousRange = CameraFeatureNumericRange(minimum: 1, maximum: 5)!
         XCTAssertEqual(resolver.normalizedNumericValue(9, range: continuousRange), 5)
         XCTAssertNil(resolver.normalizedNumericValue(.infinity, range: continuousRange))
