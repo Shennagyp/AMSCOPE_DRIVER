@@ -8,7 +8,7 @@ readonly BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 readonly APP_NAME="Amcam Imaging.app"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "make run requires macOS; SwiftUI applications cannot be launched on this host." >&2
+  echo "make run requires macOS; AppKit applications cannot be launched on this host." >&2
   exit 1
 fi
 

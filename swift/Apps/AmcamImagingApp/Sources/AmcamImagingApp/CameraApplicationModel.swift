@@ -5,7 +5,7 @@ import Foundation
 import GenTLABI
 import GenTLAPI
 import GenTLRouter
-import SwiftUI
+import Combine
 
 @MainActor
 final class CameraApplicationModel: ObservableObject {
