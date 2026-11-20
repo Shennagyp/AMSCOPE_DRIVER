@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   package-tests:
-    name: \${{ matrix.package }} tests
+    name: ${{ matrix.package }} tests
     runs-on: macos-14
     strategy:
       fail-fast: false
@@ -44,4 +44,4 @@ jobs:
         run: swift build --package-path swift/Packages/GenTLABI
 
       - name: Run package tests
-        run: swift test --package-path "\${{ matrix.path }}" --parallel
+        run: swift test --package-path "${{ matrix.path }}" --parallel
