@@ -501,4 +501,4 @@ Corrections now committed:
 - Add `GenTLABI_ErrorFromCode` in the C ABI shim to convert official `GC_ERROR_LIST` values to the ABI's `GC_ERROR` scalar type.
 - Remove duplicate Amcam raw-handle helpers; retain the identity-validating helper.
 
-The earlier Linux API pass remains valid for commit `430ccf9da3b098cedb79fd932874c031943317cd`. Latest source commit: `6364f89117ea3fc76fe4cb62663913eab100f6a1`; workflow [44676898035](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44676898035) is in progress. Linux Swift setup has not completed and macOS jobs remain queued. **The new ABI changes are not yet CI-verified.**
+The earlier Linux API pass remains valid for commit `430ccf9da3b098cedb79fd932874c031943317cd`. Latest source commit: `6364f89117ea3fc76fe4cb62663913eab100f6a1`; workflow [44676898035](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44676898035) completed the Ubuntu 24.04 ABI/API job successfully: the GenTL ABI package built and all 9 GenTLAPI tests passed. The four macOS package jobs remain queued. **The Amcam/native backend and macOS integration changes are not yet CI-verified.**
