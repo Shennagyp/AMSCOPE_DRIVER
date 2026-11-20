@@ -1,4 +1,4 @@
-name: Swift GenTL packages
+name: Amcam macOS camera and imaging application
 
 on:
   push:
@@ -22,7 +22,7 @@ permissions:
 # running run is allowed to finish; superseded queued runs are replaced.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   package-tests:
@@ -32,14 +32,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - package: GenTLAPI
-            path: swift/Packages/GenTLAPI
-          - package: GenTLNative
-            path: swift/Packages/GenTLNative
           - package: AmcamGenTL
             path: swift/Packages/AmcamGenTL
-          - package: GenTLRouter
-            path: swift/Packages/GenTLRouter
 
     steps:
       - name: Check out repository
