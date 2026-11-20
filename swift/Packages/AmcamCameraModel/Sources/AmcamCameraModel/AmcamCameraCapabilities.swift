@@ -217,9 +217,9 @@ public struct AmcamCameraProfileRegistry: Sendable {
                 evidence = .runtimeProbe
                 reason = baseAvailable ? nil : "The camera does not expose a usable preview resolution configuration."
             } else if feature == .liveCapture {
-                baseAvailable = true
+                baseAvailable = probe == true
                 evidence = .implementation
-                reason = nil
+                reason = baseAvailable ? nil : "The opened device does not expose a data stream."
             } else if feature == .discreteFrameSpeed {
                 baseAvailable = maximumSpeedLevel.map { $0 >= 0 } == true && probe == true
                 evidence = .runtimeProbe
@@ -251,6 +251,53 @@ public struct AmcamCameraProfileRegistry: Sendable {
             )
         }
         return AmcamCameraCapabilities(modelCode: modelCode, modelFlags: modelFlags, features: records)
+    }
+
+
+    /// Resolves runtime GenTL feature observations into the AmScope capability
+    /// model. Descriptor presence establishes implementation coverage; descriptor
+    /// availability establishes hardware/runtime evidence. A model profile can
+    /// narrow these observations but cannot make an unavailable feature usable.
+    public func resolveRuntime(
+        device: AmcamDevice,
+        featureAvailabilityByName: [String: Bool],
+        hasDataStream: Bool,
+        maximumSpeedLevel: Int? = nil
+    ) -> AmcamCameraCapabilities {
+        let featureNames: [AmcamCameraFeature: [String]] = [
+            .resolution: ["AmcamResolutionIndex"],
+            .exposureAuto: ["ExposureAuto"],
+            .exposureManual: ["ExposureTime"],
+            .analogGain: ["AmcamAnalogGainPercent"],
+            .whiteBalance: [
+                "AmcamWhiteBalanceTemperature",
+                "AmcamWhiteBalanceTint",
+                "AmcamWhiteBalanceRGBGain"
+            ],
+            .colorCorrection: ["AmcamColorMatrixEnabled"],
+            .pixelFormatSelection: ["AmcamPixelFormat"],
+            .preciseFrameRate: ["AmcamFixedFrameRate"],
+            .discreteFrameSpeed: ["AmcamFrameSpeedLevel"]
+        ]
+
+        var probes = ProbeResults()
+        var implemented: Set<AmcamCameraFeature> = [.liveCapture]
+        for (feature, names) in featureNames {
+            let observations = names.compactMap { featureAvailabilityByName[$0] }
+            if !observations.isEmpty {
+                implemented.insert(feature)
+                probes[feature] = observations.contains(true)
+            }
+        }
+        probes[.liveCapture] = hasDataStream
+
+        return resolve(
+            modelCode: device.modelCode,
+            modelFlags: device.modelFlags ?? 0,
+            maximumSpeedLevel: maximumSpeedLevel ?? device.maximumSpeedLevel,
+            probes: probes,
+            implemented: implemented
+        )
     }
 
     private static func requiredFlag(for feature: AmcamCameraFeature) -> UInt64? {
