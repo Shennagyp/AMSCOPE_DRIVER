@@ -1,13 +1,30 @@
 import XCTest
 @testable import GenTLRouter
 
+private final class InvocationCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+}
+
 final class GenTLRouterRegistrationTests: XCTestCase {
     func testRegistrationIsLazyUntilDiscovery() throws {
         let router = GenTLRouter()
-        var factoryInvocations = 0
+        let factoryInvocations = InvocationCounter()
 
         try router.register(backendID: "lazy-backend") {
-            factoryInvocations += 1
+            factoryInvocations.increment()
             throw NSError(
                 domain: "GenTLRouterRegistrationTests",
                 code: 1,
@@ -15,12 +32,12 @@ final class GenTLRouterRegistrationTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(factoryInvocations, 0)
+        XCTAssertEqual(factoryInvocations.value, 0)
         XCTAssertEqual(router.backendIDs, ["lazy-backend"])
 
         let report = router.discover(timeout: 0)
 
-        XCTAssertEqual(factoryInvocations, 1)
+        XCTAssertEqual(factoryInvocations.value, 1)
         XCTAssertTrue(report.devices.isEmpty)
         XCTAssertEqual(report.failures.map(\.backendID), ["lazy-backend"])
         XCTAssertTrue(report.failures[0].message.contains("Expected test factory failure"))
@@ -28,17 +45,17 @@ final class GenTLRouterRegistrationTests: XCTestCase {
 
     func testDuplicateBackendIdentifierIsRejectedWithoutReplacingRegistration() throws {
         let router = GenTLRouter()
-        var firstFactoryInvocations = 0
-        var secondFactoryInvocations = 0
+        let firstFactoryInvocations = InvocationCounter()
+        let secondFactoryInvocations = InvocationCounter()
 
         try router.register(backendID: "camera-backend") {
-            firstFactoryInvocations += 1
+            firstFactoryInvocations.increment()
             throw NSError(domain: "first", code: 1)
         }
 
         XCTAssertThrowsError(
             try router.register(backendID: "camera-backend") {
-                secondFactoryInvocations += 1
+                secondFactoryInvocations.increment()
                 throw NSError(domain: "second", code: 2)
             }
         ) { error in
@@ -48,8 +65,8 @@ final class GenTLRouterRegistrationTests: XCTestCase {
         }
 
         XCTAssertEqual(router.backendIDs, ["camera-backend"])
-        XCTAssertEqual(firstFactoryInvocations, 0)
-        XCTAssertEqual(secondFactoryInvocations, 0)
+        XCTAssertEqual(firstFactoryInvocations.value, 0)
+        XCTAssertEqual(secondFactoryInvocations.value, 0)
     }
 
     func testBackendIdentifiersMustBeCanonicalNonEmptyValues() throws {
