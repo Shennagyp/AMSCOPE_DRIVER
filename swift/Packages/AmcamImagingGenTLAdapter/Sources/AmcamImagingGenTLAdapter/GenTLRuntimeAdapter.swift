@@ -4,7 +4,8 @@ import Foundation
 import GenTLRouter
 
 /// Adapts one already-open GenTL device session to the portable lifecycle contract.
-/// The caller transfers exclusive ownership to this wrapper until close succeeds.
+/// The caller delegates device close responsibility to this wrapper. It may retain
+/// the session reference for feature access, but must not close it independently.
 public final class GenTLRuntimeSession: CameraRuntimeSession, @unchecked Sendable {
     private let device: GenTLDeviceSession
 

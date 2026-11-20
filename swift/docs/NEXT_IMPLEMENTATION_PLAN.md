@@ -141,7 +141,7 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [x] Add deterministic tests for RGB8 format identity, row padding, payload bounds, invalid dimensions and arithmetic overflow.
 - [x] Extract monotonic-timestamp frame-rate estimation into AmcamImagingCore and test smoothing-window bounds, invalid timestamps and reset behavior.
 - [x] Add AmcamImagingApplicationCore with async backend protocols, an event stream, strict child-before-parent cleanup, retryable ownership and generation-based stale-frame rejection.
-- [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, frame delivery, stop and stale-frame suppression.
+- [x] Add deterministic fake-runtime tests for acquisition-close retry, device-close retry, startup rollback, timeout recovery, unsolicited stop, fatal-read cleanup, concurrent-close rejection, frame delivery and stale-frame suppression.
 - [x] Add AmcamImagingGenTLAdapter to bridge GenTLRouter's synchronous device/acquisition sessions into the portable async lifecycle contracts; blocking reads run off the cooperative executor so stop/close can interrupt them.
 - [ ] Replace the AppKit model's direct acquisition task with the lifecycle coordinator and route session cleanup through the adapter.
 - [ ] Move camera discovery, feature policy, controls and profile semantics into a separately testable application state model with an explicitly chosen observation/event contract.

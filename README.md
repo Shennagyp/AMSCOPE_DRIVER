@@ -38,7 +38,7 @@ See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for p
 - **GenTLNative** — native GenTL Consumer implementation, dynamic CTI loading and C function dispatch.
 - **AmcamCameraModel** — SDK-independent camera value types, capability descriptors, control snapshots and model-profile policy.
 - **AmcamImagingCore** — platform-neutral RGB8 frames, generic camera payload values and frame-rate estimation; Foundation-only, with Linux CI coverage.
-- **AmcamImagingApplicationCore** — backend-neutral async camera session/acquisition lifecycle with ordered cleanup, retryable ownership and stale-frame rejection; no AppKit, Combine, GenTL handles or vendor SDK dependency.
+- **AmcamImagingApplicationCore** — backend-neutral async camera session/acquisition lifecycle with serialized operations, ordered cleanup, retryable ownership, reliable state events and latest-frame-only delivery; no AppKit, Combine, GenTL handles or vendor SDK dependency.
 - **AmcamImagingGenTLAdapter** — macOS GenTLRouter adapter implementing the portable lifecycle contracts; blocking GenTL reads execute away from Swift's cooperative executor so stop/close can interrupt them concurrently.
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract; it re-exports AmcamCameraModel for source compatibility.
 - **GenTLRouter** — backend registration, discovery aggregation, backend-bound sessions, typed feature forwarding and generic GenTL data-stream acquisition.
