@@ -8,14 +8,14 @@ let package = Package(
         .library(name: "GenTLNative", targets: ["GenTLNative"])
     ],
     dependencies: [
-        .package(path: "../GenTLAPI")
+        .package(path: "../GenTLAPI"),
+        .package(path: "../GenTLABI")
     ],
     targets: [
-        .target(name: "GenTLABI", publicHeadersPath: "include"),
         .target(
             name: "GenTLNative",
             dependencies: [
-                "GenTLABI",
+                .product(name: "GenTLABI", package: "GenTLABI"),
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
         ),
