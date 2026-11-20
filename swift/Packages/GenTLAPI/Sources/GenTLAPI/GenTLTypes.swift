@@ -226,6 +226,7 @@ public enum GenTLInfoCommand {
     public enum TransportLayer: Int32, Sendable {
         case id = 0, vendor = 1, model = 2, version = 3, transportType = 4
         case fileName = 5, pathName = 6, displayName = 7, charEncoding = 8
+        case genTLVersionMajor = 9, genTLVersionMinor = 10
     }
     public enum Interface: Int32, Sendable {
         case id = 0, displayName = 1, transportType = 2
