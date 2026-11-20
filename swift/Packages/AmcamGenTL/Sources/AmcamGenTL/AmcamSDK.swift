@@ -360,7 +360,7 @@ final class AmcamSDK: @unchecked Sendable {
     }
 
     func setAutoExposureMode(_ handle: UnsafeMutableRawPointer, mode: AmcamAutoExposureMode) throws {
-        let result = api.setAutoExposure(handle, Int32(mode.rawValue))
+        let result = api.setAutoExposure(handle, mode.rawValue)
         try checkControlResult("Amcam_put_AutoExpoEnable", result)
     }
 
