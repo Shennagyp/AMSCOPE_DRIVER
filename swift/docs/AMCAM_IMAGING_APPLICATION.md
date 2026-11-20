@@ -66,7 +66,7 @@ The Amcam API uses a three-state Amcam_put_AutoExpoEnable value:
 
 The SDK wrapper now preserves all three values instead of collapsing every nonzero value into a Boolean. Fixed exposure is available when the camera's auto-exposure mode and exposure range/readback queries succeed. The exposure-time slider is enabled only in manual mode. A setter is accepted only after the SDK confirms manual mode and the requested microsecond value is read back exactly.
 
-This is distinct from analog gain. Gain is a separate control with its own API and range query; it must not be inferred from exposure support.
+This is distinct from analog gain. Gain is a separate control with its own API and range query; it must not be inferred from exposure support. The Swift implementation loads gain functions as optional symbols, requires the complete get/set/range API, probes the current camera, validates the model-reported range, and verifies exact readback after a write. The mock integration suite also injects a successful-but-ignored gain write and requires a readback-mismatch error.
 
 ## Model profile configuration
 
@@ -104,6 +104,7 @@ The first application slice exposes:
 - resolution selection when the loaded SDK exposes resolution changes;
 - manual/fixed, continuous-auto, and one-shot-auto exposure modes;
 - exposure-time range and exact readback;
+- analog gain range, setter, and exact readback when the SDK symbols and camera queries are available;
 - precise fixed frame rate when both model flag and runtime option probes succeed;
 - discrete sensor speed when model speed range and SDK get/set symbols are usable.
 
