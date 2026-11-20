@@ -129,6 +129,16 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(frameInfo.height, 480)
         XCTAssertEqual(frameInfo.seq, 1)
         XCTAssertEqual(buffer.load(as: UInt8.self), 0x5a)
+
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let versionSymbol = dlsym(mockLibrary, "MockAmcam_PullAPIVersion") else {
+            XCTFail("Mock SDK is missing MockAmcam_PullAPIVersion")
+            return
+        }
+        let reportedVersion = unsafeBitCast(versionSymbol, to: (@convention(c) () -> UInt32).self)
+        XCTAssertEqual(reportedVersion(), 4, "The SDK must actually dispatch through PullImageV4.")
     }
 
 
