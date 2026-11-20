@@ -194,11 +194,15 @@ final class CameraApplicationModel: ObservableObject {
                         guard !frame.isIncomplete else { continue }
                         await self?.accept(frame)
                     } catch let error as GenTLAcquisitionError {
-                        if case .acquisitionStopped = error {
-                            break
+                        switch error {
+                        case .acquisitionStopped:
+                            return
+                        case .eventTimeout:
+                            continue
+                        default:
+                            await self?.handleCaptureFailure(error)
+                            return
                         }
-                        await self?.handleCaptureFailure(error)
-                        break
                     } catch {
                         await self?.handleCaptureFailure(error)
                         break
