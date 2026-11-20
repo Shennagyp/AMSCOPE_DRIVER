@@ -16,7 +16,6 @@ The application uses one GenTL API contract with two interchangeable implementat
 From the repository root on an Apple Silicon Mac running macOS 13 or later:
 
 ```sh
-gh auth login
 make run
 ```
 
