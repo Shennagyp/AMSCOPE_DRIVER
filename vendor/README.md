@@ -1,32 +1,36 @@
-# Vendor SDK layout
+# Vendor SDK directory
 
-Place vendor runtime libraries under a vendor-specific directory. The application
-build copies this tree into the app bundle and signs packaged macOS dynamic
-libraries before signing the app itself.
-
-Current AmScope SDK location:
+Vendor binaries are deployment inputs and are not selected from the UI. Keep
+each vendor isolated under its own directory:
 
 ```text
 vendor/
-  amscope/
+  amcam/
     macos/
-      arm64/
-        libamcam.dylib
-        <any sibling runtime dependencies>
-      x86_64/
-        libamcam.dylib
-        <any sibling runtime dependencies>
-      universal/
-        libamcam.dylib
-        <any sibling runtime dependencies>
-  <other-vendor>/
-    ...
+      libamcam.dylib
+      <sibling runtime dependencies>
+  <another-vendor>/
+    macos/
+      <vendor runtime libraries>
 ```
 
-Use the architecture matching the process. A universal binary may be placed in
-`universal/`. Keep all vendor-supplied sibling dependencies in the same
-architecture directory so their own `@loader_path` references remain valid.
+The macOS build copies this tree into:
+
+```text
+<application>.app/Contents/Frameworks/Vendors/<vendor>/...
+```
+
+For AmScope, the backend looks first in the application bundle at
+`Contents/Frameworks/Vendors/amcam/macos/libamcam.dylib`. It then checks the
+per-user and machine-wide SDK installation locations documented in
+`swift/Packages/AmcamGenTL`.
+
+The build also accepts `AMCAM_SDK_SOURCE=/absolute/path/to/libamcam.dylib`.
+It validates that the SDK contains every architecture used by the application,
+copies it into the app bundle, and signs the bundled copy. The vendor source
+file is not modified. Set `REQUIRE_AMCAM_SDK=1` to fail packaging when the
+AmScope SDK is missing; without it, the app can launch with that provider
+unavailable.
 
 Do not commit proprietary SDK binaries unless the vendor license explicitly
-permits redistribution. For local development, obtain the SDK from the vendor
-and place it here. The app does not provide a file picker for native libraries.
+permits redistribution.
