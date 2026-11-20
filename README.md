@@ -19,7 +19,7 @@ The application uses one GenTL API contract with two interchangeable implementat
 - **AmcamGenTL** — Amcam SDK-backed implementation of the same contract.
 - **GenTLRouter** — backend registration, discovery aggregation and backend-bound device candidates/sessions.
 
-The shared ABI package is being extracted from the current GenTLNative package. Until that code change is complete, the existing repository layout is transitional.
+The shared GenTLABI package has now been extracted and the GenTLAPI, GenTLNative and AmcamGenTL dependencies are wired to it. The remaining transition is to convert the public GenTLAPI contract and its ABI-relevant types to use the imported declarations directly.
 
 ## Implementation plan
 
