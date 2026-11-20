@@ -7,29 +7,35 @@ public enum AmcamCameraFeature: String, CaseIterable, Codable, Hashable, Sendabl
     case liveCapture, resolution
     case exposureAuto, exposureManual, analogGain
     case preciseFrameRate, discreteFrameSpeed
-    case hardwareROI, binningAndSkipping, monochromeOutput
-    case whiteBalance, colorCorrection, imageLevelRange, blackLevel
-    case triggerSoftware, triggerExternal, selfTrigger
-    case focusMotor, autoFocus
+    case hardwareROI, binningAndSkipping, monochromeOutput, frameBuffer, ddrFrameBuffer
+    case whiteBalance, colorCorrection, imageLevelRange, blackLevel, ispProcessor
+    case triggerSoftware, triggerExternal, triggerSingle, selfTrigger, hardwareEvent
+    case focusMotor, autoFocus, astroAutoFocuser
     case thermoelectricCooling, thermoelectricCoolingOnOff, sensorTemperature, coolingFan, heatAntiFog
-    case conversionGain, lowNoiseMode, hardwareLevelRange
-    case filterWheel, embeddedLightSource, pixelFormatSelection
+    case conversionGain, conversionGainHDR, lowNoiseMode, hardwareLevelRange
+    case filterWheel, embeddedLightSource, standaloneLightSource, st4Port, pixelFormatSelection
+    case cmosSensor, ccdProgressiveSensor, ccdInterlacedSensor, highFullWell, globalShutter, ghoptoSensor
+    case usb3, usb3OverUSB2, gigE, fiveGigE, tenGigE, twoPointFiveGigE, cameraLink, coaxPress
 
     public var id: String { rawValue }
 
     public var group: AmcamCameraFeatureGroup {
         switch self {
         case .liveCapture, .resolution, .hardwareROI, .binningAndSkipping,
-             .monochromeOutput, .pixelFormatSelection: return .capture
+             .monochromeOutput, .pixelFormatSelection, .frameBuffer, .ddrFrameBuffer: return .capture
         case .exposureAuto, .exposureManual, .analogGain: return .exposureAndGain
         case .preciseFrameRate, .discreteFrameSpeed: return .frameRate
         case .whiteBalance, .colorCorrection, .imageLevelRange, .blackLevel,
-             .conversionGain, .lowNoiseMode: return .image
-        case .triggerSoftware, .triggerExternal, .selfTrigger: return .trigger
+             .conversionGain, .conversionGainHDR, .lowNoiseMode, .ispProcessor: return .image
+        case .triggerSoftware, .triggerExternal, .triggerSingle, .selfTrigger, .hardwareEvent: return .trigger
         case .focusMotor, .autoFocus: return .focus
         case .thermoelectricCooling, .thermoelectricCoolingOnOff, .sensorTemperature, .coolingFan, .heatAntiFog: return .thermal
         case .hardwareLevelRange: return .calibration
-        case .filterWheel, .embeddedLightSource: return .accessories
+        case .filterWheel, .embeddedLightSource, .standaloneLightSource, .st4Port, .astroAutoFocuser: return .accessories
+        case .cmosSensor, .ccdProgressiveSensor, .ccdInterlacedSensor, .highFullWell,
+             .globalShutter, .ghoptoSensor: return .sensor
+        case .usb3, .usb3OverUSB2, .gigE, .fiveGigE, .tenGigE, .twoPointFiveGigE,
+             .cameraLink, .coaxPress: return .transport
         }
     }
 }
@@ -49,6 +55,8 @@ public enum AmcamCameraFeatureGroup: String, CaseIterable, Codable, Hashable, Se
         case .thermal: return "Cooling & Temperature"
         case .calibration: return "Calibration"
         case .accessories: return "Accessories"
+        case .sensor: return "Sensor"
+        case .transport: return "Transport"
         }
     }
 
@@ -218,7 +226,7 @@ public struct AmcamCameraProfileRegistry: Sendable {
             } else {
                 policyReason = reason
             }
-            let isImplemented = implemented.contains(feature)
+            let isImplemented = implemented.contains(feature) || feature.isInformational
             return AmcamFeatureAvailability(
                 feature: feature, available: available, implemented: isImplemented,
                 evidence: evidence ?? (isImplemented ? .implementation : nil),
@@ -230,28 +238,62 @@ public struct AmcamCameraProfileRegistry: Sendable {
         return AmcamCameraCapabilities(modelCode: modelCode, modelFlags: modelFlags, features: records)
     }
 
+    private extension AmcamCameraFeature {
+        var isInformational: Bool {
+            switch self {
+            case .cmosSensor, .ccdProgressiveSensor, .ccdInterlacedSensor, .highFullWell,
+                 .globalShutter, .ghoptoSensor, .usb3, .usb3OverUSB2, .gigE, .fiveGigE,
+                 .tenGigE, .twoPointFiveGigE, .cameraLink, .coaxPress:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     private static func requiredFlag(for feature: AmcamCameraFeature) -> UInt64? {
         switch feature {
+        case .cmosSensor: return 0x00000001
+        case .ccdProgressiveSensor: return 0x00000002
+        case .ccdInterlacedSensor: return 0x00000004
         case .hardwareROI: return 0x00000008
         case .monochromeOutput: return 0x00000010
         case .binningAndSkipping: return 0x00000020
         case .thermoelectricCooling: return 0x00000080
         case .thermoelectricCoolingOnOff: return 0x00020000
+        case .st4Port: return 0x00000200
         case .sensorTemperature: return 0x00000400
+        case .highFullWell: return 0x00000800
         case .coolingFan: return 0x00010000
+        case .ispProcessor: return 0x00040000
         case .triggerSoftware: return 0x00080000
         case .triggerExternal: return 0x00100000
+        case .triggerSingle: return 0x00200000
         case .blackLevel: return 0x00400000
         case .autoFocus: return 0x00800000
+        case .frameBuffer: return 0x01000000
+        case .ddrFrameBuffer: return 0x02000000
         case .conversionGain: return 0x04000000
         case .preciseFrameRate: return 0x0000004000000000
         case .focusMotor: return 0x0000002000000000
         case .heatAntiFog: return 0x0000008000000000
         case .lowNoiseMode: return 0x0000010000000000
         case .hardwareLevelRange: return 0x0000020000000000
+        case .hardwareEvent: return 0x0000040000000000
         case .embeddedLightSource: return 0x0000080000000000
         case .filterWheel: return 0x0000100000000000
+        case .astroAutoFocuser: return 0x0002000000000000
+        case .standaloneLightSource: return 0x0004000000000000
+        case .cameraLink: return 0x0008000000000000
+        case .coaxPress: return 0x0010000000000000
         case .selfTrigger: return 0x0040000000000000
+        case .ghoptoSensor: return 0x0100000000000000
+        case .usb3: return 0x00000040
+        case .usb3OverUSB2: return 0x00000100
+        case .gigE: return 0x0000200000000000
+        case .tenGigE: return 0x0000400000000000
+        case .fiveGigE: return 0x0000800000000000
+        case .twoPointFiveGigE: return 0x0001000000000000
         case .exposureAuto, .exposureManual, .analogGain, .resolution, .liveCapture,
              .discreteFrameSpeed, .whiteBalance, .colorCorrection, .imageLevelRange,
              .pixelFormatSelection: return nil
