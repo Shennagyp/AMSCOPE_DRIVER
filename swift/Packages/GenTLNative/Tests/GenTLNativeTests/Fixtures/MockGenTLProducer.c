@@ -17,8 +17,8 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCGetInfo(
     void *buffer,
     size_t *size
 ) {
-    (void)command;
     mock_call_counts[0]++;
+    if (command != (TL_INFO_CMD)0x1234) return (GC_ERROR)-4322;
     if (type != NULL) *type = INFO_DATATYPE_UINT32;
     if (size != NULL) {
         if (buffer != NULL && *size >= sizeof(uint32_t)) {
@@ -64,8 +64,33 @@ GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE EventKill(EVENT_HANDLE event) {
 }
 
 MOCK_STUB_CODE(1, GCGetLastError, (GC_ERROR *piErrorCode, char *sErrText, size_t *piSize), -6001)
-MOCK_STUB_CODE(4, GCReadPort, (PORT_HANDLE hPort, uint64_t iAddress, void *pBuffer, size_t *piSize), -6004)
-MOCK_STUB_CODE(5, GCWritePort, (PORT_HANDLE hPort, uint64_t iAddress, const void *pBuffer, size_t *piSize), -6005)
+GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCReadPort(
+    PORT_HANDLE hPort, uint64_t iAddress, void *pBuffer, size_t *piSize
+) {
+    mock_call_counts[4]++;
+    if (hPort != (PORT_HANDLE)(uintptr_t)0x1111 ||
+        iAddress != UINT64_C(0x1020304050607080) ||
+        pBuffer == NULL || piSize == NULL || *piSize < sizeof(uint32_t)) {
+        return (GC_ERROR)-5431;
+    }
+    const uint32_t marker = UINT32_C(0xA1B2C3D4);
+    memcpy(pBuffer, &marker, sizeof(marker));
+    *piSize = sizeof(marker);
+    return (GC_ERROR)-5432;
+}
+GC_IMPORT_EXPORT GC_ERROR GC_CALLTYPE GCWritePort(
+    PORT_HANDLE hPort, uint64_t iAddress, const void *pBuffer, size_t *piSize
+) {
+    mock_call_counts[5]++;
+    const uint8_t expected[4] = {0x12, 0x34, 0x56, 0x78};
+    if (hPort != (PORT_HANDLE)(uintptr_t)0x1111 ||
+        iAddress != UINT64_C(0x1020304050607080) ||
+        pBuffer == NULL || piSize == NULL || *piSize != sizeof(expected) ||
+        memcmp(pBuffer, expected, sizeof(expected)) != 0) {
+        return (GC_ERROR)-5433;
+    }
+    return (GC_ERROR)-5434;
+}
 MOCK_STUB_CODE(6, GCGetPortURL, (PORT_HANDLE hPort, char *sURL, size_t *piSize), -6006)
 MOCK_STUB_CODE(7, GCGetPortInfo, (PORT_HANDLE hPort, PORT_INFO_CMD iInfoCmd, INFO_DATATYPE *piType, void *pBuffer, size_t *piSize), -6007)
 MOCK_STUB_CODE(10, EventGetData, (EVENT_HANDLE hEvent, void *pBuffer, size_t *piSize, uint64_t iTimeout), -6010)
