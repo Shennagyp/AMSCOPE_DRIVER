@@ -515,7 +515,7 @@ final class CameraSessionLifecycleTests: XCTestCase {
         try await lifecycle.close()
     }
 
-    func testConcurrentCloseIsRejectedWhileFirstCloseSuspends() async throws {
+    func testConcurrentCloseWaitsForFirstCloseWithoutDoubleClosing() async throws {
         let gate = AsyncGate()
         let acquisition = FakeAcquisition(closeGate: gate)
         let session = FakeSession(acquisition: acquisition)
@@ -529,15 +529,14 @@ final class CameraSessionLifecycleTests: XCTestCase {
         }
         await gate.waitUntilEntered()
 
-        do {
+        let secondClose = Task {
             try await lifecycle.close()
-            XCTFail("A second close must not operate on the same acquisition concurrently.")
-        } catch {
-            XCTAssertEqual(error as? CameraSessionLifecycleError, .operationInProgress)
         }
+        await Task.yield()
 
         await gate.release()
         try await firstClose.value
+        try await secondClose.value
 
         let snapshot = await lifecycle.snapshot()
         XCTAssertFalse(snapshot.hasSession)
