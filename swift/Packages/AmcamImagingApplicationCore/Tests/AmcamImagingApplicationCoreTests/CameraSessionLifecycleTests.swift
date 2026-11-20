@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 import AmcamImagingCore
 @testable import AmcamImagingApplicationCore
@@ -11,7 +12,7 @@ private enum FakeRuntimeError: Error {
 /// NSLock protects control counters while AsyncStream handles frame delivery.
 private final class FakeAcquisition: CameraRuntimeAcquisition, @unchecked Sendable {
     private let lock = NSLock()
-    private let iterator: AsyncStream<CameraFramePayload>.Iterator
+    private var iterator: AsyncStream<CameraFramePayload>.Iterator
     private let continuation: AsyncStream<CameraFramePayload>.Continuation
     private var closeFailuresRemaining: Int
     private var startFailuresRemaining: Int
@@ -159,7 +160,8 @@ final class CameraSessionLifecycleTests: XCTestCase {
 
         let firstSnapshot = await lifecycle.snapshot()
         let firstAcquisitionCloses = acquisition.closeAttempts
-                XCTAssertTrue(firstSnapshot.hasSession)
+        let firstSessionCloses = await session.closeAttempts
+        XCTAssertTrue(firstSnapshot.hasSession)
         XCTAssertTrue(firstSnapshot.hasAcquisition)
         XCTAssertFalse(firstSnapshot.isStreaming)
         XCTAssertEqual(firstAcquisitionCloses, 1)
