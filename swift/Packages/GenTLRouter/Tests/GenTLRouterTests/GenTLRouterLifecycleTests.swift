@@ -15,7 +15,7 @@ private struct CallCounts {
     var deviceClose = 0
 }
 
-private final class RecordingGenTLAPI: GenTLBackendConvenience, @unchecked Sendable {
+private final class RecordingGenTLAPI: GenTLBackendConvenience, GenTLAPI, @unchecked Sendable {
     private let lock = NSLock()
     private var calls = CallCounts()
     private let failSystemOpen: Bool
