@@ -65,6 +65,23 @@ public struct AmcamExposureControl: Equatable, Sendable {
     }
 }
 
+public struct AmcamGainControl: Equatable, Sendable {
+    public let readbackPercent: UInt16
+    public let minimumPercent: UInt16
+    public let maximumPercent: UInt16
+    public let defaultPercent: UInt16
+    public let requestedPercent: UInt16?
+
+    public init(readbackPercent: UInt16, minimumPercent: UInt16, maximumPercent: UInt16,
+                defaultPercent: UInt16, requestedPercent: UInt16? = nil) {
+        self.readbackPercent = readbackPercent
+        self.minimumPercent = minimumPercent
+        self.maximumPercent = maximumPercent
+        self.defaultPercent = defaultPercent
+        self.requestedPercent = requestedPercent
+    }
+}
+
 public struct AmcamFrameRateControl: Equatable, Sendable {
     /// Recent camera-side frame-rate sample from the SDK's rolling measurement window.
     public let deviceMeasuredFramesPerSecond: Double?
@@ -102,10 +119,13 @@ public struct AmcamFrameRateControl: Equatable, Sendable {
 
 public struct AmcamControlSnapshot: Equatable, Sendable {
     public let exposure: AmcamExposureControl
+    public let gain: AmcamGainControl?
     public let frameRate: AmcamFrameRateControl
 
-    public init(exposure: AmcamExposureControl, frameRate: AmcamFrameRateControl) {
+    public init(exposure: AmcamExposureControl, gain: AmcamGainControl? = nil,
+                frameRate: AmcamFrameRateControl) {
         self.exposure = exposure
+        self.gain = gain
         self.frameRate = frameRate
     }
 }
