@@ -518,26 +518,21 @@ Verified evidence:
 - Six test cases were scheduled and completed: three RGB24 layout tests and three integration tests covering discovery/open, repeated stream start-stop, synchronous callback delivery, disconnect cleanup, exposure controls/readback, resolution changes/readback, frame delivery, and the GenTL data-stream buffer/event lifecycle.
 - The overall workflow was not green because the separate \`GenTLNative\` and \`GenTLRouter\` jobs failed. Do not attribute those failures to the Amcam package job.
 
-### Verified hardening baseline and pending follow-up
+### Verified Amcam hardening and hardware-probe build
 
-A hardening baseline completed successfully in workflow [44682176084](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44682176084), source commit `0f35d0ee87e3f100a7826846c032ceab04c29880`.
+Latest source commit `d40c96e0840283cb1df665178d329130bbb1b977` completed Amcam verification in workflow [44683070601](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44683070601).
 
 The Amcam macOS job:
-- Scheduled all 10 tests: three bounded Amcam ABI string-helper tests, three RGB24 layout tests, and four SDK integration tests.
-- Completed the `Run package tests` step successfully.
-- Built the release camera probe, identified it as a Mach-O 64-bit arm64 executable, and ran `--help`.
-- Uploaded artifact `amcam-camera-probe-macos-arm64`, ID `14604159604`, SHA-256 `82d0d24d1a06a341565d775d74ae544bcb7e82c71a388a4a8dd15e951bea4bcd`, expiring 2026-12-04.
+- Scheduled all 11 tests: three ABI string-boundary tests, three RGB24 layout tests, and five SDK integration tests.
+- Completed `Run package tests` successfully. Coverage includes exposure setter/readback fault injection, precise frame-rate range and quantization, two-buffer round-robin finite acquisition, disconnect error-event delivery and cleanup, and undersized-buffer safety.
+- Built the release probe as a Mach-O 64-bit arm64 executable and ran `--help`.
+- Uploaded artifact `amcam-camera-probe-macos-arm64`, ID `14605760059`, SHA-256 `b23ee03db32c19c8def9f7c341e882f70f6741d04b453edf29dbd67e3e8adb13`, expiring 2026-12-04.
 
-The overall workflow remained red because the separate GenTLNative and GenTLRouter jobs failed. The Linux ABI/API, GenTLAPI, and Amcam jobs succeeded. The Amcam tests validate the deterministic SDK fixture, not a physical camera.
+The overall workflow remains red because GenTLNative and GenTLRouter fail separately. Linux ABI/API, GenTLAPI, and Amcam jobs succeeded. The Amcam tests use the deterministic C SDK fixture, not the physical camera.
 
-Changes made after that verified baseline:
-- The mock now advertises precise frame-rate capability and tests range, 0.1 FPS increments, setter/readback, invalid increments, and unsupported discrete speed control.
-- The stream integration test now uses two buffers over three finite frames and verifies round-robin delivery, buffer metadata, requeue ownership, and finite-stop completion.
-- The hardware probe now uses up to four buffers under a 512 MiB aggregate allocation ceiling.
+The probe registers both New Buffer and Error events. A camera error or disconnect is checked before frame waits and after a frame-wait timeout, avoiding misclassification as a normal frame timeout.
 
-Latest source commit: `d5d7138ccba49c77a40c264bd4efa25e9d5eb692`. Workflow [44682507702](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44682507702) contains those follow-up changes and is queued. Do not call the new frame-rate, multi-buffer, or updated probe changes verified until the Amcam test, release-build, and artifact-upload steps all succeed.
-
-The artifact from run 44682176084 predates these follow-up changes. Use only an artifact rebuilt from the latest passing source revision for physical hardware acceptance.
+The arm64 artifact matches the Apple Silicon Mac. The original vendor Amcam SDK had already streamed successfully on this Mac; the remaining hardware gate is to exercise the new Swift AmcamGenTL backend with that vendor dylib and the physical MU503.
 
 ### Hardware acceptance — not yet completed
 
