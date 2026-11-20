@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import XCTest
+@_spi(BackendConvenience) import GenTLAPI
 @testable import AmcamGenTL
 
 private final class FrameCapture: @unchecked Sendable {
@@ -99,6 +100,71 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         emitEvent(0x0081)
         wait(for: [disconnected], timeout: 2)
         try session.stop()
+        try session.close()
+    }
+
+
+    func testDataStreamQueuesAndDeliversACompleteRGBFrame() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+
+        let streamHandle = DS_HANDLE(rawValue: 0x101)
+        let deviceHandle = DEV_HANDLE(rawValue: 0x102)
+        let bufferHandle = BUFFER_HANDLE(rawValue: 0x103)
+        let eventHandle = EVENT_HANDLE(rawValue: 0x104)
+        let stream = try AmcamDataStreamRecord(
+            handle: streamHandle,
+            deviceHandle: deviceHandle,
+            session: session
+        )
+        let event = AmcamEventRecord(
+            handle: eventHandle,
+            eventType: GenTLEventType.newBuffer.rawValue,
+            source: .dataStream(streamHandle)
+        )
+        stream.addEvent(event)
+
+        let payloadSize = try XCTUnwrap(
+            AmcamRGB24Layout(width: 640, height: 480)
+        ).payloadSize
+        let memory = UnsafeMutableRawPointer.allocate(
+            byteCount: payloadSize,
+            alignment: 64
+        )
+        memory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
+        defer { memory.deallocate() }
+
+        try stream.announce(
+            handle: bufferHandle,
+            memory: memory,
+            size: payloadSize,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+        try stream.queue(bufferHandle)
+        try stream.start(numberToAcquire: 1)
+
+        let eventData = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
+        XCTAssertEqual(eventData.count, 2 * MemoryLayout<UInt>.size)
+        let deliveredHandle = eventData.withUnsafeBytes {
+            $0.loadUnaligned(as: UInt.self)
+        }
+        XCTAssertEqual(deliveredHandle, bufferHandle.rawValue)
+
+        XCTAssertEqual(memory.load(as: UInt8.self), 0x5a)
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 9), .size(payloadSize))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 10), .size(640))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 11), .size(480))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 16), .uint64(1))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 4), .bool8(true))
+        XCTAssertEqual(try stream.bufferInfo(bufferHandle, command: 5), .bool8(false))
+
+        // A finite acquisition auto-stops the SDK. DSStop must still complete
+        // the GenTL acquisition lifecycle and release its outstanding state.
+        try stream.stop()
+        try stream.close()
         try session.close()
     }
 
