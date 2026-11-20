@@ -36,6 +36,9 @@ public final class AmcamGenTLImplementation: GenTLBackendConvenience, @unchecked
     private var dataStreams: [UInt: AmcamDataStreamRecord] = [:]
     private var events: [UInt: AmcamEventRecord] = [:]
     private var bufferHandlesByStream: [UInt: Set<UInt>] = [:]
+    private let eventReadCondition = NSCondition()
+    private var activeRawEventReads = Set<UInt>()
+    private var pendingRawEventData: [UInt: Data] = [:]
 
     // Each C-facing void* handle is backed by a unique allocation. Retired
     // tokens stay allocated until backend destruction so stale handles cannot
@@ -1971,23 +1974,58 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ piSize: UnsafeMutablePointer<Int>?, _ iTimeout: UInt64
     ) -> GenTLABI.GC_ERROR {
         guard let piSize, let hEvent else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
-        let event = EVENT_HANDLE(rawValue: UInt(bitPattern: hEvent))
+        let key = UInt(bitPattern: hEvent)
         let capacity = piSize.pointee
         guard capacity >= 0 else { return GenTLABI.GC_ERR_INVALID_PARAMETER }
+
+        // Serialize retrieval per event so an undersized destination can retain
+        // the dequeued payload for the caller's retry instead of losing it.
+        eventReadCondition.lock()
+        while activeRawEventReads.contains(key) {
+            eventReadCondition.wait()
+        }
+        activeRawEventReads.insert(key)
+        let pending = pendingRawEventData.removeValue(forKey: key)
+        eventReadCondition.unlock()
+
+        defer {
+            eventReadCondition.lock()
+            activeRawEventReads.remove(key)
+            eventReadCondition.broadcast()
+            eventReadCondition.unlock()
+        }
+
+        let event = EVENT_HANDLE(rawValue: key)
         do {
-            let data = try EventGetData(event, timeout: iTimeout)
+            let data: Data
+            if let pending {
+                data = pending
+            } else {
+                data = try EventGetData(event, timeout: iTimeout)
+            }
             piSize.pointee = data.count
-            guard !data.isEmpty else { return GenTLABI.GC_ERR_SUCCESS }
-            guard let pBuffer, capacity >= data.count else {
+
+            // A NULL data pointer discards the queued event payload.
+            guard let pBuffer else { return GenTLABI.GC_ERR_SUCCESS }
+
+            guard capacity >= data.count else {
+                eventReadCondition.lock()
+                pendingRawEventData[key] = data
+                eventReadCondition.unlock()
                 return GenTLABI.GC_ERR_BUFFER_TOO_SMALL
             }
-            data.withUnsafeBytes { source in
-                if let base = source.baseAddress {
-                    pBuffer.copyMemory(from: base, byteCount: source.count)
+
+            if !data.isEmpty {
+                data.withUnsafeBytes { source in
+                    if let base = source.baseAddress {
+                        pBuffer.copyMemory(from: base, byteCount: source.count)
+                    }
                 }
             }
             return GenTLABI.GC_ERR_SUCCESS
-        } catch { return rawError(error) }
+        } catch {
+            return rawError(error)
+        }
     }
 
     public func EventGetDataInfo(
