@@ -24,12 +24,18 @@ let package = Package(
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
         ),
+        .target(name: "AmcamCameraProbeSupport"),
         .executableTarget(
             name: "AmcamCameraProbe",
             dependencies: [
                 "AmcamGenTL",
+                "AmcamCameraProbeSupport",
                 .product(name: "GenTLAPI", package: "GenTLAPI")
             ]
+        ),
+        .testTarget(
+            name: "AmcamCameraProbeSupportTests",
+            dependencies: ["AmcamCameraProbeSupport"]
         ),
         .testTarget(
             name: "AmcamGenTLTests",

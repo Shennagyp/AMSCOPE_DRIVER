@@ -1,6 +1,7 @@
 import CryptoKit
 import Darwin
 import Foundation
+import AmcamCameraProbeSupport
 @_spi(BackendConvenience) import GenTLAPI
 @_spi(BackendFactory) import AmcamGenTL
 
@@ -10,6 +11,7 @@ private struct Options {
     let frameCount: Int
     let timeoutMilliseconds: UInt64
     let outputURL: URL?
+    let jsonOutput: Bool
 
     static func parse(_ arguments: [String]) throws -> Options {
         var sdkPath: String?
@@ -17,10 +19,16 @@ private struct Options {
         var frameCount = 10
         var timeoutMilliseconds: UInt64 = 5_000
         var outputPath: String?
+        var jsonOutput = false
 
         var index = 0
         while index < arguments.count {
             let argument = arguments[index]
+            if argument == "--json" {
+                jsonOutput = true
+                index += 1
+                continue
+            }
             guard index + 1 < arguments.count else {
                 throw ProbeError.usage("Missing value after \(argument).")
             }
@@ -64,7 +72,8 @@ private struct Options {
             deviceIndex: deviceIndex,
             frameCount: frameCount,
             timeoutMilliseconds: timeoutMilliseconds,
-            outputURL: outputPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+            outputURL: outputPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+            jsonOutput: jsonOutput
         )
     }
 
@@ -80,6 +89,7 @@ private struct Options {
       --frames N         Number of frames to acquire (default: 10; max: 10000)
       --timeout-ms N     Per-frame event timeout (default: 5000)
       --output PATH      Write the last complete frame as an RGB PPM image
+      --json              Write a versioned diagnostic report as JSON to stdout
       --help              Show this help
 
     The probe reports device discovery, dimensions, frame payload, sequence,
@@ -104,6 +114,30 @@ private enum ProbeError: Error, LocalizedError {
     case invalidFrameLayout
     case invalidPixelFormat(UInt64)
     case invalidFramePointer
+
+
+    var diagnosticStage: AmcamProbeStage? {
+        switch self {
+        case .usage:
+            return .argumentParsing
+        case .sdkNotFound:
+            return .sdkLibraryValidation
+        case .noInterface:
+            return .interfaceDiscovery
+        case .noDevices, .invalidDeviceIndex:
+            return .deviceDiscovery
+        case .noDataStream:
+            return .dataStreamOpen
+        case .cameraErrorEvent:
+            return .frameRead
+        case .invalidEventPayload, .unknownBuffer, .unexpectedUserPointer,
+             .incompleteFrame, .invalidFrameLayout, .invalidPixelFormat,
+             .invalidFramePointer:
+            return .frameValidation
+        case .invalidInfo:
+            return nil
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -130,24 +164,80 @@ private enum ProbeError: Error, LocalizedError {
     }
 }
 
+private final class ProbeRunContext {
+    var report = AmcamCameraProbeReport()
+    var currentStage: AmcamProbeStage = .argumentParsing
+}
+
 @main
 struct AmcamCameraProbe {
     static func main() {
-        if CommandLine.arguments.dropFirst().contains("--help") {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        let wantsJSON = arguments.contains("--json")
+        if arguments.contains("--help") {
             print(Options.usage)
             return
         }
 
+        let context = ProbeRunContext()
         do {
-            let options = try Options.parse(Array(CommandLine.arguments.dropFirst()))
-            try run(options)
+            let options = try Options.parse(arguments)
+            context.report.sdk = AmcamProbeSDKInfo(path: options.sdkURL.path)
+            try run(options, context: context)
         } catch {
-            fputs("ERROR: \(error.localizedDescription)\n", stderr)
+            if context.report.failure == nil {
+                let stage = (error as? ProbeError)?.diagnosticStage ?? context.currentStage
+                context.report.failure = AmcamProbeFailure(
+                    stage: stage,
+                    message: error.localizedDescription
+                )
+            }
+        }
+
+        if !context.report.cleanupErrors.isEmpty, context.report.failure == nil {
+            context.report.failure = AmcamProbeFailure(
+                stage: .cleanup,
+                message: "One or more native resources could not be released."
+            )
+        }
+        context.report.status = context.report.failure == nil ? .success : .failure
+
+        if wantsJSON {
+            do {
+                let encoder = JSONEncoder()
+                encoder.keyEncodingStrategy = .convertToSnakeCase
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let data = try encoder.encode(context.report)
+                FileHandle.standardOutput.write(data)
+                FileHandle.standardOutput.write(Data([0x0A]))
+            } catch {
+                fputs("ERROR: Could not encode diagnostic report: \(error.localizedDescription)\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+        } else {
+            if let failure = context.report.failure {
+                fputs("ERROR [\(failure.stage.rawValue)]: \(failure.message)\n", stderr)
+            }
+            for cleanupError in context.report.cleanupErrors {
+                fputs("CLEANUP ERROR: \(cleanupError)\n", stderr)
+            }
+        }
+
+        if context.report.status == .failure {
             exit(EXIT_FAILURE)
         }
     }
 
-    private static func run(_ options: Options) throws {
+    private static func emit(_ message: String, options: Options) {
+        guard !options.jsonOutput else { return }
+        print(message)
+    }
+
+    private static func run(
+        _ options: Options,
+        context: ProbeRunContext
+    ) throws {
+        context.report.sdk = AmcamProbeSDKInfo(path: options.sdkURL.path)
         let backend = AmcamGenTLImplementation(sdkLibraryURL: options.sdkURL)
 
         var initialized = false
@@ -161,6 +251,7 @@ struct AmcamCameraProbe {
         var bufferHandlesByRawValue: [UInt: BUFFER_HANDLE] = [:]
 
         defer {
+            context.currentStage = .cleanup
             var cleanupFailures: [String] = []
             func attemptCleanup(_ operation: String, _ action: () throws -> Void) {
                 do {
@@ -210,28 +301,29 @@ struct AmcamCameraProbe {
                 attemptCleanup("GCCloseLib") { try backend.swiftGCCloseLib() }
             }
 
-            if !cleanupFailures.isEmpty {
-                fputs(
-                    "CLEANUP ERROR:\\n" + cleanupFailures.joined(separator: "\\n") + "\\n",
-                    stderr
-                )
-                exit(EXIT_FAILURE)
-            }
+            context.report.cleanupErrors.append(contentsOf: cleanupFailures)
         }
 
+        context.currentStage = .libraryInitialization
         try backend.swiftGCInitLib()
         initialized = true
+        context.currentStage = .sdkVersionRead
         let sdkVersion = try readString(backend.GCGetInfo(command: GenTLInfoCommand.TransportLayer.version.rawValue))
-        print("SDK version: \(sdkVersion)")
+        context.report.sdk?.version = sdkVersion
+        emit("SDK version: \(sdkVersion)", options: options)
+        context.currentStage = .transportLayerOpen
         let systemHandle = try backend.TLOpen()
         system = systemHandle
 
+        context.currentStage = .interfaceDiscovery
         let interfaceCount = try backend.TLGetNumInterfaces(systemHandle)
         guard interfaceCount > 0 else { throw ProbeError.noInterface }
         let interfaceID = try backend.TLGetInterfaceID(systemHandle, index: 0)
+        context.report.interfaceIdentifier = interfaceID
         let interfaceHandle = try backend.TLOpenInterface(systemHandle, interfaceID: interfaceID)
         interface = interfaceHandle
 
+        context.currentStage = .deviceDiscovery
         _ = try backend.IFUpdateDeviceList(interfaceHandle, timeout: options.timeoutMilliseconds)
         let deviceCount = Int(try backend.IFGetNumDevices(interfaceHandle))
         guard deviceCount > 0 else { throw ProbeError.noDevices }
@@ -239,14 +331,16 @@ struct AmcamCameraProbe {
             throw ProbeError.invalidDeviceIndex(options.deviceIndex, count: deviceCount)
         }
 
-        print("SDK: \(options.sdkURL.path)")
-        print("Interface: \(interfaceID)")
-        print("Discovered devices: \(deviceCount)")
+        context.report.device = AmcamProbeDeviceInfo(discoveredCount: deviceCount)
+        emit("SDK: \(options.sdkURL.path)", options: options)
+        emit("Interface: \(interfaceID)", options: options)
+        emit("Discovered devices: \(deviceCount)", options: options)
         for index in 0..<deviceCount {
             let identifier = try backend.IFGetDeviceID(interfaceHandle, index: UInt32(index))
-            print("  [\(index)] \(identifier)")
+            emit("  [\(index)] \(identifier)", options: options)
         }
 
+        context.currentStage = .deviceDiscovery
         let deviceID = try backend.IFGetDeviceID(
             interfaceHandle,
             index: UInt32(options.deviceIndex)
@@ -265,21 +359,31 @@ struct AmcamCameraProbe {
                 command: GenTLInfoCommand.Device.displayName.rawValue
             )
         )
-        print("Selected camera: \(displayName) (\(modelName))")
+        context.report.device = AmcamProbeDeviceInfo(
+            index: options.deviceIndex,
+            identifier: deviceID,
+            modelName: modelName,
+            displayName: displayName,
+            discoveredCount: deviceCount
+        )
+        emit("Selected camera: \(displayName) (\(modelName))", options: options)
+        context.currentStage = .deviceOpen
         let deviceHandle = try backend.IFOpenDevice(
             interfaceHandle,
             deviceID: deviceID,
             accessFlags: GenTLDeviceAccess.exclusive.rawValue
         )
         device = deviceHandle
-        print("Opened device: \(deviceID)")
+        emit("Opened device: \(deviceID)", options: options)
 
+        context.currentStage = .dataStreamOpen
         let streamCount = try backend.DevGetNumDataStreams(deviceHandle)
         guard streamCount > 0 else { throw ProbeError.noDataStream }
         let streamID = try backend.DevGetDataStreamID(deviceHandle, index: 0)
         let streamHandle = try backend.DevOpenDataStream(deviceHandle, dataStreamID: streamID)
         stream = streamHandle
 
+        context.currentStage = .bufferPreparation
         let payloadSize = try readSize(
             backend,
             stream: streamHandle,
@@ -292,6 +396,8 @@ struct AmcamCameraProbe {
             )
         }
 
+        context.report.stream = AmcamProbeStreamInfo(identifier: streamID, payloadSize: payloadSize)
+        context.currentStage = .bufferPreparation
         let eventHandle = try backend.GCRegisterEvent(
             .dataStream(streamHandle),
             eventType: GenTLEventType.newBuffer.rawValue
@@ -315,14 +421,18 @@ struct AmcamCameraProbe {
             try backend.DSQueueBuffer(streamHandle, buffer: bufferHandle)
         }
 
-        print("Data stream: \(streamID)")
-        print(
+        context.report.stream?.announcedBufferCount = bufferCount
+        context.report.acquisition = AmcamProbeAcquisitionInfo(requestedFrameCount: options.frameCount)
+        emit("Data stream: \(streamID)", options: options)
+        emit(
             "Announced buffers: \(bufferCount) x \(payloadSize) bytes " +
-            "(\(bufferCount * payloadSize) bytes total)"
+            "(\(bufferCount * payloadSize) bytes total)",
+            options: options
         )
-        print("Acquiring \(options.frameCount) frame(s)...")
+        emit("Acquiring \(options.frameCount) frame(s)...", options: options)
 
         let startTime = ProcessInfo.processInfo.systemUptime
+        context.currentStage = .acquisitionStart
         try backend.DSStartAcquisition(
             streamHandle,
             flags: GenTLAcquisitionStartFlag.normal.rawValue,
@@ -337,6 +447,7 @@ struct AmcamCameraProbe {
         var lastPPM: Data?
 
         for frameIndex in 0..<options.frameCount {
+            context.currentStage = .frameRead
             if (try? backend.EventGetData(errorEventHandle, timeout: 0)) != nil {
                 throw ProbeError.cameraErrorEvent
             }
@@ -372,6 +483,7 @@ struct AmcamCameraProbe {
                 throw ProbeError.unexpectedUserPointer(deliveredUserPointer)
             }
 
+            context.currentStage = .frameValidation
             let width = try readSize(
                 backend, stream: streamHandle, buffer: bufferHandle,
                 command: GenTLInfoCommand.Buffer.width.rawValue
@@ -418,7 +530,9 @@ struct AmcamCameraProbe {
             )
             guard !isIncomplete else {
                 incompleteFrames += 1
-                print("Frame \(frameIndex + 1): INCOMPLETE")
+                context.report.acquisition?.completeFrameCount = completeFrames
+                context.report.acquisition?.incompleteFrameCount = incompleteFrames
+                emit("Frame \(frameIndex + 1): INCOMPLETE", options: options)
                 if frameIndex + 1 < options.frameCount {
                     try backend.DSQueueBuffer(streamHandle, buffer: bufferHandle)
                 }
@@ -459,11 +573,35 @@ struct AmcamCameraProbe {
                 .map { String(format: "%02x", $0) }
                 .joined()
             completeFrames += 1
-            print(
+            context.report.image = AmcamProbeImageInfo(
+                width: width,
+                height: height,
+                pixelFormatCode: pixelFormat,
+                pixelFormatNamespace: pixelFormatNamespace,
+                bytesPerRow: bytesPerRow,
+                rowPaddingBytes: rowPadding,
+                sizeFilled: sizeFilled,
+                dataSize: dataSize
+            )
+            context.report.acquisition?.completeFrameCount = completeFrames
+            context.report.acquisition?.incompleteFrameCount = incompleteFrames
+            if context.report.acquisition?.firstSequence == nil {
+                context.report.acquisition?.firstSequence = sequence
+            }
+            context.report.acquisition?.lastSequence = sequence
+            if context.report.acquisition?.firstDeviceTimestampMicroseconds == nil, timestamp > 0 {
+                context.report.acquisition?.firstDeviceTimestampMicroseconds = timestamp
+            }
+            if timestamp > 0 {
+                context.report.acquisition?.lastDeviceTimestampMicroseconds = timestamp
+            }
+            context.report.acquisition?.lastFrameSHA256 = digest
+            emit(
                 "Frame \(frameIndex + 1): \(width)x\(height), " +
                 "\(sizeFilled) bytes, stride \(bytesPerRow), " +
                 "sequence \(sequence), timestamp \(timestamp) us, " +
-                "SHA-256 \(digest)"
+                "SHA-256 \(digest)",
+                options: options
             )
 
             if options.outputURL != nil {
@@ -479,11 +617,17 @@ struct AmcamCameraProbe {
             }
 
             if frameIndex + 1 < options.frameCount {
+                context.currentStage = .bufferQueue
                 try backend.DSQueueBuffer(streamHandle, buffer: bufferHandle)
             }
         }
 
         let elapsed = max(ProcessInfo.processInfo.systemUptime - startTime, 0.000_001)
+        context.report.acquisition?.completeFrameCount = completeFrames
+        context.report.acquisition?.incompleteFrameCount = incompleteFrames
+        context.report.acquisition?.elapsedSeconds = elapsed
+        context.report.acquisition?.hostLoopFramesPerSecond = Double(completeFrames) / elapsed
+        context.currentStage = .acquisitionStop
         try backend.DSStopAcquisition(
             streamHandle,
             flags: GenTLAcquisitionStopFlag.normal.rawValue
@@ -491,23 +635,27 @@ struct AmcamCameraProbe {
         acquisitionStarted = false
 
         if let outputURL = options.outputURL, let lastPPM {
+            context.currentStage = .outputWrite
             try lastPPM.write(to: outputURL, options: .atomic)
-            print("Last complete frame written: \(outputURL.path)")
+            context.report.outputImagePath = outputURL.path
+            emit("Last complete frame written: \(outputURL.path)", options: options)
         }
 
-        print(
+        emit(
             "Result: \(completeFrames) complete, \(incompleteFrames) incomplete, " +
             String(format: "%.2f", Double(completeFrames) / elapsed) + " host-loop FPS, " +
-            String(format: "%.3f", elapsed) + " seconds"
+            String(format: "%.3f", elapsed) + " seconds",
+            options: options
         )
         if let firstDeviceTimestamp, let lastDeviceTimestamp,
            lastDeviceTimestamp > firstDeviceTimestamp, completeFrames > 1 {
             let deviceElapsedMicroseconds = lastDeviceTimestamp - firstDeviceTimestamp
             let deviceFPS = Double(completeFrames - 1) * 1_000_000.0 /
                 Double(deviceElapsedMicroseconds)
-            print("Camera timestamp rate: \(String(format: "%.2f", deviceFPS)) FPS")
+            context.report.acquisition?.cameraTimestampFramesPerSecond = deviceFPS
+            emit("Camera timestamp rate: \(String(format: "%.2f", deviceFPS)) FPS", options: options)
         } else {
-            print("Camera timestamp rate: unavailable")
+            emit("Camera timestamp rate: unavailable", options: options)
         }
         if incompleteFrames > 0 {
             throw ProbeError.incompleteFrame
