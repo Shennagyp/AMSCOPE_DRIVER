@@ -132,12 +132,21 @@ Automated acceptance: GenTL close-order/retry tests, Amcam provider-buffer revoc
 
 ### Phase D — Pixel-format implementation
 
-Do not conflate sensor RAW formats with RGB formats.
+Do not conflate the Amcam SDK's vendor-specific pixel-format selection codes with the PFNC identity of the delivered GenTL frame. `AmcamPixelFormatCode` is an SDK control enumeration. The current pull path requests 24-bit RGB output, creates an `.rgb24` frame, and the Amcam GenTL Producer reports that delivered payload as PFNC RGB8. A vendor enumeration integer must never be copied directly into `BUFFER_INFO_PIXELFORMAT` or treated as a PFNC identifier.
 
-- Implement a format registry driven by exact PFNC identifiers and the camera's SDK-reported supported-format list.
-- Add independent decoders and tests for each selected format.
+Any new output format must establish the complete chain: camera/SDK mode, raw-versus-processed mode, pull API output bits, returned dimensions, row stride, payload size, component order, packing and exact PFNC frame identity. Do not change the frame's PFNC metadata merely because a camera feature value changed.
+
+Implemented on `macos-version-0.4`:
+- [x] Add a format identity containing both PFNC namespace and numeric code.
+- [x] Add an immutable PFNC registry with only the exact RGB8 identifier registered to the existing RGB8 decoder.
+- [x] Resolve `RGB8Frame.decode` through the registry; unknown codes and namespace mismatches remain rejected.
+- [x] Add tests for exact identity, advertised-format intersection, duplicate identifiers and invalid names.
+
+Remaining:
+- Map camera-advertised/vendor pixel-format modes to actual pull-output PFNC formats only after their SDK semantics are verified.
+- Add independent decoders and tests for each selected output format.
 - Validate row stride, packing, payload length, bit alignment, endianness and odd-width behavior.
-- Prioritize the actual MU503 formats observed during hardware acceptance.
+- Prioritize formats verified on the physical MU503.
 - Keep RGB8 as the only enabled display decoder until each additional decoder has numerical and layout tests.
 
 Acceptance: per-format fixtures pass exact pixel-value, stride and payload tests before the UI enables that format.
