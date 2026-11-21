@@ -190,6 +190,54 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(reportedVersion(), 4, "The SDK must actually dispatch through PullImageV4.")
     }
 
+    func testPendingImagePullDoesNotStopTheSession() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let pendingCountSymbol = dlsym(mockLibrary, "MockAmcam_SetPendingPullCount"),
+              let emitEventSymbol = dlsym(mockLibrary, "MockAmcam_EmitEvent") else {
+            XCTFail("Mock SDK is missing pending-pull or event controls")
+            return
+        }
+        let setPendingPullCount = unsafeBitCast(
+            pendingCountSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+        let emitEvent = unsafeBitCast(
+            emitEventSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+        setPendingPullCount(1)
+
+        let frameReceived = expectation(description: "frame after transient pending pull")
+        let receivedFrame = FrameCapture()
+        try session.start { result in
+            switch result {
+            case .success(let frame):
+                receivedFrame.store(frame)
+                frameReceived.fulfill()
+            case .failure(let error):
+                XCTFail("A transient E_PENDING result must not fail acquisition: \\(error)")
+            }
+        }
+
+        // The mock sends a synchronous first image event from StartPullMode. Its
+        // PullImageV4 call returns E_PENDING once; the next event must still pull.
+        XCTAssertTrue(session.isStreaming)
+        emitEvent(AmcamSDK.imageEvent)
+        wait(for: [frameReceived], timeout: 2)
+
+        XCTAssertTrue(session.isStreaming)
+        XCTAssertEqual(receivedFrame.load()?.metadata?.apiVersion, .v4)
+        try session.stop()
+    }
+
     func testModelProfilePinsPullImageV2WhenNewerSymbolsAreExported() throws {
         let libraryURL = try buildMockSDK()
         let registry = AmcamCameraProfileRegistry(
