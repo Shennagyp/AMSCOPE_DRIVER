@@ -334,6 +334,7 @@ void MockAmcam_Reset(void) {
     pull_api_version = 0;
     unsupported_pull_api_mask = 0;
     pull_api_failure = 0;
+    pending_pull_count = 0;
     mock_v4_frame_flags = UINT32_C(0x000103ff);
     current_resolution_index = 2;
     active_callback = 0;
