@@ -223,7 +223,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
                 receivedFrame.store(frame)
                 frameReceived.fulfill()
             case .failure(let error):
-                XCTFail("A transient E_PENDING result must not fail acquisition: \\(error)")
+                XCTFail("A transient E_PENDING result must not fail acquisition: \(error)")
             }
         }
 
