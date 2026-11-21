@@ -1,11 +1,36 @@
-# macOS version 0.3 — recovery and lifecycle baseline
+# macOS version 0.3 — recovery, lifecycle regressions and probe diagnostics
 
 ## Branch baseline
 
 - Branch: `macos-version-0.3`
 - Source baseline: `macos-version-0.2` commit `4f4a8ca022274eba5fe49dc2489f9e7fa766dd64`
 - Source baseline CI: [GitHub Actions run 44860717992](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44860717992) — all six jobs passed.
-- Scope of this branch increment: document the already implemented and user-verified process-relaunch and USB reconnect recovery. The application/backend code is inherited unchanged from the green source baseline.
+- Scope of this branch increment: record the user-verified process-relaunch and idle USB reconnect behavior; add deterministic sustained-buffer and repeated acquisition lifecycle regressions; and add a versioned JSON diagnostic report to `amcam-camera-probe`. The AppKit application and camera-session runtime behavior are inherited from the green source baseline; the probe executable and its supporting report target have additional code in 0.3.
+
+## Acquisition regression coverage added in 0.3
+
+The branch adds deterministic, hardware-independent coverage without changing camera runtime semantics:
+
+- A GenTL acquisition test consumes 64 consecutive frames through one reused announced buffer and checks monotonically increasing frame sequence values, changing copied pixel contents, and exactly one buffer return per delivered frame.
+- A lifecycle test uses one open device session with four distinct acquisitions. It performs three stop/restart transitions and verifies exactly one start, one stop and one close per acquisition.
+- The existing regression set continues to cover timeout recovery, stop/close races, frame-copy immutability and the rule that a failed `DSQueueBuffer` call is surfaced once and is not retried on the same handle.
+
+These mock/contract tests do not establish five-minute physical streaming or physical-camera start/stop behavior. The lifecycle test commit passed all six CI jobs in [run 44862950222](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44862950222).
+
+## Structured camera-probe report
+
+The `amcam-camera-probe` executable accepts `--json` and emits one schema-versioned JSON document to stdout. The default human-readable mode is unchanged. The report contains:
+
+- Backend identifier and SDK path/version.
+- Interface identifier and selected camera's model descriptor, display name and transient device identifier.
+- Stream identifier, payload size and announced-buffer count.
+- Pixel-format code and namespace, width, height, row stride/padding, size-filled and data-size.
+- Complete/incomplete frame counts, sequence and device timestamp bounds, host-loop/camera timestamp rates and the last-frame SHA-256 digest.
+- A typed failure stage and message, with cleanup errors reported separately.
+
+The command retains a nonzero process exit status on failure while still emitting the JSON report. `make build-probe` builds the CLI; `make run-probe` directs SwiftPM build diagnostics to stderr so stdout remains parseable when `--json` is selected. The schema is isolated in the `AmcamCameraProbeSupport` target and has JSON encoding/decoding tests.
+
+The real MU503 probe execution remains part of the outstanding hardware acceptance; a passing schema test or probe build is not physical-camera evidence.
 
 ## Runtime behavior carried into 0.3
 
@@ -46,7 +71,7 @@ The source baseline commit `4f4a8ca` passed all six jobs in [run 44860717992](ht
 - AmcamGenTL tests, including the camera-probe build, dependency-boundary checks and fixture-SDK app packaging/signing.
 - AmcamImagingGenTLAdapter tests.
 
-This verifies the tested source, mock behavior, package builds and fixture packaging. It does not verify the proprietary SDK binary or physical camera.
+This verifies the source baseline, package contracts and fixture packaging. It does not verify the proprietary SDK binary or physical camera. Later 0.3 CI validates the new 64-frame and repeated-restart regressions; the current branch workflow is also responsible for validating the structured probe target and packaging changes.
 
 ### Physical MU503 result — 2026-11-21
 
