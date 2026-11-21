@@ -599,16 +599,27 @@ final class CameraApplicationModel: ObservableObject {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AmcamImaging", isDirectory: true)
         let file = support.appendingPathComponent("camera-profiles.json")
+        let acquisitionFile = support.appendingPathComponent("camera-acquisition-profiles.json")
         do {
             try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
             if !FileManager.default.fileExists(atPath: file.path) {
                 try Data("[]".utf8).write(to: file, options: .atomic)
             }
+            if !FileManager.default.fileExists(atPath: acquisitionFile.path) {
+                try Data("[]".utf8).write(to: acquisitionFile, options: .atomic)
+            }
             let profiles = try JSONDecoder().decode(
                 [AmcamCameraModelProfile].self,
                 from: Data(contentsOf: file)
             )
-            profileRegistry = AmcamCameraProfileRegistry(profiles: profiles)
+            let acquisitionProfiles = try JSONDecoder().decode(
+                [AmcamCameraAcquisitionProfile].self,
+                from: Data(contentsOf: acquisitionFile)
+            )
+            profileRegistry = AmcamCameraProfileRegistry(
+                profiles: profiles,
+                acquisitionProfiles: acquisitionProfiles
+            )
             stateResolver = AmcamCameraStateResolver(profileRegistry: profileRegistry)
         } catch {
             errorMessage = "Camera profile configuration could not be loaded: \(error.localizedDescription)"
