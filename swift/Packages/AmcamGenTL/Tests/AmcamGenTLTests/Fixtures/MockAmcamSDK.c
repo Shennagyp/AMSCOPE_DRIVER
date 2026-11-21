@@ -28,6 +28,7 @@ static uint32_t pull_count;
 static uint32_t pull_api_version;
 static uint32_t unsupported_pull_api_mask;
 static int32_t pull_api_failure;
+static uint32_t pending_pull_count;
 static uint32_t mock_v4_frame_flags = UINT32_C(0x000103ff);
 static int32_t auto_exposure = 1;
 static int exposure_unavailable = 0;
