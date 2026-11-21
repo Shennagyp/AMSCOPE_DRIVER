@@ -181,7 +181,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             case .success:
                 framesDelivered.fulfill()
             case .failure(let error):
-                XCTFail("A repeated image event stopped pull mode: \\(error)")
+                XCTFail("A repeated image event stopped pull mode: \(error)")
             }
         }
 
@@ -235,7 +235,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             case .success:
                 framesDelivered.fulfill()
             case .failure(let error):
-                XCTFail("Unexpected callback failure during the control-read race: \\(error)")
+                XCTFail("Unexpected callback failure during the control-read race: \(error)")
             }
         }
 
@@ -531,7 +531,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
                 receivedFrame.store(frame)
                 frameReceived.fulfill()
             } else if case .failure(let error) = result {
-                XCTFail("Unexpected V2 frame failure: \\(error)")
+                XCTFail("Unexpected V2 frame failure: \(error)")
             }
         }
 
