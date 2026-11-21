@@ -7,6 +7,7 @@ on:
       - amcam-multiplatform
       - macos-version-optimization
       - macos-version-0.2
+      - macos-version-0.3
     paths:
       - "swift/Packages/**"
       - "swift/Apps/**"
@@ -21,6 +22,7 @@ on:
       - swift-gentl-api
       - macos-version-optimization
       - macos-version-0.2
+      - macos-version-0.3
     paths:
       - "swift/Packages/**"
       - "swift/Apps/**"
