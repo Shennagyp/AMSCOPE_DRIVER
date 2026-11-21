@@ -237,4 +237,6 @@ CI verifies compilation and mock/runtime contracts; the user-confirmed result ve
 - [x] When GenTL `DSStopAcquisition` fails, continue terminal teardown through event unregistration and `DSClose`; leave queue flush and explicit buffer revocation to the Producer's terminal close path.
 - [x] Honor GenTL 1.6 `DSRevokeBuffer` optional output pointers independently; add a raw-ABI regression for `ppBuffer == NULL` and `ppPrivate == NULL`.
 - [x] Add regressions for GenTL close after failed Stop and Amcam callback-worker shutdown through terminal native Close.
-- [ ] Verify physical MU503 disconnect during acquisition, reconnect, rediscovery, and successful Start without restarting the app.
+- [x] Physical MU503 retest after the `DSRevokeBuffer` `-1009` correction: the user confirmed disconnect/reconnect recovery now completes successfully without the previous buffer-revoke cleanup failure.
+- [x] Verify the observed cleanup/recovery path on the physical MU503; the former `DSRevokeBuffer` `-1009` error is resolved.
+- [ ] Verify the distinct active-stream disconnect scenario end-to-end, including callback error reporting, unless specifically exercised in the recorded hardware retest.
