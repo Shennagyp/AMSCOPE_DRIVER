@@ -62,6 +62,28 @@ final class RGB8FrameTests: XCTestCase {
         }
     }
 
+    func testRejectsRGB8CodeInNonPFNCNamespace() {
+        XCTAssertThrowsError(try RGB8Frame.decode(
+            width: 1,
+            height: 1,
+            pixelFormat: RGB8Frame.pfncRGB8,
+            pixelFormatNamespace: RGB8Frame.pfncNamespace + 1,
+            rowPaddingBytes: 0,
+            sizeFilled: 3,
+            dataSize: 3,
+            sequence: 1,
+            bytes: Data([0, 0, 0])
+        )) { error in
+            XCTAssertEqual(
+                error as? RGB8FrameError,
+                .unsupportedPixelFormat(
+                    namespace: RGB8Frame.pfncNamespace + 1,
+                    format: RGB8Frame.pfncRGB8
+                )
+            )
+        }
+    }
+
     func testRejectsInvalidDimensionsAndNegativePadding() {
         for (width, height, padding) in [(0, 1, 0), (1, 0, 0), (1, 1, -1)] {
             XCTAssertThrowsError(try RGB8Frame.decode(
