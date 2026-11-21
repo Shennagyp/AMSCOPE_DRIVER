@@ -145,8 +145,8 @@ jobs:
             echo "The UI must not select or retain native vendor library paths." >&2
             exit 1
           fi
-          grep -q 'registerAmcam(backendID: backendID)' swift/Packages/AmcamImagingGenTLAdapter/Sources/AmcamImagingGenTLAdapter/AmcamCameraProvider.swift
-          grep -q 'AmcamCameraProvider()' swift/Apps/AmcamImagingApp/Sources/AmcamImagingApp/CameraApplicationModel.swift
+          grep -q 'registerAmcam(backendID: backendID, profileRegistry: profileRegistry)' swift/Packages/AmcamImagingGenTLAdapter/Sources/AmcamImagingGenTLAdapter/AmcamCameraProvider.swift
+          grep -q 'AmcamCameraProvider(profileRegistry: profileRegistry)' swift/Apps/AmcamImagingApp/Sources/AmcamImagingApp/CameraApplicationModel.swift
           grep -q 'AmcamImagingState' swift/Apps/AmcamImagingApp/Package.swift
           grep -q 'AmcamSDKLibraryLocator.locate()' swift/Packages/GenTLRouter/Sources/GenTLRouter/GenTLRouter.swift
           grep -q 'Contents/Frameworks/Vendors' scripts/build-and-run-macos.sh
