@@ -13,8 +13,30 @@ for feature allow/deny policy, and:
 
 for native acquisition API selection.
 
-The acquisition file is a JSON array. An exact model descriptor can pin the
-legacy pull API without changing its feature availability:
+## MU503 vendor sample
+
+The MU503-supplied Python sample uses:
+
+```python
+PullImageV4(buffer, 0, 24, 0, None)
+```
+
+This requests a live RGB24 frame, with the SDK's default row pitch, and does not
+request frame metadata. The Swift implementation follows the same V4 arguments
+(`still = 0`, `bits = 24`, `rowPitch = 0`) but supplies an
+`AmcamFrameInfoV4` output structure because the runtime uses the returned
+dimensions, sequence, timestamp, and optional metadata.
+
+The default `automatic` policy already tries V4 first. It proceeds to another
+API generation only when the current API explicitly returns `E_NOTIMPL`.
+The vendor sample demonstrates V4; it does not establish that V2 is unsupported.
+A V2 override should therefore be used only when the exact camera/model behavior
+has been verified to require it.
+
+## Explicit model policy
+
+An exact model descriptor can pin the legacy pull API without changing camera
+feature availability:
 
 ```json
 [
@@ -32,7 +54,8 @@ API-generation preference and its existing `E_NOTIMPL` fallback behavior.
 
 Supported values:
 
-- `automatic`: use the SDK's existing newest-available API selection.
+- `automatic`: prefer V4, then V3, row-pitch V2, and plain V2. Move to the
+  next API only when the current API returns `E_NOTIMPL`.
 - `v2`: use only `Amcam_PullImageV2`; do not fall back to V3, V4, or the
   row-pitch V2 entry point.
 
