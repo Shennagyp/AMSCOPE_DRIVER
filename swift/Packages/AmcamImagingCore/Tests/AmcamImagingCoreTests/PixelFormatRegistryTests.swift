@@ -30,7 +30,7 @@ final class PixelFormatRegistryTests: XCTestCase {
             advertised: [unknownCode, rgb8, wrongNamespace, rgb8]
         )
 
-        XCTAssertEqual(decodable.map(\\.identifier), [rgb8])
+        XCTAssertEqual(decodable.map(\.identifier), [rgb8])
     }
 
     func testRegistryRejectsDuplicateFormatIdentities() {
