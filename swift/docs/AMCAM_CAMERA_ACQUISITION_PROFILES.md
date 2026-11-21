@@ -73,6 +73,13 @@ event. Other negative pull results remain failures. This is consistent with the
 related ToupTek camera API contract and is covered by a mock regression test;
 confirm the exact behavior on the MU503 hardware.
 
+The Amcam Python wrapper also defines `NOFRAMETIMEOUT` (`0x0082`) and
+`NOPACKETTIMEOUT` (`0x0085`) callback events. When received, the Swift camera
+session reports the specific event as an acquisition failure and retains native
+callback ownership until `Amcam_Stop` succeeds. The wrapper documents the
+corresponding no-frame and no-packet timeout options as disabled by default.
+This implementation does not enable either option automatically.
+
 After editing the file, restart the application so the profile registry is
 reloaded. A successful mock/CI test validates policy dispatch, not physical
 camera compatibility; confirm continuous frames and stop/restart on the actual

@@ -806,7 +806,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
             handler(.failure(.cameraDisconnected))
             return
         }
-        if event == AmcamSDK.errorEvent {
+        if event == AmcamSDK.errorEvent ||
+           event == AmcamSDK.noFrameTimeoutEvent ||
+           event == AmcamSDK.noPacketTimeoutEvent {
             streaming = false
             lock.unlock()
             handler(.failure(.cameraEventFailure(event)))

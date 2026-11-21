@@ -190,6 +190,46 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(reportedVersion(), 4, "The SDK must actually dispatch through PullImageV4.")
     }
 
+    func testNoFrameAndNoPacketTimeoutEventsStopAcquisitionWithSpecificErrors() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let emitterSymbol = dlsym(mockLibrary, "MockAmcam_EmitEvent") else {
+            XCTFail("Mock SDK is missing MockAmcam_EmitEvent")
+            return
+        }
+        let emitEvent = unsafeBitCast(
+            emitterSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+
+        for eventCode in [
+            AmcamSDK.noFrameTimeoutEvent,
+            AmcamSDK.noPacketTimeoutEvent
+        ] {
+            let eventReceived = expectation(description: "camera timeout event 0x\\(String(eventCode, radix: 16))")
+            try session.start { result in
+                if case .failure(.cameraEventFailure(let actualCode)) = result {
+                    XCTAssertEqual(actualCode, eventCode)
+                    eventReceived.fulfill()
+                }
+            }
+
+            emitEvent(eventCode)
+            wait(for: [eventReceived], timeout: 2)
+            XCTAssertFalse(session.isStreaming)
+            // The timeout event stops delivery, but native callback ownership remains
+            // until Amcam_Stop succeeds. The same session must then be restartable.
+            try session.stop()
+        }
+    }
+
     func testPendingImagePullDoesNotStopTheSession() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)

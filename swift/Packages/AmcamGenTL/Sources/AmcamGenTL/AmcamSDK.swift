@@ -56,6 +56,8 @@ final class AmcamSDK: @unchecked Sendable {
     static let imageEvent: UInt32 = 0x0004
     static let errorEvent: UInt32 = 0x0080
     static let disconnectedEvent: UInt32 = 0x0081
+    static let noFrameTimeoutEvent: UInt32 = 0x0082
+    static let noPacketTimeoutEvent: UInt32 = 0x0085
     static let frameSequenceFlag: UInt32 = 0x0001
     static let frameTimestampFlag: UInt32 = 0x0002
     static let frameExposureTimeFlag: UInt32 = 0x0004
