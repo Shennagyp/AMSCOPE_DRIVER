@@ -161,8 +161,7 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeaturesByGroup: [String: Set<AmcamCameraFeature>],
-                deniedFeatures: Set<AmcamCameraFeature> = [],
-                pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
+                deniedFeatures: Set<AmcamCameraFeature> = []) {
         self.modelCode = modelCode
         self.displayName = displayName
         self.allowedFeaturesByGroup = allowedFeaturesByGroup
