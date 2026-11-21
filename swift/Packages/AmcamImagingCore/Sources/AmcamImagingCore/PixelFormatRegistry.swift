@@ -105,7 +105,7 @@ public struct PixelFormatRegistry: Sendable {
                 )
             ])
         } catch {
-            preconditionFailure("The built-in PFNC registry is invalid: \\(error)")
+            preconditionFailure("The built-in PFNC registry is invalid: \(error)")
         }
     }()
 }
