@@ -1,6 +1,7 @@
 import AmcamABI
 import AmcamCameraModel
 import Darwin
+import Dispatch
 import Foundation
 import XCTest
 @_spi(BackendConvenience) import GenTLAPI
@@ -21,6 +22,23 @@ private final class FrameCapture: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return storedFrame
+    }
+}
+
+private final class FailureCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedMessage: String?
+
+    func store(_ error: Error) {
+        lock.lock()
+        storedMessage = error.localizedDescription
+        lock.unlock()
+    }
+
+    func load() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedMessage
     }
 }
 
@@ -136,6 +154,138 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         try session.close()
     }
 
+
+
+    func testRepeatedImageEventsProduceMultipleFramesWithinOneSession() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let emitterSymbol = dlsym(fixtureHandle, "MockAmcam_EmitEvent"),
+              let pullCountSymbol = dlsym(fixtureHandle, "MockAmcam_PullCount") else {
+            XCTFail("Mock SDK is missing repeated-frame test hooks")
+            return
+        }
+        let emitEvent = unsafeBitCast(emitterSymbol, to: (@convention(c) (UInt32) -> Void).self)
+        let pullCount = unsafeBitCast(pullCountSymbol, to: (@convention(c) () -> UInt32).self)
+
+        let framesDelivered = expectation(description: "all image events become frames")
+        framesDelivered.expectedFulfillmentCount = 9
+        try session.start { result in
+            switch result {
+            case .success:
+                framesDelivered.fulfill()
+            case .failure(let error):
+                XCTFail("A repeated image event stopped pull mode: \\(error)")
+            }
+        }
+
+        // Start produces the first synchronous mock callback; the remaining
+        // events model later frames in the same uninterrupted live acquisition.
+        for _ in 0..<8 {
+            emitEvent(AmcamSDK.imageEvent)
+        }
+
+        wait(for: [framesDelivered], timeout: 2)
+        XCTAssertEqual(pullCount(), 9, "Every image event must be pulled exactly once.")
+        XCTAssertTrue(session.isStreaming, "Multiple frames must not end the acquisition.")
+        try session.stop()
+    }
+
+    func testCallbackPullIsSerializedWithControlReadsDuringLiveAcquisition() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let emitterSymbol = dlsym(fixtureHandle, "MockAmcam_EmitEvent"),
+              let delaysSymbol = dlsym(fixtureHandle, "MockAmcam_SetCallDelays"),
+              let activeCallsSymbol = dlsym(fixtureHandle, "MockAmcam_ActiveSDKCallCount"),
+              let concurrentCallsSymbol = dlsym(fixtureHandle, "MockAmcam_ConcurrentSDKCallCount") else {
+            XCTFail("Mock SDK is missing SDK-call serialization test hooks")
+            return
+        }
+        let emitEvent = unsafeBitCast(emitterSymbol, to: (@convention(c) (UInt32) -> Void).self)
+        let setCallDelays = unsafeBitCast(
+            delaysSymbol,
+            to: (@convention(c) (UInt32, UInt32) -> Void).self
+        )
+        let activeCallCount = unsafeBitCast(
+            activeCallsSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+        let concurrentCallCount = unsafeBitCast(
+            concurrentCallsSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+
+        let framesDelivered = expectation(description: "initial and concurrent image callbacks")
+        framesDelivered.expectedFulfillmentCount = 2
+        try session.start { result in
+            switch result {
+            case .success:
+                framesDelivered.fulfill()
+            case .failure(let error):
+                XCTFail("Unexpected callback failure during the control-read race: \\(error)")
+            }
+        }
+
+        // Hold a control getter inside the mock vendor SDK. A concurrent image
+        // callback must wait for that call to finish instead of entering the same
+        // camera handle concurrently.
+        setCallDelays(40, 250)
+        let controlFinished = DispatchSemaphore(value: 0)
+        let controlFailure = FailureCapture()
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                _ = try session.readControls()
+            } catch {
+                controlFailure.store(error)
+            }
+            controlFinished.signal()
+        }
+
+        let deadline = ProcessInfo.processInfo.systemUptime + 2
+        while activeCallCount() == 0,
+              ProcessInfo.processInfo.systemUptime < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        XCTAssertEqual(activeCallCount(), 1, "The mock control read did not enter the SDK.")
+
+        let callbackFinished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            emitEvent(AmcamSDK.imageEvent)
+            callbackFinished.signal()
+        }
+
+        XCTAssertEqual(
+            controlFinished.wait(timeout: .now() + 3),
+            .success,
+            "The control read did not finish."
+        )
+        XCTAssertEqual(
+            callbackFinished.wait(timeout: .now() + 3),
+            .success,
+            "The image callback did not finish after the control read."
+        )
+        wait(for: [framesDelivered], timeout: 2)
+        XCTAssertNil(controlFailure.load())
+        XCTAssertEqual(
+            concurrentCallCount(),
+            0,
+            "PullImageV4 and camera feature reads must never enter the same SDK handle concurrently."
+        )
+        try session.stop()
+    }
 
     func testFailedPostStopFlushIsRetriedBeforePullModeRestart() throws {
         let libraryURL = try buildMockSDK()
