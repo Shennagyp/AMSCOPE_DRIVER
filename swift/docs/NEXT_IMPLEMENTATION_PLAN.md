@@ -118,6 +118,8 @@ Acceptance: all steps pass on physical hardware. Hosted mock tests are not a sub
 - [x] Add a mock SDK regression that rejects pull-mode restart without the post-stop flush, plus an injected flush-failure test proving the pending flush is retried before the next Start.
 - [x] Serialize native operations on one Amcam camera handle across callback `PullImageV4` and feature probes/readbacks/setters; keep StartPull and Stop outside the SDK-call lock to preserve callback lifecycle semantics.
 - [x] Extend the Amcam mock to emit multiple image events within one Start, and instrument a concurrent control-read/pull attempt to prove the two SDK calls never overlap.
+- [x] Run the Amcam fixture's image callback on a worker thread and verify that Stop joins callback delivery before the callback context is released.
+- [x] Exercise the full Amcam GenTL data-stream event path with one reused announced buffer: receive ten sequential frames, verify zero input-buffer underruns, and re-queue the buffer after every New Buffer event.
 - [x] Retain regressions for timeout recovery, stop/close races, copied-frame immutability and failed `DSQueueBuffer` not being retried with the same handle. The Producer may have accepted the first call despite its error status.
 - [x] Add a versioned JSON report schema and `amcam-camera-probe --json`, including backend, SDK version/path, interface, model/display descriptor, stream payload, pixel-format code/namespace, image dimensions/stride, acquisition counters/timestamps, failure stage and cleanup errors.
 - [x] Apply the GenTL 1.6 `ACQ_QUEUE_ALL_DISCARD` operation after stop/event unregistration and before `DSRevokeBuffer`; `ALL_TO_INPUT` leaves buffers in the input pool and is not a revocation-safe flush.

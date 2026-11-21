@@ -51,7 +51,9 @@ The application refreshes camera controls when acquisition changes to streaming.
 
 A shared recursive SDK-call lock now serializes callback pulls with feature probes, readbacks, setters, resolution changes and cache flushes. StartPull remains outside it because the SDK may synchronously invoke the callback; Stop remains outside it because the SDK may wait for callback completion. The separate lifecycle/control lock preserves Start/Stop/feature ordering.
 
-Two mock regressions now cover behavior the previous test suite did not exercise: nine image events inside one acquisition must produce nine frames without stopping, and a deliberately delayed feature read must not overlap a callback pull. Hosted CI validates these mock contracts only. The MU503's physical multi-frame stream remains unverified until retested; the user had reported a one-frame-only live display on the previous build.
+The mock coverage now also models the asynchronous callback lifecycle on a worker thread. An end-to-end Amcam GenTL data-stream regression uses one announced buffer, consumes ten sequential New Buffer events, verifies zero buffer underruns, and re-queues the same buffer after each delivery. The test verifies that Stop joins the callback worker before the retained context is released. A separate test overlaps a deliberately delayed feature read with a callback pull and verifies that SDK calls do not overlap.
+
+Hosted CI validates these mock contracts only. The MU503's physical multi-frame stream remains unverified until retested; the user had reported a one-frame-only live display on the previous build.
 
 The Amcam mock deliberately refuses the next `Amcam_StartPullModeWithCallback` until both caches have been flushed. Its integration test failed on the second start before the implementation was added; another test injects a failed flush and checks that Start retries the pending operation. This is a deterministic SDK-boundary regression, not yet proof of the MU503's physical behavior.
 
