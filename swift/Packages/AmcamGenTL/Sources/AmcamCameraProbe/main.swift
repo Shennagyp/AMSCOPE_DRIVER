@@ -252,56 +252,99 @@ struct AmcamCameraProbe {
 
         defer {
             context.currentStage = .cleanup
-            var cleanupFailures: [String] = []
-            func attemptCleanup(_ operation: String, _ action: () throws -> Void) {
-                do {
-                    try action()
-                } catch {
-                    cleanupFailures.append("\(operation): \(error.localizedDescription)")
-                }
-            }
+            let cleanupPlan = AmcamProbeCleanupCoordinator.plan(
+                streamIsOpen: stream != nil,
+                acquisitionStarted: acquisitionStarted,
+                errorEventRegistered: errorEventRegistered,
+                newBufferEventRegistered: eventRegistered,
+                bufferHandles: Array(bufferHandlesByRawValue.keys),
+                deviceIsOpen: device != nil,
+                interfaceIsOpen: interface != nil,
+                transportLayerIsOpen: system != nil,
+                libraryInitialized: initialized
+            )
+            let cleanupFailures = AmcamProbeCleanupCoordinator.execute(cleanupPlan) { step in
+                switch step {
+                case .stopAcquisition:
+                    guard let streamHandle = stream else {
+                        throw ProbeError.invalidInfo("Missing data-stream handle during stop.")
+                    }
+                    try backend.DSStopAcquisition(
+                        streamHandle,
+                        flags: GenTLAcquisitionStopFlag.normal.rawValue
+                    )
+                    acquisitionStarted = false
 
-            if let stream {
-                if acquisitionStarted {
-                    attemptCleanup("DSStopAcquisition") {
-                        try backend.DSStopAcquisition(
-                            stream,
-                            flags: GenTLAcquisitionStopFlag.normal.rawValue
-                        )
+                case .unregisterEvent(let event):
+                    guard let streamHandle = stream else {
+                        throw ProbeError.invalidInfo("Missing data-stream handle during event unregistration.")
                     }
-                }
-                if errorEventRegistered {
-                    attemptCleanup("GCUnregisterEvent(error)") {
-                        try backend.GCUnregisterEvent(
-                            .dataStream(stream),
-                            eventType: GenTLEventType.error.rawValue
-                        )
+                    let eventType = event == .error
+                        ? GenTLEventType.error.rawValue
+                        : GenTLEventType.newBuffer.rawValue
+                    try backend.GCUnregisterEvent(
+                        .dataStream(streamHandle),
+                        eventType: eventType
+                    )
+                    if event == .error {
+                        errorEventRegistered = false
+                    } else {
+                        eventRegistered = false
                     }
-                }
-                if eventRegistered {
-                    attemptCleanup("GCUnregisterEvent(new-buffer)") {
-                        try backend.GCUnregisterEvent(
-                            .dataStream(stream),
-                            eventType: GenTLEventType.newBuffer.rawValue
-                        )
-                    }
-                }
-                attemptCleanup("DSClose") { try backend.DSClose(stream) }
-            }
-            if let device {
-                attemptCleanup("DevClose") { try backend.DevClose(device) }
-            }
-            if let interface {
-                attemptCleanup("IFClose") { try backend.IFClose(interface) }
-            }
-            if let system {
-                attemptCleanup("TLClose") { try backend.TLClose(system) }
-            }
-            if initialized {
-                attemptCleanup("GCCloseLib") { try backend.swiftGCCloseLib() }
-            }
 
-            context.report.cleanupErrors.append(contentsOf: cleanupFailures)
+                case .flushAllDiscard:
+                    guard let streamHandle = stream else {
+                        throw ProbeError.invalidInfo("Missing data-stream handle during queue flush.")
+                    }
+                    try backend.DSFlushQueue(
+                        streamHandle,
+                        operation: GenTLQueueOperation.allDiscard.rawValue
+                    )
+
+                case .revokeBuffer(let rawHandle):
+                    guard let streamHandle = stream,
+                          let bufferHandle = bufferHandlesByRawValue[rawHandle] else {
+                        throw ProbeError.unknownBuffer(rawHandle)
+                    }
+                    _ = try backend.DSRevokeBuffer(streamHandle, buffer: bufferHandle)
+                    bufferHandlesByRawValue.removeValue(forKey: rawHandle)
+
+                case .closeDataStream:
+                    guard let streamHandle = stream else {
+                        throw ProbeError.invalidInfo("Missing data-stream handle during close.")
+                    }
+                    try backend.DSClose(streamHandle)
+                    stream = nil
+
+                case .closeDevice:
+                    guard let deviceHandle = device else {
+                        throw ProbeError.invalidInfo("Missing device handle during close.")
+                    }
+                    try backend.DevClose(deviceHandle)
+                    device = nil
+
+                case .closeInterface:
+                    guard let interfaceHandle = interface else {
+                        throw ProbeError.invalidInfo("Missing interface handle during close.")
+                    }
+                    try backend.IFClose(interfaceHandle)
+                    interface = nil
+
+                case .closeTransportLayer:
+                    guard let systemHandle = system else {
+                        throw ProbeError.invalidInfo("Missing transport-layer handle during close.")
+                    }
+                    try backend.TLClose(systemHandle)
+                    system = nil
+
+                case .closeLibrary:
+                    try backend.swiftGCCloseLib()
+                    initialized = false
+                }
+            }
+            context.report.cleanupErrors.append(
+                contentsOf: cleanupFailures.map { "\($0.operation): \($0.message)" }
+            )
         }
 
         do {

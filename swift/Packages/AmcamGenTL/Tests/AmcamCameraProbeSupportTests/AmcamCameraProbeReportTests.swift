@@ -95,4 +95,93 @@ final class AmcamCameraProbeReportTests: XCTestCase {
         let device = try XCTUnwrap(object["device"] as? [String: Any])
         XCTAssertEqual(device["discovered_count"] as? Int, 0)
     }
+    func testCleanupPlanUsesAllDiscardBeforeRevocationAndClosesParentsLast() {
+        let plan = AmcamProbeCleanupCoordinator.plan(
+            streamIsOpen: true,
+            acquisitionStarted: true,
+            errorEventRegistered: true,
+            newBufferEventRegistered: true,
+            bufferHandles: [30, 10, 20],
+            deviceIsOpen: true,
+            interfaceIsOpen: true,
+            transportLayerIsOpen: true,
+            libraryInitialized: true
+        )
+
+        XCTAssertEqual(
+            plan,
+            [
+                .stopAcquisition,
+                .unregisterEvent(.error),
+                .unregisterEvent(.newBuffer),
+                .flushAllDiscard,
+                .revokeBuffer(10),
+                .revokeBuffer(20),
+                .revokeBuffer(30),
+                .closeDataStream,
+                .closeDevice,
+                .closeInterface,
+                .closeTransportLayer,
+                .closeLibrary
+            ]
+        )
+    }
+
+    func testCleanupStopsAtFirstFailureAndDoesNotReleaseParents() {
+        struct InjectedCleanupFailure: Error, LocalizedError {
+            var errorDescription: String? { "Injected buffer revoke failure." }
+        }
+
+        let plan = AmcamProbeCleanupCoordinator.plan(
+            streamIsOpen: true,
+            acquisitionStarted: true,
+            errorEventRegistered: true,
+            newBufferEventRegistered: true,
+            bufferHandles: [20, 10],
+            deviceIsOpen: true,
+            interfaceIsOpen: true,
+            transportLayerIsOpen: true,
+            libraryInitialized: true
+        )
+        var attempted: [AmcamProbeCleanupStep] = []
+
+        let failures = AmcamProbeCleanupCoordinator.execute(plan) { step in
+            attempted.append(step)
+            if step == .revokeBuffer(20) {
+                throw InjectedCleanupFailure()
+            }
+        }
+
+        XCTAssertEqual(attempted, Array(plan.prefix(6)))
+        XCTAssertEqual(
+            failures,
+            [
+                AmcamProbeCleanupFailure(
+                    operation: "DSRevokeBuffer",
+                    message: "Injected buffer revoke failure."
+                )
+            ]
+        )
+        XCTAssertFalse(attempted.contains(.closeDataStream))
+        XCTAssertFalse(attempted.contains(.closeDevice))
+        XCTAssertFalse(attempted.contains(.closeLibrary))
+    }
+
+    func testCleanupPlanCanReleaseOnlyTheResourcesThatWereAcquired() {
+        XCTAssertEqual(
+            AmcamProbeCleanupCoordinator.plan(
+                streamIsOpen: false,
+                acquisitionStarted: false,
+                errorEventRegistered: false,
+                newBufferEventRegistered: false,
+                bufferHandles: [10, 20],
+                deviceIsOpen: false,
+                interfaceIsOpen: true,
+                transportLayerIsOpen: true,
+                libraryInitialized: true
+            ),
+            [.closeInterface, .closeTransportLayer, .closeLibrary]
+        )
+    }
+
 }
