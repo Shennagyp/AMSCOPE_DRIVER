@@ -8,6 +8,8 @@ private final class AmcamCallbackContext {
 }
 
 public final class AmcamCameraSession: @unchecked Sendable {
+    private static let callbackQueueKey = DispatchSpecificKey<UInt8>()
+
     private static let callback: AmcamEventCallback = { event, context in
         guard let context else { return }
         let callbackContext = Unmanaged<AmcamCallbackContext>
@@ -75,6 +77,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         self.maximumSpeedLevel = maximumSpeedLevel
         self.resolutions = resolutions
         self.currentResolutionIndex = currentResolutionIndex
+        callbackQueue.setSpecific(key: Self.callbackQueueKey, value: 1)
     }
 
     public func currentResolution() -> AmcamResolution? {
@@ -215,7 +218,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         if result < 0 {
             // StartPull may have synchronously emitted an event before reporting
             // failure. Drain it before releasing the callback context or buffer.
-            callbackQueue.sync {}
+            drainCallbackQueue()
 
             lock.lock()
             callbackContext = nil
@@ -285,7 +288,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         // A successful SDK Stop ends callback production. Drain every callback
         // already enqueued before releasing the SDK context and pull buffer.
-        callbackQueue.sync {}
+        drainCallbackQueue()
 
         lock.lock()
         let context = callbackContext
@@ -369,7 +372,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         // Amcam_Close ends callback production. Drain queued no-op/error events
         // before freeing callback context or the SDK pull buffer.
-        callbackQueue.sync {}
+        drainCallbackQueue()
 
         lock.lock()
         handle = nil
@@ -899,6 +902,14 @@ public final class AmcamCameraSession: @unchecked Sendable {
             deviceTotalFrameCount: recentRate?.totalFrameCount
         )
         return AmcamControlSnapshot(exposure: exposure, gain: gain, whiteBalance: whiteBalance, image: imageControls, frameRate: frameRate)
+    }
+
+    /// Waits for deferred callback work unless already executing on that queue.
+    /// A frame callback may synchronously request Stop/Close; the active queue
+    /// item must not synchronously wait for itself.
+    private func drainCallbackQueue() {
+        guard DispatchQueue.getSpecific(key: Self.callbackQueueKey) != 1 else { return }
+        drainCallbackQueue()
     }
 
     private func enqueue(event: UInt32) {
