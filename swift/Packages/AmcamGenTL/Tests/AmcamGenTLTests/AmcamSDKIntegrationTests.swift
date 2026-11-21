@@ -167,12 +167,17 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertNotNil(fixtureHandle)
         defer { if let fixtureHandle { dlclose(fixtureHandle) } }
         guard let emitterSymbol = dlsym(fixtureHandle, "MockAmcam_EmitEvent"),
-              let pullCountSymbol = dlsym(fixtureHandle, "MockAmcam_PullCount") else {
-            XCTFail("Mock SDK is missing repeated-frame test hooks")
+              let pullCountSymbol = dlsym(fixtureHandle, "MockAmcam_PullCount"),
+              let pullContextSymbol = dlsym(fixtureHandle, "MockAmcam_PullInsideCallbackCount") else {
+            XCTFail("Mock SDK is missing repeated-frame or callback-boundary test hooks")
             return
         }
         let emitEvent = unsafeBitCast(emitterSymbol, to: (@convention(c) (UInt32) -> Void).self)
         let pullCount = unsafeBitCast(pullCountSymbol, to: (@convention(c) () -> UInt32).self)
+        let pullInsideCallbackCount = unsafeBitCast(
+            pullContextSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
 
         let framesDelivered = expectation(description: "all image events become frames")
         framesDelivered.expectedFulfillmentCount = 9
@@ -193,6 +198,11 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         wait(for: [framesDelivered], timeout: 2)
         XCTAssertEqual(pullCount(), 9, "Every image event must be pulled exactly once.")
+        XCTAssertEqual(
+            pullInsideCallbackCount(),
+            0,
+            "PullImage must run after the SDK callback returns, on the dedicated acquisition queue."
+        )
         XCTAssertTrue(session.isStreaming, "Multiple frames must not end the acquisition.")
         try session.stop()
     }
