@@ -8,7 +8,8 @@ private final class AmcamCallbackContext {
 }
 
 public final class AmcamCameraSession: @unchecked Sendable {
-    private static let callbackQueueKey = DispatchSpecificKey<UInt8>()
+    private static let callbackQueueKey = DispatchSpecificKey<UUID>()
+    private let callbackQueueIdentity = UUID()
 
     private static let callback: AmcamEventCallback = { event, context in
         guard let context else { return }
@@ -77,7 +78,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         self.maximumSpeedLevel = maximumSpeedLevel
         self.resolutions = resolutions
         self.currentResolutionIndex = currentResolutionIndex
-        callbackQueue.setSpecific(key: Self.callbackQueueKey, value: 1)
+        callbackQueue.setSpecific(key: Self.callbackQueueKey, value: callbackQueueIdentity)
     }
 
     public func currentResolution() -> AmcamResolution? {
@@ -908,7 +909,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
     /// A frame callback may synchronously request Stop/Close; the active queue
     /// item must not synchronously wait for itself.
     private func drainCallbackQueue() {
-        guard DispatchQueue.getSpecific(key: Self.callbackQueueKey) != 1 else { return }
+        guard DispatchQueue.getSpecific(key: Self.callbackQueueKey) != callbackQueueIdentity else { return }
         callbackQueue.sync {}
     }
 
