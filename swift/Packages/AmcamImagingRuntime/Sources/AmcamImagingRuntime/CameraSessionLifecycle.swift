@@ -199,6 +199,8 @@ public actor CameraSessionLifecycle {
         generation &+= 1
         if isStreaming {
             isStreaming = false
+            // The UI must observe the stopped transition even when a later
+            // acquisition/device close operation fails and ownership is retained.
             publish(.streamingChanged(false))
         }
 
