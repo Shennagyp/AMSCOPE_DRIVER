@@ -306,7 +306,7 @@ struct AmcamCameraProbe {
 
         do {
             context.currentStage = .libraryInitialization
-                try backend.swiftGCInitLib()
+            try backend.swiftGCInitLib()
             initialized = true
             context.currentStage = .sdkVersionRead
             let sdkVersion = try readString(backend.GCGetInfo(command: GenTLInfoCommand.TransportLayer.version.rawValue))
