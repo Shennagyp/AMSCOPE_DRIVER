@@ -213,7 +213,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             AmcamSDK.noFrameTimeoutEvent,
             AmcamSDK.noPacketTimeoutEvent
         ] {
-            let eventReceived = expectation(description: "camera timeout event 0x\\(String(eventCode, radix: 16))")
+            let eventReceived = expectation(description: "camera timeout event 0x\(String(eventCode, radix: 16))")
             try session.start { result in
                 if case .failure(.cameraEventFailure(let actualCode)) = result {
                     XCTAssertEqual(actualCode, eventCode)
