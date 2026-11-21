@@ -6,7 +6,7 @@ A native macOS camera application built on the Amcam SDK backend in this reposit
 
 The application consumes backend-neutral camera models, feature contracts, lifecycle events and frame values. GenTLRouter owns generic backend registration and discovery. AmcamImagingGenTLAdapter owns AmScope provider registration, discovery mapping, and conversion between GenTL-specific sessions/features and the portable runtime contracts. AmcamImagingRuntime exclusively owns the opened device session, acquisition lifecycle, feature I/O serialization, frame delivery and cleanup. The app sends commands to that runtime and consumes its events and frames; GenTL handles never escape the runtime actor.
 
-**Current architecture on `macos-version-optimization`:** CameraApplicationModel discovers candidates through AmcamCameraProvider, opens the selected opaque runtime device through CameraSessionLifecycle, and performs typed feature reads/writes through that same lifecycle. The app depends on AmcamCameraModel, AmcamImagingCore, AmcamImagingRuntime, AmcamImagingGenTLAdapter and AmcamImagingState. It does not import GenTLABI, GenTLAPI, GenTLRouter or AmcamGenTL, and it does not construct AmcamCameraDriver, AmcamCameraSession or GenTLDeviceSession. CI enforces this dependency boundary.
+**Current application architecture:** CameraApplicationModel discovers candidates through AmcamCameraProvider, opens the selected opaque runtime device through CameraSessionLifecycle, and performs typed feature reads/writes through that same lifecycle. The app depends on AmcamCameraModel, AmcamImagingCore, AmcamImagingRuntime, AmcamImagingGenTLAdapter and AmcamImagingState. It does not import GenTLABI, GenTLAPI, GenTLRouter or AmcamGenTL, and it does not construct AmcamCameraDriver, AmcamCameraSession or GenTLDeviceSession. CI enforces this dependency boundary.
 
 ## Architecture
 
@@ -181,6 +181,26 @@ Other commands:
 
 The vendor SDK is proprietary and is not bundled. For physical AmScope camera access, place a compatible arm64 `libamcam.dylib` under `vendor/amcam/macos/libamcam.dylib`, or install it in one of the backend's standard per-user/system locations. The build script copies a local vendor SDK into the app bundle; `AMCAM_SDK_SOURCE=/absolute/path/to/libamcam.dylib` can specify a source file at build time. The backend resolves the bundled SDK first. There is no SDK file picker in the UI. Without a compatible SDK, the app can launch but the AmScope provider is unavailable. The app is ad-hoc signed for local testing, not notarized.
 
+## Process relaunch and USB reconnect recovery
+
+`make run` is a process restart, not just a rebuild followed by Launch Services reopening an existing app instance. Before the build/launch sequence, `scripts/build-and-run-macos.sh` checks for an existing `amcam-imaging` process and asks the running `com.amscope.imaging` application to quit normally. It waits for the process to exit before continuing. If the quit request fails or the process remains alive, the script exits with an error; it never force-kills the application or starts a second process that could contend for the camera. The `BUILD_ONLY=1` path used by `make build-local` and CI skips this shutdown behavior.
+
+The application also runs low-frequency device discovery (every two seconds) because this SDK integration does not rely on a portable device-change notification:
+
+- An incomplete/failed enumeration is not treated as proof that the camera has disappeared. The currently attached session is retained while discovery is inconclusive.
+- If an incomplete background scan occurs while the session is idle, the session is marked for recreation. The next complete scan performs the ordered close and reopens the selected device, even if the SDK returns the same device identifier.
+- A complete scan that finds the camera but an idle session still reports no usable data stream causes the application to recheck stream availability. This refreshes the Start-button capability state without rereading all camera controls.
+- If the SDK reports a disconnect while acquisition is active, the camera callback reports a failure; the runtime stops the acquisition and retains native callback ownership until the SDK stop succeeds. The discovery monitor then handles reconnection and session recreation.
+
+### MU503 recovery validation — 2026-11-21
+
+The user confirmed that the following physical-camera workflow succeeds on the MU503:
+
+1. Run `make run` while an earlier Amcam Imaging process is already open; the old process exits and the newly built application launches.
+2. Keep that application process open, disconnect the MU503, and reconnect it.
+3. The camera session recovers and the Start control becomes enabled again without manually quitting and relaunching the application.
+
+This is a user-confirmed physical recovery result. It does not by itself establish five-minute sustained acquisition, every feature's readback, or the independent diagnostic-probe acceptance criteria. Those remain separate checks in [the hardware acceptance record](AMCAM_HARDWARE_ACCEPTANCE.md).
 ### First physical-camera test
 
 Use the app first without changing the camera pixel format:
@@ -190,7 +210,7 @@ Use the app first without changing the camera pixel format:
 3. Stop and restart acquisition three times.
 4. In Settings, test Exposure Auto Continuous, then Off (fixed/manual); change exposure time and confirm the readback.
 5. Change analog gain and confirm its readback. Gain is represented as a percentage, not dB.
-6. Close the app normally, disconnect/reconnect the camera, reopen the app and verify discovery again.
+6. With the app still running, disconnect and reconnect the MU503; verify discovery/session recovery and that Start becomes enabled without restarting the app. Also run `make run` while an app instance is already open and verify the old process exits before the new build launches.
 
 The application display path currently decodes RGB8 only. Do not use RAW, Bayer, YUV or other pixel formats as an acceptance test yet. Keep the default format for the first test. Record any error text and whether it occurred during discovery, open, start, streaming, stop or close.
 
@@ -205,7 +225,7 @@ Typed feature access is tested at three layers:
 - GenTLRouter backend-bound feature forwarding and closed-session behavior;
 - Amcam mock-SDK integration for per-camera availability, exposure/gain, color matrix, pixel format, white-balance temperature/tint/RGB vector, fixed frame rate, resolution enumeration, validation and readback.
 
-Camera model/capability policy has its own test target. Hosted CI is the authority for package and app-build status. The latest branch run must be green before the app is considered ready for local launch; the current source changes include descriptor-gated feature reads and a corrected Swift key-path compile error, and their hosted validation is pending. Physical-camera compatibility remains a separate acceptance gate. Historical development was not uniformly test-first: some earlier SDK controls predate their tests. New feature work must continue with failing tests first, implementation, full regression and refactoring.
+Camera model/capability policy has its own test target. The `macos-version-0.2` source baseline at commit `4f4a8ca022274eba5fe49dc2489f9e7fa766dd64` passed [GitHub Actions run 44860717992](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44860717992): all six jobs completed successfully, including the Linux core/runtime/state suite, all five macOS package jobs, the camera-probe build, dependency-boundary checks, and fixture-SDK app packaging/signing. The `macos-version-0.3` documentation commits are validated separately by their own branch workflow. The user has also confirmed the physical MU503 process-relaunch and USB reconnect recovery described above; this is a partial hardware result, not completion of the full hardware acceptance checklist. Historical development was not uniformly test-first: some earlier SDK controls predate their tests. New feature work must continue with failing tests first, implementation, full regression and refactoring.
 
 ## Package dependency boundary (2026-11-20)
 
