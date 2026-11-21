@@ -122,9 +122,9 @@ final class CameraApplicationModel: ObservableObject {
                 return
             }
             sessionNeedsRecreation = false
+            latestFrame = nil
             if !selectedDeviceIsPresent {
                 selectedDeviceID = discoveredDevices.first?.identifier ?? ""
-                latestFrame = nil
             }
         }
 
