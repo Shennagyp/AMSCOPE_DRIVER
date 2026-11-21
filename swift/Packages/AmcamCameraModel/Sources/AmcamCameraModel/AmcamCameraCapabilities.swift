@@ -150,8 +150,7 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeaturesByGroup: [AmcamCameraFeatureGroup: Set<AmcamCameraFeature>],
-                deniedFeatures: Set<AmcamCameraFeature> = [],
-                pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
+                deniedFeatures: Set<AmcamCameraFeature> = []) {
         self.modelCode = modelCode
         self.displayName = displayName
         self.allowedFeaturesByGroup = Dictionary(
@@ -166,7 +165,6 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
                 pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
         self.modelCode = modelCode
         self.displayName = displayName
-        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.allowedFeaturesByGroup = allowedFeaturesByGroup
         self.deniedFeatures = deniedFeatures
     }
@@ -233,7 +231,7 @@ public struct AmcamCameraProfileRegistry: Sendable {
         ]?.pullImageAPIPolicy ?? .automatic
     }
 
-        public func resolve(
+    public func resolve(
         modelCode: String, modelFlags: UInt64, maximumSpeedLevel: Int?,
         probes: ProbeResults, implemented: Set<AmcamCameraFeature>
     ) -> AmcamCameraCapabilities {
