@@ -32,6 +32,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
     private var starting = false
     private var stopping = false
     private var streaming = false
+    /// A successful Amcam_Stop requires a both-cache flush before another pull-mode start.
+    /// Retain this obligation if the SDK rejects the flush so a later stop/close can retry.
+    private var frameCacheFlushPending = false
     private var requestedExposureMicroseconds: UInt32?
     private var requestedFrameRate: Double?
     private var requestedSpeedLevel: Int?
@@ -191,15 +194,20 @@ public final class AmcamCameraSession: @unchecked Sendable {
             lock.unlock()
             throw AmcamCameraError.transitionInProgress
         }
-        guard let handle else {
+        guard let activeHandle = handle else {
             let hasCallback = callbackContext != nil
+            let flushPending = frameCacheFlushPending
             lock.unlock()
-            if hasCallback { throw AmcamCameraError.sessionClosed }
+            if hasCallback || flushPending { throw AmcamCameraError.sessionClosed }
             return
         }
         guard callbackContext != nil else {
             streaming = false
+            let flushPending = frameCacheFlushPending
             lock.unlock()
+            if flushPending {
+                try flushStoppedFrameCaches(using: activeHandle)
+            }
             return
         }
 
@@ -210,7 +218,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
         // Never hold the session lock across Amcam_Stop because the SDK may be
         // waiting for an event callback to return.
-        let result = sdk.stop(handle)
+        let result = sdk.stop(activeHandle)
 
         lock.lock()
         stopping = false
@@ -226,10 +234,31 @@ public final class AmcamCameraSession: @unchecked Sendable {
         buffer?.deallocate()
         buffer = nil
         bufferCapacity = 0
+        frameCacheFlushPending = true
         lock.unlock()
+
         if let context {
             Unmanaged<AmcamCallbackContext>.fromOpaque(context).release()
         }
+
+        // Amcam_Stop ends callback delivery, but cached images may remain in
+        // camera DDR and in the SDK DLL. Flush both before allowing another start.
+        try flushStoppedFrameCaches(using: activeHandle)
+    }
+
+    /// Retries the post-stop flush without disturbing a callback that has already
+    /// been released. The pending flag is cleared only after the SDK confirms it.
+    private func flushStoppedFrameCaches(using activeHandle: UnsafeMutableRawPointer) throws {
+        lock.lock()
+        let pending = frameCacheFlushPending
+        lock.unlock()
+        guard pending else { return }
+
+        try sdk.flushFrameCaches(activeHandle)
+
+        lock.lock()
+        frameCacheFlushPending = false
+        lock.unlock()
     }
 
     public func stop() throws {

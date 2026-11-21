@@ -80,6 +80,8 @@ final class AmcamSDK: @unchecked Sendable {
     static let optionColorMatrix: UInt32 = 0x0d
     static let optionWhiteBalanceGain: UInt32 = 0x0e
     static let optionPixelFormat: UInt32 = 0x1a
+    static let optionFlush: UInt32 = 0x3d
+    static let flushBothFrameCaches: Int32 = 3
     static let temperatureMinimum: Int32 = 2_000
     static let temperatureMaximum: Int32 = 15_000
     static let tintMinimum: Int32 = 200
@@ -506,6 +508,16 @@ final class AmcamSDK: @unchecked Sendable {
     func setOption(_ handle: UnsafeMutableRawPointer, option: UInt32, value: Int32) throws {
         let result = api.setOption(handle, option, value)
         try checkControlResult("Amcam_put_Option(0x\(String(option, radix: 16)))", result)
+    }
+
+    /// Discards frames retained by both the camera DDR and the Amcam SDK DLL.
+    /// Required after Amcam_Stop before the same device handle enters pull mode again.
+    func flushFrameCaches(_ handle: UnsafeMutableRawPointer) throws {
+        try setOption(
+            handle,
+            option: Self.optionFlush,
+            value: Self.flushBothFrameCaches
+        )
     }
 
     func readRecentFrameRate(_ handle: UnsafeMutableRawPointer) -> (framesPerSecond: Double, frameCount: UInt32, windowMilliseconds: UInt32, totalFrameCount: UInt32)? {
