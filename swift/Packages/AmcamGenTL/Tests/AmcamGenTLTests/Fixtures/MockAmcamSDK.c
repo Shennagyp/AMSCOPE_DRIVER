@@ -1,6 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
 #include "AmcamABI.h"
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 typedef void (*AmcamEventCallback)(uint32_t event, void *context);
 
@@ -23,6 +25,10 @@ static uint32_t current_resolution_index = 2;
 static const uint32_t resolution_widths[] = {2560, 1280, 640, 641};
 static const uint32_t resolution_heights[] = {1922, 960, 480, 480};
 static uint32_t close_count;
+static uint32_t active_sdk_call_count;
+static uint32_t concurrent_sdk_call_count;
+static uint32_t pull_delay_milliseconds;
+static uint32_t control_delay_milliseconds;
 static uint32_t stop_count;
 static uint32_t frame_cache_flush_count;
 static uint32_t frame_cache_flush_failures_remaining;
@@ -46,6 +52,26 @@ static int32_t white_balance_rgb[3] = {100, 100, 100};
 static int32_t precise_frame_rate_tenths = 150;
 static int32_t color_matrix_enabled = 1;
 static int32_t pixel_format_code = 8;
+
+static void mock_begin_sdk_call(void) {
+    uint32_t active = __atomic_add_fetch(&active_sdk_call_count, 1, __ATOMIC_SEQ_CST);
+    if (active > 1) {
+        __atomic_add_fetch(&concurrent_sdk_call_count, 1, __ATOMIC_SEQ_CST);
+    }
+}
+
+static void mock_end_sdk_call(void) {
+    __atomic_sub_fetch(&active_sdk_call_count, 1, __ATOMIC_SEQ_CST);
+}
+
+static void mock_delay(uint32_t milliseconds) {
+    if (milliseconds == 0) return;
+    struct timespec delay = {
+        .tv_sec = (time_t)(milliseconds / 1000),
+        .tv_nsec = (long)(milliseconds % 1000) * 1000000L
+    };
+    (void)nanosleep(&delay, NULL);
+}
 
 void MockAmcam_EnableOddResolution(void) {
     model.preview = 4;
@@ -166,8 +192,11 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     if (pull_api_failure != 0) return pull_api_failure;
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 4)) != 0) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != 0) return -1;
+    mock_begin_sdk_call();
+    mock_delay(__atomic_load_n(&pull_delay_milliseconds, __ATOMIC_SEQ_CST));
     if (pending_pull_count > 0) {
         pending_pull_count--;
+        mock_end_sdk_call();
         return (int32_t)UINT32_C(0x8000000a);
     }
     const uint32_t width = resolution_widths[current_resolution_index];
@@ -196,6 +225,7 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     info->gps.altitude = 45600;
     info->gps.satellite = 8;
     pull_api_version = 4;
+    mock_end_sdk_call();
     return 0;
 }
 #endif
@@ -221,7 +251,10 @@ void MockAmcam_SetExposureUnavailable(int32_t unavailable) {
 }
 int32_t Amcam_get_AutoExpoEnable(void *handle, int32_t *value) {
     if (!handle || !value || exposure_unavailable) return -1;
+    mock_begin_sdk_call();
+    mock_delay(__atomic_load_n(&control_delay_milliseconds, __ATOMIC_SEQ_CST));
     *value = auto_exposure;
+    mock_end_sdk_call();
     return 0;
 }
 int32_t Amcam_put_AutoExpoEnable(void *handle, int32_t value) {
@@ -344,6 +377,10 @@ int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
 
 void MockAmcam_Reset(void) {
     close_count = 0;
+    __atomic_store_n(&active_sdk_call_count, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&concurrent_sdk_call_count, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&pull_delay_milliseconds, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&control_delay_milliseconds, 0, __ATOMIC_SEQ_CST);
     stop_count = 0;
     frame_cache_flush_count = 0;
     frame_cache_flush_failures_remaining = 0;
@@ -370,6 +407,16 @@ uint32_t MockAmcam_StopCount(void) { return stop_count; }
 uint32_t MockAmcam_FlushCount(void) { return frame_cache_flush_count; }
 void MockAmcam_SetFlushFailures(uint32_t count) { frame_cache_flush_failures_remaining = count; }
 uint32_t MockAmcam_PullCount(void) { return pull_count; }
+void MockAmcam_SetCallDelays(uint32_t pullMilliseconds, uint32_t controlMilliseconds) {
+    __atomic_store_n(&pull_delay_milliseconds, pullMilliseconds, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&control_delay_milliseconds, controlMilliseconds, __ATOMIC_SEQ_CST);
+}
+uint32_t MockAmcam_ActiveSDKCallCount(void) {
+    return __atomic_load_n(&active_sdk_call_count, __ATOMIC_SEQ_CST);
+}
+uint32_t MockAmcam_ConcurrentSDKCallCount(void) {
+    return __atomic_load_n(&concurrent_sdk_call_count, __ATOMIC_SEQ_CST);
+}
 void MockAmcam_EmitEvent(uint32_t event) {
     if (active_callback) active_callback(event, active_context);
 }
