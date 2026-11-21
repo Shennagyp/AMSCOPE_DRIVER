@@ -129,6 +129,7 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
         static let acquisitionStartDefault: GenTLABI.ACQ_START_FLAGS = 0
         static let acquisitionStopDefault: GenTLABI.ACQ_STOP_FLAGS = 0
         static let queueAllToInput: GenTLABI.ACQ_QUEUE_TYPE = 2
+        static let queueAllDiscard: GenTLABI.ACQ_QUEUE_TYPE = 4
         static let eventPayloadSize = 2 * MemoryLayout<UInt>.size
         static let maximumPayloadSize = 512 * 1024 * 1024
         static let maximumDataStreamIDSize = 1_048_576
@@ -414,8 +415,8 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
         }
 
         try check(
-            api.DSFlushQueue(streamHandle, Constants.queueAllToInput),
-            operation: "DSFlushQueue(AllToInput)"
+            api.DSFlushQueue(streamHandle, Constants.queueAllDiscard),
+            operation: "DSFlushQueue(AllDiscard)"
         )
 
         for bufferHandle in bufferHandles {
