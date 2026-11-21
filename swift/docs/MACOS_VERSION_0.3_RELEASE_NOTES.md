@@ -9,7 +9,7 @@
 
 ## Acquisition regression coverage added in 0.3
 
-The branch adds deterministic, hardware-independent coverage without changing camera runtime semantics:
+The branch adds deterministic, hardware-independent coverage for the following acquisition contracts:
 
 - A GenTL acquisition test consumes 64 consecutive frames through one reused announced buffer and checks monotonically increasing frame sequence values, changing copied pixel contents, and exactly one buffer return per delivered frame.
 - A lifecycle test uses one open device session with four distinct acquisitions. It performs three stop/restart transitions and verifies exactly one start, one stop and one close per acquisition.
@@ -43,6 +43,15 @@ Reference: [EMVA GenTL 1.6, sections 5.2.8–5.2.10 and `ACQ_QUEUE_ALL_DISCARD`]
 ## Amcam pull-mode restart invariant
 
 After `Amcam_Stop` succeeds, `AmcamCameraSession` now flushes both the camera DDR and the Amcam SDK DLL frame queue through `AMCAM_OPTION_FLUSH` (`0x3d`, value `3`). A subsequent pull-mode start is not allowed while this flush is pending. If the flush fails, the callback context and image buffer are released only after Stop has succeeded, the pending flush state is retained, and later Stop/Close/Start retries it.
+
+
+## Amcam live-callback serialization invariant
+
+The application refreshes camera controls when acquisition changes to streaming. Before this increment, the session state lock protected handle lookup and callback state, but feature operations released it before entering the SDK. A feature read could therefore overlap the callback's next `PullImageV4` operation on the same native camera handle.
+
+A shared recursive SDK-call lock now serializes callback pulls with feature probes, readbacks, setters, resolution changes and cache flushes. StartPull remains outside it because the SDK may synchronously invoke the callback; Stop remains outside it because the SDK may wait for callback completion. The separate lifecycle/control lock preserves Start/Stop/feature ordering.
+
+Two mock regressions now cover behavior the previous test suite did not exercise: nine image events inside one acquisition must produce nine frames without stopping, and a deliberately delayed feature read must not overlap a callback pull. Hosted CI validates these mock contracts only. The MU503's physical multi-frame stream remains unverified until retested; the user had reported a one-frame-only live display on the previous build.
 
 The Amcam mock deliberately refuses the next `Amcam_StartPullModeWithCallback` until both caches have been flushed. Its integration test failed on the second start before the implementation was added; another test injects a failed flush and checks that Start retries the pending operation. This is a deterministic SDK-boundary regression, not yet proof of the MU503's physical behavior.
 

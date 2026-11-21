@@ -187,6 +187,12 @@ The vendor SDK is proprietary and is not bundled. For physical AmScope camera ac
 
 The flush is part of the session lifecycle, not a UI delay or a USB reconnect workaround. If the SDK rejects it, the session retains a pending cleanup obligation; a later Stop, Close, or Start retries the flush. Start is blocked from registering a new callback until the pending flush succeeds. This preserves the device session and callback ownership while preventing a stale SDK frame queue from contaminating the next acquisition.
 
+## Live callback and feature access
+
+All operations on one open Amcam camera handle are serialized by a shared SDK-call lock. This includes the image callback's `PullImageV4` call and the feature probes, readbacks and setters initiated by the application. In particular, the application refreshes controls when streaming begins; those reads must not enter the native SDK concurrently with the next frame pull.
+
+`Amcam_StartPullModeWithCallback` and `Amcam_Stop` intentionally remain outside that lock. Start may synchronously invoke the callback, while Stop may wait for an active callback to return. The separate lifecycle/control lock serializes Start, Stop and feature operations; the SDK-call lock serializes callback pulls with feature calls without reversing the callback's state-lock order.
+
 ## Process relaunch and USB reconnect recovery
 
 `make run` is a process restart, not just a rebuild followed by Launch Services reopening an existing app instance. Before the build/launch sequence, `scripts/build-and-run-macos.sh` checks for an existing `amcam-imaging` process and asks the running `com.amscope.imaging` application to quit normally. It waits for the process to exit before continuing. If the quit request fails or the process remains alive, the script exits with an error; it never force-kills the application or starts a second process that could contend for the camera. The `BUILD_ONLY=1` path used by `make build-local` and CI skips this shutdown behavior.
