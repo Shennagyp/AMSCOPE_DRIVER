@@ -219,6 +219,8 @@ The user confirmed that the following physical-camera workflow succeeds on the M
 3. The camera session recovers and the Start control becomes enabled again without manually quitting and relaunching the application.
 
 This is a user-confirmed physical recovery result. It does not by itself establish five-minute sustained acquisition, every feature's readback, or the independent diagnostic-probe acceptance criteria. Those remain separate checks in [the hardware acceptance record](AMCAM_HARDWARE_ACCEPTANCE.md).
+
+The later `DSRevokeBuffer` `-1009` cleanup failure was traced to the Producer requiring non-NULL output pointers even though GenTL permits either output to be omitted. The raw ABI adapter now honors optional outputs, and the user confirmed that the MU503 disconnect/reconnect recovery worked after this correction. The observed cleanup failure is closed; the broader sustained-stream, settings and diagnostic-probe checks remain separate.
 ### First physical-camera test
 
 Use the app first without changing the camera pixel format:
