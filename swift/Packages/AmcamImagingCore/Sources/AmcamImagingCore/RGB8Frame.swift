@@ -2,8 +2,8 @@ import Foundation
 
 /// A validated, tightly described RGB8 frame suitable for presentation by any UI.
 public struct RGB8Frame: Equatable, Sendable {
-    public static let pfncNamespace: UInt64 = 4
-    public static let pfncRGB8: UInt64 = 0x02180014
+    public static let pfncNamespace = PixelFormatIdentifier.pfncRGB8.namespace
+    public static let pfncRGB8 = PixelFormatIdentifier.pfncRGB8.code
 
     public let width: Int
     public let height: Int
@@ -37,7 +37,11 @@ public struct RGB8Frame: Equatable, Sendable {
         sequence: UInt64,
         bytes: Data
     ) throws -> RGB8Frame {
-        guard pixelFormatNamespace == pfncNamespace, pixelFormat == pfncRGB8 else {
+        let identifier = PixelFormatIdentifier(
+            namespace: pixelFormatNamespace,
+            code: pixelFormat
+        )
+        guard PixelFormatRegistry.pfnc.descriptor(for: identifier)?.decoder == .rgb8 else {
             throw RGB8FrameError.unsupportedPixelFormat(
                 namespace: pixelFormatNamespace,
                 format: pixelFormat
