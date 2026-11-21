@@ -26,6 +26,41 @@ fi
 echo "Using Swift toolchain:"
 swift --version
 
+# Launch Services' `open` command reuses an existing application process.
+# That process would keep its previous camera provider/session and ignore the
+# executable rebuilt below. Ask the old instance to shut down cleanly first;
+# never force-kill it or launch a competing process that could own the camera.
+quit_existing_app() {
+  local running_pids
+  running_pids="$(/usr/bin/pgrep -x "$APP_PRODUCT" || true)"
+  [[ -n "$running_pids" ]] || return 0
+
+  echo
+  echo "==> Requesting clean shutdown of the existing Amcam Imaging process"
+  if ! /usr/bin/osascript -e 'with timeout of 20 seconds' \
+      -e 'tell application id "com.amscope.imaging" to quit' \
+      -e 'end timeout'; then
+    echo "Could not request an orderly shutdown of the existing Amcam Imaging process." >&2
+    echo "Close the existing app normally, confirm it exits, then run make run again." >&2
+    exit 1
+  fi
+
+  for _ in {1..30}; do
+    running_pids="$(/usr/bin/pgrep -x "$APP_PRODUCT" || true)"
+    if [[ -z "$running_pids" ]]; then
+      echo "Existing camera process exited cleanly."
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  echo "The previous Amcam Imaging process is still running (PID(s): $running_pids)." >&2
+  echo "Refusing to launch a second process that could compete for the camera." >&2
+  exit 1
+}
+
+quit_existing_app
+
 # Build every repository package explicitly. The two backend implementations
 # are intentionally not linked into the app package; building them here keeps
 # make run a complete source-build check of the library set as well.
