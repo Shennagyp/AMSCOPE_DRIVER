@@ -41,7 +41,7 @@ final class AmcamCameraProbeReportTests: XCTestCase {
             hostLoopFramesPerSecond: 5.6,
             firstSequence: 10,
             lastSequence: 16,
-            lastFrameSHA256: "abc123"
+            lastFrameSha256: "abc123"
         )
         report.failure = AmcamProbeFailure(
             stage: .frameRead,

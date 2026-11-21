@@ -125,7 +125,7 @@ public struct AmcamProbeAcquisitionInfo: Codable, Equatable, Sendable {
     public var lastSequence: UInt64?
     public var firstDeviceTimestampMicroseconds: UInt64?
     public var lastDeviceTimestampMicroseconds: UInt64?
-    public var lastFrameSHA256: String?
+    public var lastFrameSha256: String?
 
     public init(
         requestedFrameCount: Int? = nil,
@@ -138,7 +138,7 @@ public struct AmcamProbeAcquisitionInfo: Codable, Equatable, Sendable {
         lastSequence: UInt64? = nil,
         firstDeviceTimestampMicroseconds: UInt64? = nil,
         lastDeviceTimestampMicroseconds: UInt64? = nil,
-        lastFrameSHA256: String? = nil
+        lastFrameSha256: String? = nil
     ) {
         self.requestedFrameCount = requestedFrameCount
         self.completeFrameCount = completeFrameCount
@@ -150,7 +150,7 @@ public struct AmcamProbeAcquisitionInfo: Codable, Equatable, Sendable {
         self.lastSequence = lastSequence
         self.firstDeviceTimestampMicroseconds = firstDeviceTimestampMicroseconds
         self.lastDeviceTimestampMicroseconds = lastDeviceTimestampMicroseconds
-        self.lastFrameSHA256 = lastFrameSHA256
+        self.lastFrameSha256 = lastFrameSha256
     }
 }
 

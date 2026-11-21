@@ -598,7 +598,7 @@ struct AmcamCameraProbe {
                 if timestamp > 0 {
                     context.report.acquisition?.lastDeviceTimestampMicroseconds = timestamp
                 }
-                context.report.acquisition?.lastFrameSHA256 = digest
+                context.report.acquisition?.lastFrameSha256 = digest
                 emit(
                     "Frame \(frameIndex + 1): \(width)x\(height), " +
                     "\(sizeFilled) bytes, stride \(bytesPerRow), " +
