@@ -43,7 +43,10 @@ public struct AmcamCameraDiscoveryReport: Sendable {
 /// camera-model values and opaque runtime devices, never GenTL handles or ABI calls.
 public actor AmcamCameraProvider {
     private let router: GenTLRouter
+    private let backendID: String
     private var discoveryTask: Task<AmcamCameraDiscoveryReport, Never>?
+    private var isShutdown = false
+    private var shutdownFailures: [String] = []
 
     public init(
         backendID: String = "amcam-sdk",
@@ -51,12 +54,24 @@ public actor AmcamCameraProvider {
     ) throws {
         let router = GenTLRouter()
         try router.registerAmcam(backendID: backendID, profileRegistry: profileRegistry)
+        self.backendID = backendID
         self.router = router
     }
 
     /// GenTL discovery and metadata calls are synchronous vendor operations;
     /// keep them off the UI executor.
     public func discover(timeout: UInt64 = 2_000) async -> AmcamCameraDiscoveryReport {
+        guard !isShutdown else {
+            return AmcamCameraDiscoveryReport(
+                devices: [],
+                failures: [
+                    AmcamCameraProviderFailure(
+                        backendID: backendID,
+                        message: "The AmScope camera provider has been shut down."
+                    )
+                ]
+            )
+        }
         if let discoveryTask {
             return await discoveryTask.value
         }
@@ -68,6 +83,19 @@ public actor AmcamCameraProvider {
         let report = await task.value
         discoveryTask = nil
         return report
+    }
+
+    /// Waits for in-flight enumeration before releasing the GenTL hierarchy.
+    @discardableResult
+    public func shutdown() async -> [String] {
+        guard !isShutdown else { return shutdownFailures }
+        isShutdown = true
+        if let discoveryTask {
+            _ = await discoveryTask.value
+            self.discoveryTask = nil
+        }
+        shutdownFailures = router.shutdown()
+        return shutdownFailures
     }
 
     private static func discover(
