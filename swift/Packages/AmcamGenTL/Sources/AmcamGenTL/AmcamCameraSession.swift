@@ -760,6 +760,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
             var pullOperationName: String?
             var tightlyPackedRows = false
             let result = sdk.pullImage(handle, buffer: buffer, policy: pullImageAPIPolicy, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName, tightlyPackedRows: &tightlyPackedRows)
+            if result == AmcamSDK.pendingHRESULT {
+                // A callback can race the SDK's frame-ready transition. Keep pull mode
+                // alive and wait for the next image event instead of ending acquisition.
+                lock.unlock()
+                return
+            }
             guard result >= 0 else {
                 streaming = false
                 lock.unlock()
