@@ -548,17 +548,44 @@ public final class GenTLRouter: @unchecked Sendable {
     public func registerAmcam(backendID: String) throws {
         try registerAmcam(
             backendID: backendID,
-            sdkLibraryURL: AmcamSDKLibraryLocator.locate()
+            sdkLibraryURL: AmcamSDKLibraryLocator.locate(),
+            profileRegistry: AmcamCameraProfileRegistry()
         )
     }
 
     public func registerAmcam(backendID: String, sdkLibraryURL: URL) throws {
+        try registerAmcam(
+            backendID: backendID,
+            sdkLibraryURL: sdkLibraryURL,
+            profileRegistry: AmcamCameraProfileRegistry()
+        )
+    }
+
+    public func registerAmcam(
+        backendID: String,
+        profileRegistry: AmcamCameraProfileRegistry
+    ) throws {
+        try registerAmcam(
+            backendID: backendID,
+            sdkLibraryURL: AmcamSDKLibraryLocator.locate(),
+            profileRegistry: profileRegistry
+        )
+    }
+
+    public func registerAmcam(
+        backendID: String,
+        sdkLibraryURL: URL,
+        profileRegistry: AmcamCameraProfileRegistry
+    ) throws {
         let canonicalURL = sdkLibraryURL.standardizedFileURL.resolvingSymlinksInPath()
         try registerUniqueResource(
             backendID: backendID,
             resourceIdentity: "amcam-sdk:\(canonicalURL.path)"
         ) {
-            AmcamGenTLImplementation(sdkLibraryURL: canonicalURL)
+            AmcamGenTLImplementation(
+                sdkLibraryURL: canonicalURL,
+                profileRegistry: profileRegistry
+            )
         }
     }
 
