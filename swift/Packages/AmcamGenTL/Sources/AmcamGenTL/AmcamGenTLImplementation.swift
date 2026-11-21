@@ -2171,10 +2171,10 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
         let rgbGainAvailable = whiteBalanceAvailability.isUsable && controls.whiteBalance?.rgbGain?.count == 3
         let colorMatrixAvailable = capabilities.availability(of: .colorCorrection).isUsable
             && controls.image?.colorMatrixEnabled != nil
-        let pixelFormats = controls.image?.supportedPixelFormats ?? []
+        let pixelFormats = controls.image?.supportedSensorPixelFormats ?? []
         let pixelFormatAvailable = capabilities.availability(of: .pixelFormatSelection).isUsable
             && !pixelFormats.isEmpty
-            && controls.image?.pixelFormatCode != nil
+            && controls.image?.sensorPixelFormatCode != nil
         let fixedRateAvailable = capabilities.availability(of: .preciseFrameRate).isUsable
             && controls.frameRate.supported
         let speedAvailable = capabilities.availability(of: .discreteFrameSpeed).isUsable
@@ -2263,10 +2263,10 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
             ),
             GenTLFeatureDescriptor(
                 name: "AmcamPixelFormat",
-                displayName: "Pixel Format",
+                displayName: "Amcam Sensor Format",
                 kind: .enumeration,
                 isAvailable: pixelFormatAvailable,
-                isReadable: controls.image?.pixelFormatCode != nil,
+                isReadable: controls.image?.sensorPixelFormatCode != nil,
                 isWritable: pixelFormatAvailable && stopped,
                 enumerationValues: pixelFormats.map(String.init)
             ),
@@ -2371,7 +2371,7 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
             }
             return .boolean(value)
         case "AmcamPixelFormat":
-            guard let value = controls.image?.pixelFormatCode else {
+            guard let value = controls.image?.sensorPixelFormatCode else {
                 throw GenTLFeatureAccessError.featureNotReadable(name)
             }
             return .enumeration(String(value))
@@ -2466,7 +2466,7 @@ extension AmcamGenTLImplementation: GenTLFeatureAccess {
         case ("AmcamPixelFormat", .enumeration(let symbol)):
             guard descriptor.enumerationValues.contains(symbol),
                   let code = Int32(symbol) else {
-                throw GenTLFeatureAccessError.invalidValue("AmcamPixelFormat must be one of the camera's enumerated format codes.")
+                throw GenTLFeatureAccessError.invalidValue("The Amcam sensor-format value must be one of the camera's SDK-enumerated codes.")
             }
             _ = try record.session.setPixelFormat(code: code)
 

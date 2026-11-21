@@ -336,7 +336,8 @@ final class CameraSettingsViewController: NSViewController {
         content.addArrangedSubview(colorMatrixButton)
         pixelFormatPicker.target = self
         pixelFormatPicker.action = #selector(pixelFormatChanged)
-        addRow("Pixel format", control: pixelFormatPicker)
+        pixelFormatPicker.toolTip = "Selects the Amcam vendor sensor-format option (0x1a). This does not change the delivered GenTL PFNC frame format or enable raw acquisition mode."
+        addRow("Sensor format", control: pixelFormatPicker)
         addSection("Frame rate")
         frameRateSlider = addSlider("Fixed FPS", minimum: 1, maximum: 120, selector: #selector(frameRateChanged))
         speedLevelSlider = addSlider("Frame speed level", minimum: 0, maximum: 1, selector: #selector(speedLevelChanged))
@@ -477,17 +478,17 @@ final class CameraSettingsViewController: NSViewController {
                     || !model.isFeatureWritable("AmcamColorMatrixEnabled")
             }
             pixelFormatPicker.removeAllItems()
-            for code in image.supportedPixelFormats {
-                pixelFormatPicker.addItem(withTitle: AmcamPixelFormatCode(rawValue: code)?.title ?? "Format \(code)")
+            for code in image.supportedSensorPixelFormats {
+                pixelFormatPicker.addItem(withTitle: AmcamSensorPixelFormatCode(rawValue: code)?.title ?? "Format \(code)")
                 pixelFormatPicker.lastItem?.representedObject = code
             }
-            if let code = image.pixelFormatCode,
-               let index = image.supportedPixelFormats.firstIndex(of: code) {
+            if let code = image.sensorPixelFormatCode,
+               let index = image.supportedSensorPixelFormats.firstIndex(of: code) {
                 pixelFormatPicker.selectItem(at: index)
             }
             let canWritePixelFormat = capabilities.availability(of: .pixelFormatSelection).isUsable
                 && model.isFeatureWritable("AmcamPixelFormat")
-            pixelFormatPicker.isHidden = !canWritePixelFormat || image.supportedPixelFormats.isEmpty
+            pixelFormatPicker.isHidden = !canWritePixelFormat || image.supportedSensorPixelFormats.isEmpty
         }
 
         if let rate = controls.frameRate.readbackFramesPerSecond {

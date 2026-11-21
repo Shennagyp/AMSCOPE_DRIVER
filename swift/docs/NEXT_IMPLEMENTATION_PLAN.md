@@ -142,6 +142,8 @@ The checked-in vendor wrapper (`amcam.py`, SDK version `58.28273.20250415`) docu
 
 For `PullImageV4`, the `bits` argument chooses RGB/gray output in processed mode but is ignored in raw mode. The wrapper documents raw row stride as `width` bytes in 8-bit mode and `width * 2` bytes in 10/12/14/16-bit mode. Consequently, adding a vendor pixel-format code to the current frame decoder is not sufficient: the raw/processed selection, bit-depth mode, payload layout and GenTL PFNC identity must change together. The current Swift path requests 24-bit RGB output, creates an `.rgb24` frame and reports that delivered payload as PFNC RGB8. It does not yet implement the raw-mode/bit-depth acquisition configuration.
 
+The existing UI selector is now labeled **Sensor format** (GenTL feature identifier `AmcamPixelFormat` retained for compatibility). It controls only the vendor `AMCAM_OPTION_PIXEL_FORMAT` value. Its values must not be interpreted as PFNC codes, and selecting a `RAW n` sensor-format code does not itself set `AMCAM_OPTION_RAW`; raw acquisition remains unimplemented. The SDK selector and the PFNC identity of each delivered frame are separate state.
+
 Any new output format must establish the complete chain: camera/SDK mode, raw-versus-processed mode, bit-depth and RGB output settings, pull API parameters, returned dimensions, row stride, payload size, component order, packing and exact PFNC frame identity. Do not change the frame's PFNC metadata merely because a camera feature value changed.
 
 Implemented on `macos-version-0.4`:
@@ -153,7 +155,8 @@ Implemented on `macos-version-0.4`:
 - [x] Add an RGB8 decoder regression for a matching code carried in the wrong PFNC namespace.
 
 Remaining:
-- Map camera-advertised/vendor pixel-format modes to actual pull-output PFNC formats only after their SDK semantics are verified.
+- Implement and read back raw/processed mode, bit-depth mode and processed-output selection as separate SDK settings before exposing acquisition-mode changes.
+- Map camera-advertised/vendor sensor-format modes to actual pull-output PFNC formats only after their SDK semantics are verified.
 - Add independent decoders and tests for each selected output format.
 - Validate row stride, packing, payload length, bit alignment, endianness and odd-width behavior.
 - Prioritize formats verified on the physical MU503.
