@@ -533,9 +533,13 @@ final class CameraSessionLifecycleTests: XCTestCase {
         try await lifecycle.close()
     }
 
-    func testUnexpectedAcquisitionStopClearsStreamingState() async throws {
-        let acquisition = FakeAcquisition(stoppedReadCount: 1)
-        let session = FakeSession(acquisition: acquisition)
+    func testUnexpectedAcquisitionStopClearsStreamingStateAndAllowsRestart() async throws {
+        let firstAcquisition = FakeAcquisition(stoppedReadCount: 1)
+        let secondAcquisition = FakeAcquisition()
+        let session = FakeSession(
+            acquisition: firstAcquisition,
+            additionalAcquisitions: [secondAcquisition]
+        )
         let lifecycle = CameraSessionLifecycle()
         let events = await lifecycle.events()
         var iterator = events.makeAsyncIterator()
@@ -551,10 +555,19 @@ final class CameraSessionLifecycleTests: XCTestCase {
             }
         }
 
-        let snapshot = await lifecycle.snapshot()
+        let stoppedSnapshot = await lifecycle.snapshot()
         XCTAssertEqual(reportedFailure, "The camera acquisition stopped without a stop request.")
-        XCTAssertFalse(snapshot.isStreaming)
-        XCTAssertTrue(snapshot.hasAcquisition)
+        XCTAssertFalse(stoppedSnapshot.isStreaming)
+        XCTAssertTrue(stoppedSnapshot.hasAcquisition)
+        XCTAssertEqual(firstAcquisition.stopAttempts, 1, "Unexpected producer stop must release the backend acquisition.")
+
+        try await lifecycle.start()
+        let restartedSnapshot = await lifecycle.snapshot()
+        let acquisitionRequests = await session.acquisitionRequests
+        XCTAssertTrue(restartedSnapshot.isStreaming)
+        XCTAssertEqual(acquisitionRequests, 2)
+        XCTAssertEqual(secondAcquisition.startAttempts, 1)
+
         try await lifecycle.close()
     }
 

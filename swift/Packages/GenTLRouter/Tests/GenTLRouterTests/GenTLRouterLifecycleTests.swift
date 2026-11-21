@@ -40,6 +40,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var failBufferRevoke = false
     private var queueBufferFailuresRemaining = 0
     private var forceEventTimeout = false
+    private var streamIsGrabbing = false
 
     init(
         failSystemOpen: Bool = false,
@@ -248,6 +249,12 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         lock.unlock()
     }
 
+    func setStreamIsGrabbing(_ value: Bool) {
+        lock.lock()
+        streamIsGrabbing = value
+        lock.unlock()
+    }
+
     func setBufferPixels(_ pixels: [UInt8]) {
         lock.lock()
         defer { lock.unlock() }
@@ -319,17 +326,31 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         _ pBuffer: UnsafeMutableRawPointer?,
         _ piSize: UnsafeMutablePointer<Int>?
     ) -> GenTLABI.GC_ERROR {
-        guard hDataStream == streamToken,
-              iInfoCmd == GenTLInfoCommand.Stream.payloadSize.rawValue else {
+        guard hDataStream == streamToken else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
         }
-        return writeInfo(
-            6,
-            dataType: Int32(GenTLABI.INFO_DATATYPE_SIZET.rawValue),
-            type: piType,
-            output: pBuffer,
-            size: piSize
-        )
+        if iInfoCmd == GenTLInfoCommand.Stream.payloadSize.rawValue {
+            return writeInfo(
+                6,
+                dataType: Int32(GenTLABI.INFO_DATATYPE_SIZET.rawValue),
+                type: piType,
+                output: pBuffer,
+                size: piSize
+            )
+        }
+        if iInfoCmd == GenTLInfoCommand.Stream.isGrabbing.rawValue {
+            lock.lock()
+            let value: UInt8 = streamIsGrabbing ? 1 : 0
+            lock.unlock()
+            return writeInfo(
+                value,
+                dataType: Int32(GenTLABI.INFO_DATATYPE_BOOL8.rawValue),
+                type: piType,
+                output: pBuffer,
+                size: piSize
+            )
+        }
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
     }
 
     func GCRegisterEvent(
@@ -403,7 +424,10 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         guard hDataStream == streamToken, iStartFlags == 0, iNumToAcquire > 0 else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
         }
+        lock.lock()
         eventDelivered = false
+        streamIsGrabbing = true
+        lock.unlock()
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
 
@@ -503,9 +527,13 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         _ iStopFlags: GenTLABI.ACQ_STOP_FLAGS
     ) -> GenTLABI.GC_ERROR {
         record { $0.acquisitionStop += 1 }
-        return hDataStream == streamToken && iStopFlags == 0
-            ? GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
-            : GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        guard hDataStream == streamToken, iStopFlags == 0 else {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
+        }
+        lock.lock()
+        streamIsGrabbing = false
+        lock.unlock()
+        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
     }
 
     func DSFlushQueue(
@@ -714,6 +742,32 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(api.snapshot().bufferRevoke, 1)
         XCTAssertEqual(api.snapshot().dataStreamClose, 1)
         try device.close()
+    }
+
+    func testProducerStopWithoutNewBufferEventIsReportedAsAcquisitionStopped() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "producer-stopped") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        defer {
+            try? acquisition.close()
+            try? device.close()
+        }
+
+        try acquisition.start()
+        api.setForceEventTimeout(true)
+        api.setStreamIsGrabbing(false) // Simulates the Producer stopping after a fatal camera callback.
+
+        XCTAssertThrowsError(try acquisition.nextFrame(timeoutMilliseconds: 1)) { error in
+            XCTAssertEqual(error as? GenTLAcquisitionError, .acquisitionStopped)
+        }
+
+        // The GenTL acquisition still owns its start/stop transition until the
+        // consumer explicitly stops it, which also cleans the camera callback.
+        try acquisition.stop()
+        XCTAssertEqual(api.snapshot().acquisitionStop, 1)
     }
 
     func testEventTimeoutDoesNotPoisonAcquisitionSession() throws {

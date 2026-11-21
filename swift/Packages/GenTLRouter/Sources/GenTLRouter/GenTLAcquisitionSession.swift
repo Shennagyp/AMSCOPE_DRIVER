@@ -249,6 +249,12 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
                 throw GenTLAcquisitionError.acquisitionStopped
             }
             if eventStatus == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_TIMEOUT) {
+                // A Producer can stop its stream after a fatal camera callback while
+                // the GenTL consumer is still waiting on New Buffer. Observe the
+                // Producer's authoritative stream state instead of timing out forever.
+                guard try readStreamIsGrabbing(streamHandle) else {
+                    throw GenTLAcquisitionError.acquisitionStopped
+                }
                 throw GenTLAcquisitionError.eventTimeout
             }
             try check(eventStatus, operation: "EventGetData(NewBuffer)")
@@ -559,6 +565,34 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
             throw GenTLAcquisitionError.invalidDataStreamID
         }
         return String(decoding: bytes[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
+    private func readStreamIsGrabbing(_ stream: GenTLABI.DS_HANDLE) throws -> Bool {
+        var value: UInt8 = 0
+        var dataType: GenTLABI.INFO_DATATYPE = 0
+        var size = MemoryLayout<UInt8>.size
+        let status = withUnsafeMutableBytes(of: &value) { bytes in
+            api.DSGetInfo(
+                stream,
+                GenTLInfoCommand.Stream.isGrabbing.rawValue,
+                &dataType,
+                bytes.baseAddress,
+                &size
+            )
+        }
+        try check(status, operation: "DSGetInfo(IsGrabbing)")
+
+        let expectedType = Int32(GenTLABI.INFO_DATATYPE_BOOL8.rawValue)
+        guard dataType == expectedType, size == MemoryLayout<UInt8>.size else {
+            throw GenTLAcquisitionError.invalidBufferInfo(
+                command: GenTLInfoCommand.Stream.isGrabbing.rawValue,
+                expectedDataType: expectedType,
+                actualDataType: Int32(dataType),
+                expectedSize: MemoryLayout<UInt8>.size,
+                actualSize: size
+            )
+        }
+        return value != 0
     }
 
     private func readStreamPayloadSize(_ stream: GenTLABI.DS_HANDLE) throws -> Int {

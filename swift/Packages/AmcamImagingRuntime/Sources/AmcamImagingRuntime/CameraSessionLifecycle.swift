@@ -263,11 +263,23 @@ public actor CameraSessionLifecycle {
         await acquireLifecycleOperation()
         defer { releaseLifecycleOperation() }
 
-        guard activeGeneration == generation, isStreaming else { return }
+        guard activeGeneration == generation, isStreaming,
+              let acquisition else { return }
         generation &+= 1
         isStreaming = false
         publish(.streamingChanged(false))
-        publish(.failure("The camera acquisition stopped without a stop request."))
+
+        // The Producer may have stopped frame delivery while retaining its native
+        // callback registration. Stop explicitly so a later start can close this
+        // acquisition and create a fresh one on the still-open device session.
+        do {
+            try await acquisition.stop()
+            publish(.failure("The camera acquisition stopped without a stop request."))
+        } catch {
+            publish(.failure(
+                "The camera acquisition stopped without a stop request. Cleanup also failed: \(error.localizedDescription)"
+            ))
+        }
     }
 
     private func reportFailure(
