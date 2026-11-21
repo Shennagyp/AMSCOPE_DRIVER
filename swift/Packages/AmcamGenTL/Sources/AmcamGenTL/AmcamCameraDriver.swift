@@ -3,9 +3,14 @@ import AmcamCameraModel
 
 public final class AmcamCameraDriver: @unchecked Sendable {
     private let sdk: AmcamSDK
+    private let profileRegistry: AmcamCameraProfileRegistry
 
-    public init(libraryURL: URL) throws {
+    public init(
+        libraryURL: URL,
+        profileRegistry: AmcamCameraProfileRegistry = AmcamCameraProfileRegistry()
+    ) throws {
         self.sdk = try AmcamSDK(libraryURL: libraryURL)
+        self.profileRegistry = profileRegistry
     }
 
     public func discover() throws -> [AmcamDevice] { try sdk.enumerate() }
@@ -18,6 +23,7 @@ public final class AmcamCameraDriver: @unchecked Sendable {
             width: opened.width,
             height: opened.height,
             modelCode: opened.modelName ?? "Unknown",
+            pullImageAPIPolicy: profileRegistry.pullImageAPIPolicy(for: opened.modelName ?? "Unknown"),
             modelFlags: opened.modelFlags,
             maximumSpeedLevel: opened.maximumSpeedLevel,
             resolutions: opened.resolutions,
