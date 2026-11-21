@@ -1365,6 +1365,70 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         stream = nil
     }
 
+    func testAllDiscardFlushMakesQueuedProviderBuffersRevocable() throws {
+        let libraryURL = try buildMockSDK()
+        let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)
+        try implementation.swiftGCInitLib()
+        let system = try implementation.TLOpen()
+        let interface = try implementation.TLOpenInterface(
+            system,
+            interfaceID: try implementation.TLGetInterfaceID(system, index: 0)
+        )
+        _ = try implementation.IFUpdateDeviceList(interface, timeout: 0)
+        let deviceID = try implementation.IFGetDeviceID(interface, index: 0)
+        let device = try implementation.IFOpenDevice(
+            interface,
+            deviceID: deviceID,
+            accessFlags: GenTLDeviceAccess.exclusive.rawValue
+        )
+        var stream: DS_HANDLE?
+        defer {
+            if let stream {
+                try? implementation.DSFlushQueue(
+                    stream,
+                    operation: GenTLQueueOperation.allDiscard.rawValue
+                )
+                try? implementation.DSClose(stream)
+            }
+            try? implementation.DevClose(device)
+            try? implementation.IFClose(interface)
+            try? implementation.TLClose(system)
+            try? implementation.swiftGCCloseLib()
+        }
+
+        let streamID = try implementation.DevGetDataStreamID(device, index: 0)
+        let openedStream = try implementation.DevOpenDataStream(device, dataStreamID: streamID)
+        stream = openedStream
+
+        _ = try implementation.DSAllocAndAnnounceBuffer(
+            openedStream,
+            size: 640 * 480 * 3,
+            privateData: nil
+        )
+        let buffer = try implementation.DSGetBufferID(openedStream, index: 0)
+        try implementation.DSQueueBuffer(openedStream, buffer: buffer)
+
+        // ALL_TO_INPUT leaves the buffer referenced by the input pool, so it
+        // must not yet be revocable.
+        try implementation.DSFlushQueue(
+            openedStream,
+            operation: GenTLQueueOperation.allToInput.rawValue
+        )
+        XCTAssertThrowsError(try implementation.DSRevokeBuffer(openedStream, buffer: buffer))
+
+        // ALL_DISCARD clears both input and output pools and enables revocation.
+        try implementation.DSFlushQueue(
+            openedStream,
+            operation: GenTLQueueOperation.allDiscard.rawValue
+        )
+        let revoked = try implementation.DSRevokeBuffer(openedStream, buffer: buffer)
+        XCTAssertNil(revoked.baseAddress, "Producer-allocated buffer memory is released by the backend.")
+        XCTAssertNil(revoked.privateData)
+
+        try implementation.DSClose(openedStream)
+        stream = nil
+    }
+
     func testTypedFeatureAccessExposesOnlyProbedCameraControlsAndVerifiesWrites() throws {
         let libraryURL = try buildMockSDK()
         let implementation = AmcamGenTLImplementation(sdkLibraryURL: libraryURL)

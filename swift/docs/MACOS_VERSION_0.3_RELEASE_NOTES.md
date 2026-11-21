@@ -32,7 +32,7 @@ The command retains a nonzero process exit status on failure while still emittin
 
 The real MU503 probe execution remains part of the outstanding hardware acceptance; a passing schema test or probe build is not physical-camera evidence.
 
-## Runtime behavior carried into 0.3
+## GenTL buffer release invariant\n\nThe shared `GenTLAcquisitionSession.close()` and the standalone probe now use `ACQ_QUEUE_ALL_DISCARD` after acquisition stop and event unregistration, before revoking announced buffers. `ACQ_QUEUE_ALL_TO_INPUT` is not sufficient: it deliberately keeps buffers in the input pool, where GenTL 1.6 says they cannot be revoked. The Amcam backend integration test checks this distinction, then confirms that provider-allocated memory is released by successful revocation.\n\nThe probe applies fail-fast, child-before-parent cleanup. A failed stop, event unregister, queue discard, buffer revoke or child close is recorded in `cleanup_errors`; subsequent parent teardown is not attempted while a child resource may remain owned.\n\nReference: [EMVA GenTL 1.6, sections 5.2.8–5.2.10 and `ACQ_QUEUE_ALL_DISCARD`](https://www.emva.org/wp-content/uploads/GenICam_GenTL_1_6.pdf).\n\n## Runtime behavior carried into 0.3
 
 ### Relaunch from source
 

@@ -174,7 +174,7 @@ final class AmcamCameraProbeReportTests: XCTestCase {
                 acquisitionStarted: false,
                 errorEventRegistered: false,
                 newBufferEventRegistered: false,
-                bufferHandles: [10, 20],
+                bufferHandles: [],
                 deviceIsOpen: false,
                 interfaceIsOpen: true,
                 transportLayerIsOpen: true,

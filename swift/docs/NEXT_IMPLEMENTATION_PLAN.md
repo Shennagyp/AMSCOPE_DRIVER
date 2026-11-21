@@ -116,10 +116,12 @@ Acceptance: all steps pass on physical hardware. Hosted mock tests are not a sub
 - [x] Extend lifecycle coverage to four distinct acquisitions on one open device session (three stop/restart transitions), asserting one start, one stop and one close per acquisition.
 - [x] Retain regressions for timeout recovery, stop/close races, copied-frame immutability and failed `DSQueueBuffer` not being retried with the same handle. The Producer may have accepted the first call despite its error status.
 - [x] Add a versioned JSON report schema and `amcam-camera-probe --json`, including backend, SDK version/path, interface, model/display descriptor, stream payload, pixel-format code/namespace, image dimensions/stride, acquisition counters/timestamps, failure stage and cleanup errors.
+- [x] Apply the GenTL 1.6 `ACQ_QUEUE_ALL_DISCARD` operation after stop/event unregistration and before `DSRevokeBuffer`; `ALL_TO_INPUT` leaves buffers in the input pool and is not a revocation-safe flush.
+- [x] Make probe cleanup fail-fast and child-before-parent: stop, unregister events, discard queues, revoke buffers, then close stream/device/interface/transport/library. A release failure is recorded and blocks parent teardown.
 - [ ] Run the JSON probe against the physical MU503 and verify discovery, open, acquisition and cleanup diagnostics with the proprietary SDK.
 - [x] Keep hardware-specific facts explicitly distinguished from unsupported or unverified features.
 
-Automated acceptance: the GenTL and lifecycle regressions plus report schema tests pass in hosted CI. Physical probe execution remains part of Phase B hardware acceptance; mock tests do not certify the camera.
+Automated acceptance: GenTL close-order/retry tests, Amcam provider-buffer revocation integration, lifecycle regressions and probe report/cleanup tests must pass in hosted CI. Physical probe execution remains part of Phase B hardware acceptance; mock tests do not certify the camera. See the [GenTL 1.6 specification](https://www.emva.org/wp-content/uploads/GenICam_GenTL_1_6.pdf), sections 5.2.8–5.2.10.
 
 ### Phase D — Pixel-format implementation
 
