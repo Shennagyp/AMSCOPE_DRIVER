@@ -1,6 +1,14 @@
 import Foundation
 @_spi(BackendConvenience) import GenTLAPI
 
+/// PFNC identity of the image produced by the current Amcam pull contract.
+/// This describes the delivered RGB24/RGB8 payload, not the vendor-specific
+/// AMCAM_PIXELFORMAT_* sensor-format selection code.
+private enum AmcamGenTLPixelFormat {
+    static let rgb8Code: UInt64 = 0x02180014
+    static let namespace = UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue)
+}
+
 final class AmcamBufferRecord: @unchecked Sendable {
     let handle: BUFFER_HANDLE
     let memory: UnsafeMutableRawPointer
@@ -662,8 +670,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 17: return .bool8(buffer.sizeFilled > 0)
         case 18: return .size(0)
         case 19: return .size(Int(GenTLPayloadType.image.rawValue))
-        case 20: return .uint64(0x02180014) // PFNC RGB8 packed.
-        case 21: return .uint64(UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue))
+        case 20: return .uint64(AmcamGenTLPixelFormat.rgb8Code)
+        case 21: return .uint64(AmcamGenTLPixelFormat.namespace)
         case 22: return .size(buffer.height)
         case 23: return .size(0) // No chunk payload.
         case 24: return .uint64(0) // No chunk layout identifier.
@@ -702,8 +710,8 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         case 0: return .pointer(UInt(bitPattern: buffer.memory)) // BASE
         case 1: return .size(buffer.sizeFilled) // DATA_SIZE
         case 2: return .size(Int(GenTLPartDataType.image2D.rawValue))
-        case 3: return .uint64(0x02180014) // PFNC RGB8 packed
-        case 4: return .uint64(UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue))
+        case 3: return .uint64(AmcamGenTLPixelFormat.rgb8Code)
+        case 4: return .uint64(AmcamGenTLPixelFormat.namespace)
         case 5: return .size(buffer.width)
         case 6: return .size(buffer.height)
         case 7, 8: return .size(0) // No image offset.
