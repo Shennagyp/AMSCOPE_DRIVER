@@ -197,6 +197,110 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         try session.stop()
     }
 
+
+    func testAsynchronousAmcamCallbacksRecycleOneGenTLBufferContinuously() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+
+        let streamHandle = DS_HANDLE(rawValue: 0x101)
+        let deviceHandle = DEV_HANDLE(rawValue: 0x102)
+        let bufferHandle = BUFFER_HANDLE(rawValue: 0x103)
+        let event = AmcamEventRecord(
+            handle: EVENT_HANDLE(rawValue: 0x104),
+            eventType: GenTLEventType.newBuffer.rawValue,
+            source: .dataStream(streamHandle)
+        )
+        let stream = try AmcamDataStreamRecord(
+            handle: streamHandle,
+            deviceHandle: deviceHandle,
+            session: session
+        )
+        let memory = UnsafeMutableRawPointer.allocate(
+            byteCount: stream.payloadSize,
+            alignment: 64
+        )
+        memory.initializeMemory(as: UInt8.self, repeating: 0, count: stream.payloadSize)
+        defer {
+            try? stream.close()
+            try? session.close()
+            memory.deallocate()
+        }
+
+        try stream.announce(
+            handle: bufferHandle,
+            memory: memory,
+            size: stream.payloadSize,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+        try stream.queue(bufferHandle)
+        stream.addEvent(event)
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let intervalSymbol = dlsym(fixtureHandle, "MockAmcam_SetAutomaticFrameInterval"),
+              let callbackCountSymbol = dlsym(fixtureHandle, "MockAmcam_AsynchronousCallbackCount") else {
+            XCTFail("Mock SDK is missing asynchronous callback test hooks")
+            return
+        }
+        let setInterval = unsafeBitCast(
+            intervalSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+        let asynchronousCallbackCount = unsafeBitCast(
+            callbackCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+        setInterval(15)
+
+        try stream.start(numberToAcquire: GenTLConstants.infiniteCount)
+
+        var deliveredSequences: [UInt64] = []
+        for expected in UInt64(1)...UInt64(10) {
+            let payload = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
+            let deliveredHandle = payload.withUnsafeBytes {
+                $0.loadUnaligned(as: UInt.self)
+            }
+            XCTAssertEqual(deliveredHandle, bufferHandle.rawValue)
+
+            let sequenceValue = try stream.bufferInfo(bufferHandle, command: 16)
+            guard case .uint64(let sequence) = sequenceValue else {
+                XCTFail("GenTL buffer sequence was not returned as UINT64: \\(sequenceValue)")
+                return
+            }
+            XCTAssertEqual(sequence, expected)
+            XCTAssertEqual(memory.load(as: UInt8.self), 0x5a)
+            deliveredSequences.append(sequence)
+
+            // The consumer returns the exact same announced buffer only after
+            // EventGetData has transferred it out of the output queue.
+            try stream.queue(bufferHandle)
+        }
+
+        XCTAssertEqual(deliveredSequences, Array(UInt64(1)...UInt64(10)))
+        XCTAssertEqual(stream.numDelivered, 10)
+        XCTAssertEqual(stream.numUnderrun, 0)
+        XCTAssertGreaterThanOrEqual(
+            asynchronousCallbackCount(),
+            9,
+            "The fixture must deliver later image callbacks on its worker thread."
+        )
+
+        try stream.stop()
+        let callbackCountAfterStop = asynchronousCallbackCount()
+        Thread.sleep(forTimeInterval: 0.05)
+        XCTAssertEqual(
+            asynchronousCallbackCount(),
+            callbackCountAfterStop,
+            "Amcam_Stop must join callback delivery before the retained context is released."
+        )
+        try stream.close()
+        try session.close()
+    }
+
     func testCallbackPullIsSerializedWithControlReadsDuringLiveAcquisition() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)
