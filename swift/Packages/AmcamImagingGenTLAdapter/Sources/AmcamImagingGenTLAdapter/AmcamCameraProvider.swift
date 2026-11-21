@@ -45,9 +45,12 @@ public actor AmcamCameraProvider {
     private let router: GenTLRouter
     private var discoveryTask: Task<AmcamCameraDiscoveryReport, Never>?
 
-    public init(backendID: String = "amcam-sdk") throws {
+    public init(
+        backendID: String = "amcam-sdk",
+        profileRegistry: AmcamCameraProfileRegistry = AmcamCameraProfileRegistry()
+    ) throws {
         let router = GenTLRouter()
-        try router.registerAmcam(backendID: backendID)
+        try router.registerAmcam(backendID: backendID, profileRegistry: profileRegistry)
         self.router = router
     }
 
