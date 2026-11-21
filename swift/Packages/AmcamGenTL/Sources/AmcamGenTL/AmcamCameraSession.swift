@@ -1043,4 +1043,5 @@ public final class AmcamCameraSession: @unchecked Sendable {
             }
             return
         }
-    }}
+    }
+}
