@@ -147,10 +147,17 @@ final class CameraApplicationModel: ObservableObject {
                 : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
         }
 
-        if !(await cameraLifecycle.snapshot()).hasSession,
-           isCurrentCameraSelectionOperation(operation),
-           selectedDevice != nil {
+        let lifecycleSnapshot = await cameraLifecycle.snapshot()
+        guard isCurrentCameraSelectionOperation(operation) else { return }
+
+        if !lifecycleSnapshot.hasSession, selectedDevice != nil {
             await prepareSelectedCamera(expectedGeneration: operation)
+        } else if !lifecycleSnapshot.isStreaming,
+                  cameraCapabilities?.availability(of: .liveCapture).isUsable != true {
+            // A device can enumerate before its data stream is ready (notably
+            // during USB re-enumeration). Re-query the attached session instead
+            // of leaving a stale negative capability that keeps Start disabled.
+            await refreshControlsOwned(expectedGeneration: operation)
         }
     }
 
