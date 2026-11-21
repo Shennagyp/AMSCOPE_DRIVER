@@ -82,6 +82,17 @@ final class CameraApplicationModel: ObservableObject {
         }
         let report = await cameraProvider.discover()
         guard isCurrentCameraSelectionOperation(operation) else { return }
+        // An incomplete enumeration is not evidence that every camera has
+        // disappeared. Keep the current session and retry on the next poll.
+        guard report.failures.isEmpty else {
+            if !backgroundMonitor {
+                status = "GenTL camera discovery failed"
+                errorMessage = report.failures
+                    .map { "\($0.backendID): \($0.message)" }
+                    .joined(separator: "\n")
+            }
+            return
+        }
         let discoveredDevices = report.devices.map(\.device)
         let discoveredCandidates = Dictionary(
             uniqueKeysWithValues: report.devices.map { ($0.id, $0) }
