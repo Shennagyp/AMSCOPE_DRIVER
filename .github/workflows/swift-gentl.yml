@@ -173,3 +173,7 @@ jobs:
           codesign --verify --strict "$embedded_sdk"
           codesign --verify --deep --strict "$app_bundle"
           file "$app_bundle/Contents/MacOS/amcam-imaging" | grep -q "Mach-O 64-bit executable arm64"
+
+      - name: Build macOS imaging application
+        if: matrix.package == 'AmcamGenTL'
+        run: swift build --package-path swift/Apps/AmcamImagingApp --configuration release
