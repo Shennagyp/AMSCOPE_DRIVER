@@ -339,14 +339,26 @@ final class CameraSessionLifecycleTests: XCTestCase {
         let acquisition = FakeAcquisition(closeFailures: 1)
         let session = FakeSession(acquisition: acquisition)
         let lifecycle = CameraSessionLifecycle()
+        let events = await lifecycle.events()
+        var eventIterator = events.makeAsyncIterator()
 
         try await lifecycle.open(FakeDevice(session: session))
         try await lifecycle.start()
+
+        let startedEvent = await eventIterator.next()
+        XCTAssertEqual(startedEvent, .streamingChanged(true))
 
         do {
             try await lifecycle.close()
             XCTFail("Expected the first acquisition close to fail.")
         } catch {}
+
+        let stoppedEvent = await eventIterator.next()
+        XCTAssertEqual(
+            stoppedEvent,
+            .streamingChanged(false),
+            "Close must publish the stopped state even when child cleanup fails."
+        )
 
         let firstSnapshot = await lifecycle.snapshot()
         let firstAcquisitionCloses = acquisition.closeAttempts
