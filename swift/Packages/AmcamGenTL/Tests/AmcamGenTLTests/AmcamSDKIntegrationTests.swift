@@ -223,10 +223,14 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
             emitEvent(eventCode)
             wait(for: [eventReceived], timeout: 2)
-            XCTAssertFalse(session.isStreaming)
-            // The timeout event stops delivery, but native callback ownership remains
-            // until Amcam_Stop succeeds. The same session must then be restartable.
+            XCTAssertTrue(
+                session.isStreaming,
+                "Callback ownership is retained after the event until Amcam_Stop succeeds."
+            )
+            // The timeout event stops frame delivery, but native callback ownership
+            // remains until Amcam_Stop succeeds. The same session must then restart.
             try session.stop()
+            XCTAssertFalse(session.isStreaming)
         }
     }
 
