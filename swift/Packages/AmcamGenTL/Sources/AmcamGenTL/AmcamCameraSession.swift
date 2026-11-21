@@ -909,7 +909,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
     /// item must not synchronously wait for itself.
     private func drainCallbackQueue() {
         guard DispatchQueue.getSpecific(key: Self.callbackQueueKey) != 1 else { return }
-        drainCallbackQueue()
+        callbackQueue.sync {}
     }
 
     private func enqueue(event: UInt32) {
