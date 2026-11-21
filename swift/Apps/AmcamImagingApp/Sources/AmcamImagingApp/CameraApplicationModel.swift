@@ -35,6 +35,10 @@ final class CameraApplicationModel: ObservableObject {
     private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?
     private var deviceMonitorTask: Task<Void, Never>?
+    private var acquisitionTransitionCount = 0
+    private var isAcquisitionTransitionInProgress: Bool { acquisitionTransitionCount > 0 }
+    private var isDeviceDiscoveryInProgress = false
+    private var deviceDiscoveryWaiters: [CheckedContinuation<Void, Never>] = []
     private var sessionNeedsRecreation = false
     private var featureDescriptors: [CameraFeatureDescriptor] = []
     private var hasInitialized = false
@@ -77,7 +81,9 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     func refreshDevices() {
-        let operation = beginCameraSelectionOperation()
+        // Discovery is not a camera-selection operation and must not invalidate
+        // the active frame consumer's generation.
+        let operation = cameraSelectionGeneration
         Task { await refreshDevicesOwned(operation: operation) }
     }
 
@@ -90,6 +96,9 @@ final class CameraApplicationModel: ObservableObject {
             status = "AmScope camera provider is unavailable"
             return
         }
+        guard await beginDeviceDiscovery() else { return }
+        defer { finishDeviceDiscovery() }
+
         let report = await cameraProvider.discover()
         guard isCurrentCameraSelectionOperation(operation) else { return }
         // An incomplete enumeration is not evidence that every camera has
@@ -134,7 +143,7 @@ final class CameraApplicationModel: ObservableObject {
             sessionNeedsRecreation = true
         }
         if sessionNeedsRecreation {
-            guard await closeSession(expectedGeneration: operation),
+            guard await closeSession(expectedGeneration: operation, duringDiscovery: true),
                   isCurrentCameraSelectionOperation(operation) else {
                 if isCurrentCameraSelectionOperation(operation) {
                     status = "Camera disappeared; previous session cleanup is incomplete"
@@ -211,6 +220,13 @@ final class CameraApplicationModel: ObservableObject {
     private func startOwned(expectedGeneration operation: UInt64, expectedDeviceID: String) async {
         guard isCurrentCameraSelectionOperation(operation),
               selectedDeviceID == expectedDeviceID else { return }
+
+        beginAcquisitionTransition()
+        defer { endAcquisitionTransition() }
+        await waitForDeviceDiscoveryToFinish()
+        guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else { return }
+
         guard (await cameraLifecycle.snapshot()).hasSession,
               isCurrentCameraSelectionOperation(operation),
               selectedDeviceID == expectedDeviceID,
@@ -305,6 +321,13 @@ final class CameraApplicationModel: ObservableObject {
     private func stopOwned(expectedGeneration operation: UInt64, expectedDeviceID: String) async {
         guard isCurrentCameraSelectionOperation(operation),
               selectedDeviceID == expectedDeviceID else { return }
+
+        beginAcquisitionTransition()
+        defer { endAcquisitionTransition() }
+        await waitForDeviceDiscoveryToFinish()
+        guard isCurrentCameraSelectionOperation(operation),
+              selectedDeviceID == expectedDeviceID else { return }
+
         do {
             try await cameraLifecycle.stop()
             guard isCurrentCameraSelectionOperation(operation),
@@ -516,6 +539,48 @@ final class CameraApplicationModel: ObservableObject {
     }
 
 
+    private func beginAcquisitionTransition() {
+        acquisitionTransitionCount += 1
+    }
+
+    private func endAcquisitionTransition() {
+        precondition(acquisitionTransitionCount > 0)
+        acquisitionTransitionCount -= 1
+    }
+
+    private func waitForDeviceDiscoveryToFinish() async {
+        while isDeviceDiscoveryInProgress {
+            await withCheckedContinuation { continuation in
+                deviceDiscoveryWaiters.append(continuation)
+            }
+        }
+    }
+
+    private func beginDeviceDiscovery() async -> Bool {
+        guard !isAcquisitionTransitionInProgress, !isStreaming else { return false }
+        await waitForDeviceDiscoveryToFinish()
+        guard !isAcquisitionTransitionInProgress, !isStreaming else { return false }
+
+        isDeviceDiscoveryInProgress = true
+        let lifecycleSnapshot = await cameraLifecycle.snapshot()
+        guard !isAcquisitionTransitionInProgress,
+              !isStreaming,
+              !lifecycleSnapshot.isStreaming else {
+            finishDeviceDiscovery()
+            return false
+        }
+        return true
+    }
+
+    private func finishDeviceDiscovery() {
+        isDeviceDiscoveryInProgress = false
+        let waiters = deviceDiscoveryWaiters
+        deviceDiscoveryWaiters.removeAll(keepingCapacity: true)
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+
     /// Low-frequency polling provides hot-plug discovery on SDKs that do not
     /// expose a portable device-change notification. Stable topology does not
     /// overwrite the current user-visible status.
@@ -548,7 +613,15 @@ final class CameraApplicationModel: ObservableObject {
     }
 
     @discardableResult
-    private func closeSession(expectedGeneration operation: UInt64) async -> Bool {
+    private func closeSession(
+        expectedGeneration operation: UInt64,
+        duringDiscovery: Bool = false
+    ) async -> Bool {
+        beginAcquisitionTransition()
+        defer { endAcquisitionTransition() }
+        if !duringDiscovery {
+            await waitForDeviceDiscoveryToFinish()
+        }
         guard isCurrentCameraSelectionOperation(operation) else { return false }
         do {
             try await cameraLifecycle.close()
