@@ -41,6 +41,8 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var queueBufferFailuresRemaining = 0
     private var forceEventTimeout = false
     private var streamIsGrabbing = false
+    private var frameSequenceValue: UInt64 = 6
+    private var lastDeliveredFrameSequence: UInt64 = 6
 
     init(
         failSystemOpen: Bool = false,
@@ -455,6 +457,8 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         }
         piSize.pointee = words.count * MemoryLayout<UInt>.size
         lock.lock()
+        frameSequenceValue &+= 1
+        lastDeliveredFrameSequence = frameSequenceValue
         eventDelivered = true
         lock.unlock()
         return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
@@ -501,10 +505,16 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
              GenTLInfoCommand.Buffer.timestamp.rawValue:
             let value: UInt64
             switch iInfoCmd {
-            case GenTLInfoCommand.Buffer.pixelFormat.rawValue: value = 0x02180014
-            case GenTLInfoCommand.Buffer.pixelFormatNamespace.rawValue: value = 4
-            case GenTLInfoCommand.Buffer.frameID.rawValue: value = 7
-            default: value = 99
+            case GenTLInfoCommand.Buffer.pixelFormat.rawValue:
+                value = 0x02180014
+            case GenTLInfoCommand.Buffer.pixelFormatNamespace.rawValue:
+                value = 4
+            case GenTLInfoCommand.Buffer.frameID.rawValue:
+                lock.lock()
+                value = lastDeliveredFrameSequence
+                lock.unlock()
+            default:
+                value = 99
             }
             return writeInfo(value, dataType: uint64Type, type: piType, output: pBuffer, size: piSize)
         case GenTLInfoCommand.Buffer.isIncomplete.rawValue,
@@ -670,6 +680,55 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(firstFrame.bytes, Data([1, 2, 3, 4, 5, 6]))
         XCTAssertEqual(secondFrame.bytes, Data([9, 8, 7, 6, 5, 4]))
         XCTAssertEqual(api.queuedBuffers(), 3, "The single announced buffer is requeued after each copied frame.")
+        try acquisition.stop()
+    }
+
+    func testSustainedAcquisitionPreservesIncreasingFrameSequenceAcrossBufferReuse() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "sustained-frame-sequence") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        defer {
+            try? acquisition.close()
+            try? device.close()
+        }
+
+        let frameCount = 64
+        try acquisition.start(numberToAcquire: UInt64(frameCount))
+
+        var receivedSequences: [UInt64] = []
+        receivedSequences.reserveCapacity(frameCount)
+
+        for index in 0..<frameCount {
+            let pixels: [UInt8] = [
+                UInt8(truncatingIfNeeded: index),
+                UInt8(truncatingIfNeeded: index + 1),
+                UInt8(truncatingIfNeeded: index + 2),
+                UInt8(truncatingIfNeeded: index + 3),
+                UInt8(truncatingIfNeeded: index + 4),
+                UInt8(truncatingIfNeeded: index + 5)
+            ]
+            api.setBufferPixels(pixels)
+
+            let frame = try acquisition.nextFrame(timeoutMilliseconds: 100)
+            XCTAssertEqual(frame.sequence, UInt64(index + 7))
+            XCTAssertEqual(frame.bytes, Data(pixels))
+            receivedSequences.append(frame.sequence)
+        }
+
+        XCTAssertEqual(
+            receivedSequences,
+            (0..<frameCount).map { UInt64($0 + 7) },
+            "A sustained read loop must preserve every increasing frame sequence."
+        )
+        XCTAssertEqual(
+            api.queuedBuffers(),
+            frameCount + 1,
+            "The single announced buffer must be returned exactly once after each copied frame."
+        )
+
         try acquisition.stop()
     }
 
