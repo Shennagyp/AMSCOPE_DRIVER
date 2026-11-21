@@ -569,6 +569,7 @@ final class AmcamSDK: @unchecked Sendable {
     func pullImage(
         _ handle: UnsafeMutableRawPointer,
         buffer: UnsafeMutableRawPointer,
+        policy: AmcamPullImageAPIPolicy = .automatic,
         frameInfo: UnsafeMutablePointer<AmcamFrameInfoV2>,
         metadata: UnsafeMutablePointer<AmcamFrameMetadata?>? = nil,
         operationName: UnsafeMutablePointer<String?>? = nil,
@@ -579,6 +580,20 @@ final class AmcamSDK: @unchecked Sendable {
         metadata?.pointee = nil
         operationName?.pointee = nil
         tightlyPackedRows?.pointee = false
+
+        // A model profile may pin the documented legacy API when newer
+        // exported symbols are not valid for that camera. This is a strict
+        // selection: do not silently switch API generations on a pinned model.
+        if policy == .v2 {
+            operationName?.pointee = "Amcam_PullImageV2"
+            guard let pullV2 = api.pullImage else { return Self.notImplementedHRESULT }
+            let result = pullV2(handle, buffer, Self.requestedPullBits, frameInfo)
+            if result >= 0 {
+                tightlyPackedRows?.pointee = false
+                metadata?.pointee = AmcamFrameMetadata(apiVersion: .v2, validityFlags: frameInfo.pointee.flag)
+            }
+            return result
+        }
 
         // Amcam documents rowPitch = -1 as zero padding (tightly packed rows).
         // E_NOTIMPL is model-specific: retry the next API generation only for
