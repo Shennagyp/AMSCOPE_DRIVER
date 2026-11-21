@@ -17,6 +17,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
     private let lock = NSLock()
     private let controlLock = NSRecursiveLock()
     private let modelCode: String
+    private let pullImageAPIPolicy: AmcamPullImageAPIPolicy
     private let modelFlags: UInt64?
     private let maximumSpeedLevel: Int?
     private var handle: UnsafeMutableRawPointer?
@@ -41,6 +42,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         width: Int,
         height: Int,
         modelCode: String,
+        pullImageAPIPolicy: AmcamPullImageAPIPolicy,
         modelFlags: UInt64?,
         maximumSpeedLevel: Int?,
         resolutions: [AmcamResolution],
@@ -51,6 +53,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         self.width = width
         self.height = height
         self.modelCode = modelCode
+        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.modelFlags = modelFlags
         self.maximumSpeedLevel = maximumSpeedLevel
         self.resolutions = resolutions
@@ -756,7 +759,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
             var frameMetadata: AmcamFrameMetadata?
             var pullOperationName: String?
             var tightlyPackedRows = false
-            let result = sdk.pullImage(handle, buffer: buffer, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName, tightlyPackedRows: &tightlyPackedRows)
+            let result = sdk.pullImage(handle, buffer: buffer, policy: pullImageAPIPolicy, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName, tightlyPackedRows: &tightlyPackedRows)
             guard result >= 0 else {
                 streaming = false
                 lock.unlock()
