@@ -40,7 +40,7 @@ Record the SDK version, macOS version, exact model descriptor, device identifier
 4. Press Stop and verify the image stream stops without an error.
 5. Start again and verify acquisition resumes.
 6. Repeat Stop→Start at least three times without disconnecting the USB cable. Every Start must return a new live frame; do not use a USB unplug/replug as a substitute for this check.
-6. Disconnect the camera while streaming, record the reported error, reconnect, refresh, and start again.
+7. Disconnect the camera while streaming, record the reported error, reconnect, refresh, and start again.
 
 Do not run the diagnostic probe and GUI application against the same camera at the same time. Only one process should own the camera handle.
 
