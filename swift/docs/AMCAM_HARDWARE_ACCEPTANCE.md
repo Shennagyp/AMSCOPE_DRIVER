@@ -110,7 +110,7 @@ The user confirmed that the MU503 recovery workflow above succeeded:
 
 This record is intentionally limited to process relaunch and idle USB reconnect recovery. The user did not report the SDK version, exact model descriptor, firmware, macOS build, or Mac architecture with this confirmation. Do not infer those values.
 
-**Live-stream regression status (2026-11-21):** the user subsequently reported that the MU503 live display stopped after its first frame. The backend now serializes callback pulls with feature I/O and the mock suite exercises asynchronous callbacks plus ten-frame GenTL delivery through one reused buffer with zero underruns. These are software-level regressions only; this physical symptom is not marked resolved until the camera is retested.
+**Live-stream regression status (2026-11-21):** the user subsequently reported that the MU503 live display stopped after its first frame. The backend now serializes callback pulls with feature I/O and the mock suite exercises asynchronous callbacks plus ten-frame GenTL delivery through one reused buffer with zero underruns. The AppKit preview was also corrected to use application frame-arrival revision rather than device sequence as its redraw key. These are software-level corrections only; this physical symptom is not marked resolved until the camera is retested.
 
 The following broader acceptance items are **not established by this result** and remain open: five-minute sustained live acquisition, repeated start/stop cycles, disconnect while actively streaming, every exposed feature's setter/readback, and independent probe validation of metadata/payload/cleanup. CI success does not close those hardware-specific checks.
 

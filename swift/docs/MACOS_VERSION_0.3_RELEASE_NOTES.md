@@ -53,6 +53,8 @@ A shared recursive SDK-call lock now serializes callback pulls with feature prob
 
 The mock coverage now also models the asynchronous callback lifecycle on a worker thread. An end-to-end Amcam GenTL data-stream regression uses one announced buffer, consumes ten sequential New Buffer events, verifies zero buffer underruns, and re-queues the same buffer after each delivery. The test verifies that Stop joins the callback worker before the retained context is released. A separate test overlaps a deliberately delayed feature read with a callback pull and verifies that SDK calls do not overlap.
 
+The AppKit preview also no longer assumes that the camera's sequence metadata is a unique frame-arrival key. The application advances a local frame revision whenever a payload is successfully decoded; repeated or unavailable device sequence values therefore cannot suppress preview redraws. The original device sequence remains part of the frame metadata for diagnostics.
+
 Hosted CI validates these mock contracts only. The MU503's physical multi-frame stream remains unverified until retested; the user had reported a one-frame-only live display on the previous build.
 
 The Amcam mock deliberately refuses the next `Amcam_StartPullModeWithCallback` until both caches have been flushed. Its integration test failed on the second start before the implementation was added; another test injects a failed flush and checks that Start retries the pending operation. This is a deterministic SDK-boundary regression, not yet proof of the MU503's physical behavior.

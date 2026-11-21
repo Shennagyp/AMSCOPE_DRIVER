@@ -195,6 +195,10 @@ All operations on one open Amcam camera handle are serialized by a shared SDK-ca
 
 The Amcam fixture also runs image callbacks on a periodic worker thread. An end-to-end regression passes those frames through the GenTL data-stream record using one announced buffer, consumes each New Buffer event, and re-queues the same buffer for the next frame. Stop joins the callback worker before the session releases its retained callback context.
 
+## Preview freshness is not camera sequence
+
+The application keeps the device-reported frame sequence as image metadata, but it does not use that field to decide whether a preview image is new. Each successfully decoded frame increments an application-local `frameRevision`; the AppKit preview redraws when that revision changes. Camera sequence values may be absent, repeated, reset, or model-specific, and are not an authoritative UI invalidation identity.
+
 ## Process relaunch and USB reconnect recovery
 
 `make run` is a process restart, not just a rebuild followed by Launch Services reopening an existing app instance. Before the build/launch sequence, `scripts/build-and-run-macos.sh` checks for an existing `amcam-imaging` process and asks the running `com.amscope.imaging` application to quit normally. It waits for the process to exit before continuing. If the quit request fails or the process remains alive, the script exits with an error; it never force-kills the application or starts a second process that could contend for the camera. The `BUILD_ONLY=1` path used by `make build-local` and CI skips this shutdown behavior.
