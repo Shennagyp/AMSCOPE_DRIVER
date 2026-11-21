@@ -422,43 +422,48 @@ final class CameraSessionLifecycleTests: XCTestCase {
         XCTAssertEqual(stopAttempts, 1)
     }
 
-    func testStopThenStartCreatesFreshAcquisitionOnExistingDeviceSession() async throws {
-        let firstAcquisition = FakeAcquisition()
-        let secondAcquisition = FakeAcquisition()
+    func testRepeatedStopRestartCyclesCreateFreshAcquisitionsOnOneDeviceSession() async throws {
+        let acquisitions = (0..<4).map { _ in FakeAcquisition() }
         let session = FakeSession(
-            acquisition: firstAcquisition,
-            additionalAcquisitions: [secondAcquisition]
+            acquisition: acquisitions[0],
+            additionalAcquisitions: Array(acquisitions.dropFirst())
         )
         let lifecycle = CameraSessionLifecycle()
 
         try await lifecycle.open(FakeDevice(session: session))
-        try await lifecycle.start()
-        try await lifecycle.stop()
 
-        let stoppedSnapshot = await lifecycle.snapshot()
-        XCTAssertFalse(stoppedSnapshot.isStreaming)
-        XCTAssertTrue(stoppedSnapshot.hasSession)
-        XCTAssertTrue(stoppedSnapshot.hasAcquisition)
+        for (index, acquisition) in acquisitions.enumerated() {
+            try await lifecycle.start()
 
-        // Starting again must close the old GenTL acquisition and ask the still-open
-        // camera session for a fresh acquisition object.
-        try await lifecycle.start()
+            let startedSnapshot = await lifecycle.snapshot()
+            XCTAssertTrue(startedSnapshot.isStreaming, "Cycle \(index + 1) must enter streaming state.")
+            XCTAssertTrue(startedSnapshot.hasSession)
+            XCTAssertTrue(startedSnapshot.hasAcquisition)
+            XCTAssertEqual(acquisition.startAttempts, 1)
 
-        let restartedSnapshot = await lifecycle.snapshot()
+            try await lifecycle.stop()
+
+            let stoppedSnapshot = await lifecycle.snapshot()
+            XCTAssertFalse(stoppedSnapshot.isStreaming, "Cycle \(index + 1) must leave streaming state.")
+            XCTAssertTrue(stoppedSnapshot.hasSession)
+            XCTAssertTrue(stoppedSnapshot.hasAcquisition)
+            XCTAssertEqual(acquisition.stopAttempts, 1)
+        }
+
         let acquisitionRequests = await session.acquisitionRequests
-        XCTAssertTrue(restartedSnapshot.isStreaming)
-        XCTAssertTrue(restartedSnapshot.hasSession)
-        XCTAssertTrue(restartedSnapshot.hasAcquisition)
-        XCTAssertEqual(acquisitionRequests, 2)
-        XCTAssertEqual(firstAcquisition.closeAttempts, 1)
-        XCTAssertEqual(secondAcquisition.startAttempts, 1)
+        XCTAssertEqual(acquisitionRequests, 4, "Each start must create a fresh acquisition.")
 
-        try await lifecycle.stop()
         try await lifecycle.close()
 
         let sessionCloseAttempts = await session.closeAttempts
-        XCTAssertEqual(secondAcquisition.closeAttempts, 1)
         XCTAssertEqual(sessionCloseAttempts, 1)
+        for (index, acquisition) in acquisitions.enumerated() {
+            XCTAssertEqual(
+                acquisition.closeAttempts,
+                1,
+                "Acquisition \(index + 1) must be closed exactly once."
+            )
+        }
     }
 
     func testFrameArrivingDuringCloseIsRejectedByGenerationGuard() async throws {
