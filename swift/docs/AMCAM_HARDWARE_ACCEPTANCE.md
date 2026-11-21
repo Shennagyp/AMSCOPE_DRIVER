@@ -85,6 +85,28 @@ Record:
 - Stop/restart, disconnect/reconnect, and cleanup results.
 - Full probe terminal output and PPM file.
 
+### E. Relaunch and USB hot-plug recovery
+
+1. Leave Amcam Imaging open with the MU503 selected.
+2. Disconnect the MU503 and reconnect it without quitting the application.
+3. Allow the background discovery monitor to complete a successful scan.
+4. Verify the selected camera session is recreated and Start becomes enabled.
+5. Separately, while an Amcam Imaging instance is already running, execute `make run` from the repository. Verify the old process exits cleanly and the rebuilt application opens as a new process.
+
+`make run` requests a normal application quit before it builds and launches the replacement. It does not force-kill a process that refuses to exit; it aborts instead of allowing two app processes to contend for the camera. `make build-local` does not close a running application.
+
+## Recorded physical result — 2026-11-21
+
+The user confirmed that the MU503 recovery workflow above succeeded:
+
+- `make run` completed while an earlier app instance was open; the old app exited and the replacement launched.
+- The MU503 was disconnected and reconnected while the replacement app remained open.
+- The application recovered the camera session and re-enabled Start without requiring another app restart.
+
+This record is intentionally limited to process relaunch and idle USB reconnect recovery. The user did not report the SDK version, exact model descriptor, firmware, macOS build, or Mac architecture with this confirmation. Do not infer those values.
+
+The following broader acceptance items are **not established by this result** and remain open: five-minute sustained live acquisition, repeated start/stop cycles, disconnect while actively streaming, every exposed feature's setter/readback, and independent probe validation of metadata/payload/cleanup. CI success does not close those hardware-specific checks.
+
 ## Acceptance criteria
 
 The macOS first-pass acceptance is successful only when:
