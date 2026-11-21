@@ -16,6 +16,10 @@ public final class AmcamCameraSession: @unchecked Sendable {
     private let sdk: AmcamSDK
     private let lock = NSLock()
     private let controlLock = NSRecursiveLock()
+    /// Serializes calls into one Amcam handle across callback pulls and feature I/O.
+    /// StartPull is intentionally excluded because it may synchronously invoke the callback;
+    /// Stop is excluded because the SDK may wait for that callback to return.
+    private let sdkCallLock = NSRecursiveLock()
     private let modelCode: String
     private let pullImageAPIPolicy: AmcamPullImageAPIPolicy
     private let modelFlags: UInt64?
@@ -112,11 +116,19 @@ public final class AmcamCameraSession: @unchecked Sendable {
         }
         lock.unlock()
 
-        let resolution = try sdk.setResolution(
-            activeHandle,
-            index: index,
-            supportedResolutions: resolutions
-        )
+        sdkCallLock.lock()
+        let resolution: AmcamResolution
+        do {
+            resolution = try sdk.setResolution(
+                activeHandle,
+                index: index,
+                supportedResolutions: resolutions
+            )
+        } catch {
+            sdkCallLock.unlock()
+            throw error
+        }
+        sdkCallLock.unlock()
 
         lock.lock()
         width = resolution.width
@@ -269,7 +281,14 @@ public final class AmcamCameraSession: @unchecked Sendable {
         lock.unlock()
         guard pending else { return }
 
-        try sdk.flushFrameCaches(activeHandle)
+        sdkCallLock.lock()
+        do {
+            try sdk.flushFrameCaches(activeHandle)
+        } catch {
+            sdkCallLock.unlock()
+            throw error
+        }
+        sdkCallLock.unlock()
 
         lock.lock()
         frameCacheFlushPending = false
@@ -317,6 +336,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         var probes: AmcamCameraProfileRegistry.ProbeResults = [:]
 
         if (try? sdk.readAutoExposureMode(activeHandle)) != nil {
@@ -379,6 +400,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         return try readControls(
             using: activeHandle,
             requestedExposure: requestedExposureMicroseconds,
@@ -395,6 +418,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         try sdk.setAutoExposureMode(activeHandle, mode: mode)
         let candidateRequestedExposure = mode == .manual ? requestedExposureMicroseconds : nil
         let actualMode = try sdk.readAutoExposureMode(activeHandle)
@@ -419,6 +444,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         let current = try sdk.readExposureTime(activeHandle)
         guard microseconds >= current.minimum, microseconds <= current.maximum else {
             throw AmcamCameraError.exposureOutOfRange(requested: microseconds, minimum: current.minimum, maximum: current.maximum)
@@ -450,6 +477,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         try sdk.setOption(activeHandle, option: AmcamSDK.optionColorMatrix, value: enabled ? 1 : 0)
         let snapshot = try readControls(
             using: activeHandle,
@@ -471,6 +500,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         lock.lock()
         let running = starting || streaming || stopping
         lock.unlock()
@@ -502,6 +533,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         guard temperature >= AmcamSDK.temperatureMinimum,
               temperature <= AmcamSDK.temperatureMaximum,
               tint >= AmcamSDK.tintMinimum,
@@ -534,6 +567,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         guard values.count == 3 else {
             throw AmcamCameraError.unsupportedControl("RGB white balance requires exactly three values.")
         }
@@ -558,6 +593,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         let current = try sdk.readExposureGain(activeHandle)
         guard percent >= current.minimum, percent <= current.maximum else {
             throw AmcamCameraError.unsupportedControl(
@@ -585,6 +622,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         guard modelFlags.map({ ($0 & AmcamSDK.preciseFrameRateFlag) != 0 }) == true else {
             throw AmcamCameraError.unsupportedControl("This camera model does not advertise precise fixed-frame-rate control.")
         }
@@ -639,6 +678,8 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         guard let maximumSpeedLevel,
               maximumSpeedLevel >= 0,
               maximumSpeedLevel <= Int(UInt16.max) else {
@@ -799,6 +840,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         }
 
         if event == AmcamSDK.imageEvent {
+            sdkCallLock.lock()
             var info = AmcamFrameInfoV2()
             var frameMetadata: AmcamFrameMetadata?
             var pullOperationName: String?
@@ -807,11 +849,13 @@ public final class AmcamCameraSession: @unchecked Sendable {
             if result == AmcamSDK.pendingHRESULT {
                 // A callback can race the SDK's frame-ready transition. Keep pull mode
                 // alive and wait for the next image event instead of ending acquisition.
+                sdkCallLock.unlock()
                 lock.unlock()
                 return
             }
             guard result >= 0 else {
                 streaming = false
+                sdkCallLock.unlock()
                 lock.unlock()
                 handler(.failure(.cameraReadbackFailed(operation: pullOperationName ?? sdk.pullImageOperationName, code: result)))
                 return
@@ -823,6 +867,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
                   frameHeight == height,
                   layout.payloadSize <= bufferCapacity else {
                 streaming = false
+                sdkCallLock.unlock()
                 lock.unlock()
                 handler(.failure(.invalidFrameDimensions))
                 return
@@ -839,6 +884,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
                     : nil,
                 metadata: frameMetadata
             )
+            sdkCallLock.unlock()
             lock.unlock()
             handler(.success(frame))
             return
