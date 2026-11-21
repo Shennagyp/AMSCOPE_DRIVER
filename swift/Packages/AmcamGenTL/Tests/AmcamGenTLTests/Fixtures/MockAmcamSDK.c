@@ -199,6 +199,7 @@ uint32_t MockAmcam_PullAPIVersion(void) { return pull_api_version; }
 void MockAmcam_SetUnsupportedPullAPIVersion(uint32_t version) { unsupported_pull_api_mask = version <= 4 ? (UINT32_C(1) << version) : 0; }
 void MockAmcam_SetUnsupportedPullAPIMask(uint32_t mask) { unsupported_pull_api_mask = mask; }
 void MockAmcam_SetPullFailure(int32_t result) { pull_api_failure = result; }
+void MockAmcam_SetPendingPullCount(uint32_t count) { pending_pull_count = count; }
 void MockAmcam_SetV4FrameFlags(uint32_t flags) { mock_v4_frame_flags = flags; }
 
 int32_t Amcam_Stop(void *handle) {
