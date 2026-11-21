@@ -285,3 +285,10 @@ Row layout is now tied to the function that actually succeeds for the connected 
 
 Hosted tests cover V4 preference and every metadata field, invalid-field suppression when validity flags are absent, V3 fallback when V4 is absent, row-pitch V2 fallback when V3/V4 are absent, plain V2 fallback when no row-pitch-aware function exists, camera-specific `E_NOTIMPL` fallback, and preservation of non-`E_NOTIMPL` hardware errors. ABI layout assertions cover V2, V3, GPS and V4. These tests validate the mock ABI and dispatch behavior; real-camera compatibility remains a separate hardware acceptance item. The current UI still requests 24-bit RGB; this work does not claim RAW10/RAW12 or RGB48 decoding support.
 
+
+
+## Terminal cleanup after physical disconnection
+
+Orderly Stop and terminal Close are separate lifecycle operations. A failed Stop (including an SDK error after USB removal or a post-stop cache-flush failure) must remain visible to the caller and retain callback ownership for retry. Terminal Close must not depend on Stop succeeding: it calls the vendor's `Amcam_Close`, keeps the callback context and pull buffer alive until that call returns, and only then releases both.
+
+At the GenTL consumer boundary, a failed `DSStopAcquisition` changes the terminal path: unregister the event and call `DSClose`; do not attempt `DSFlushQueue(AllDiscard)` or per-buffer `DSRevokeBuffer` against a stream that may still be active. The Amcam Producer's `DSClose` then attempts orderly Stop and falls back to terminal native Close if needed, before clearing its announced-buffer records. Successful Stop retains the regular all-discard, revoke, and stream-close sequence. A successful mock regression validates this ordering; physical MU503 disconnect/reconnect acceptance remains separate.

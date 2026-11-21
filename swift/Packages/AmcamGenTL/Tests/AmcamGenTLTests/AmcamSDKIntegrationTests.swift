@@ -1379,6 +1379,126 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         cleanupCompleted = true
     }
 
+    func testTerminalStreamCloseUsesAmcamCloseWhenStopFailsAfterDisconnect() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+
+        let streamHandle = DS_HANDLE(rawValue: 0x311)
+        let deviceHandle = DEV_HANDLE(rawValue: 0x312)
+        let bufferHandle = BUFFER_HANDLE(rawValue: 0x313)
+        let errorEventHandle = EVENT_HANDLE(rawValue: 0x314)
+        let stream = try AmcamDataStreamRecord(
+            handle: streamHandle,
+            deviceHandle: deviceHandle,
+            session: session
+        )
+        let errorEvent = AmcamEventRecord(
+            handle: errorEventHandle,
+            eventType: GenTLEventType.error.rawValue,
+            source: .dataStream(streamHandle)
+        )
+        stream.addEvent(errorEvent)
+
+        let payloadSize = try XCTUnwrap(
+            AmcamRGB24Layout(width: 640, height: 480)
+        ).payloadSize
+        let memory = UnsafeMutableRawPointer.allocate(
+            byteCount: payloadSize,
+            alignment: 64
+        )
+        memory.initializeMemory(as: UInt8.self, repeating: 0, count: payloadSize)
+        var cleanupCompleted = false
+        defer {
+            if !cleanupCompleted {
+                try? stream.stop()
+                try? stream.close()
+                try? session.close()
+            }
+            memory.deallocate()
+        }
+
+        try stream.announce(
+            handle: bufferHandle,
+            memory: memory,
+            size: payloadSize,
+            privateData: nil,
+            allocatedByProvider: false
+        )
+        try stream.queue(bufferHandle)
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+
+        guard let emitSymbol = dlsym(fixtureHandle, "MockAmcam_EmitEvent"),
+              let setStopFailureSymbol = dlsym(fixtureHandle, "MockAmcam_SetStopFailure"),
+              let setFrameIntervalSymbol = dlsym(fixtureHandle, "MockAmcam_SetAutomaticFrameInterval"),
+              let callbackCountSymbol = dlsym(fixtureHandle, "MockAmcam_AsynchronousCallbackCount"),
+              let stopCountSymbol = dlsym(fixtureHandle, "MockAmcam_StopCount"),
+              let closeCountSymbol = dlsym(fixtureHandle, "MockAmcam_CloseCount") else {
+            XCTFail("Mock SDK is missing terminal-close regression hooks")
+            return
+        }
+
+        let emitEvent = unsafeBitCast(emitSymbol, to: (@convention(c) (UInt32) -> Void).self)
+        let setStopFailure = unsafeBitCast(
+            setStopFailureSymbol,
+            to: (@convention(c) (Int32) -> Void).self
+        )
+        let setFrameInterval = unsafeBitCast(
+            setFrameIntervalSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+        let callbackCount = unsafeBitCast(
+            callbackCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+        let stopCount = unsafeBitCast(
+            stopCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+        let closeCount = unsafeBitCast(
+            closeCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+
+        setFrameInterval(10)
+        try stream.start(numberToAcquire: GenTLConstants.infiniteCount)
+        for _ in 0..<20 where callbackCount() == 0 {
+            usleep(10_000)
+        }
+        XCTAssertGreaterThan(callbackCount(), 0, "The mock SDK must own an active asynchronous callback.")
+
+        emitEvent(0x0081)
+        let errorPayload = try stream.nextEventData(
+            errorEvent,
+            timeoutMilliseconds: 2_000
+        )
+        XCTAssertTrue(errorPayload.isEmpty)
+
+        // A disconnected camera rejects Stop but still requires Amcam_Close to
+        // terminate callback delivery and release the retained callback context.
+        setStopFailure(1)
+        try stream.close()
+        XCTAssertEqual(stopCount(), 1)
+        XCTAssertEqual(closeCount(), 1)
+        XCTAssertFalse(session.isStreaming)
+
+        let callbacksAfterClose = callbackCount()
+        usleep(50_000)
+        XCTAssertEqual(
+            callbackCount(),
+            callbacksAfterClose,
+            "Amcam_Close must join callback delivery before the callback context is released."
+        )
+
+        try session.close()
+        XCTAssertEqual(closeCount(), 1, "Terminal close must be idempotent.")
+        cleanupCompleted = true
+    }
+
     func testUndersizedBufferIsReportedWithoutMemoryOverwrite() throws {
         let libraryURL = try buildMockSDK()
         let driver = try AmcamCameraDriver(libraryURL: libraryURL)

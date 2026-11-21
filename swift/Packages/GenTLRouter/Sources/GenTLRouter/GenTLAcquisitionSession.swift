@@ -383,7 +383,21 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
         let acquiring = isAcquiring
         stateLock.unlock()
         if alreadyClosed { return }
-        if acquiring { try stop() }
+
+        // Stop is preferred because it returns the announced buffers to a
+        // known stopped state. If Stop fails (for example after USB removal),
+        // continue with terminal DSClose below. In that path DSClose owns the
+        // remaining buffer cleanup; revoking buffers from a possibly active
+        // stream would be unsafe.
+        var stopCompleted = !acquiring
+        if acquiring {
+            do {
+                try stop()
+                stopCompleted = true
+            } catch {
+                stopCompleted = false
+            }
+        }
 
         readerLock.lock()
         defer { readerLock.unlock() }
@@ -414,24 +428,32 @@ public final class GenTLAcquisitionSession: @unchecked Sendable {
             stateLock.unlock()
         }
 
-        try check(
-            api.DSFlushQueue(streamHandle, Constants.queueAllDiscard),
-            operation: "DSFlushQueue(AllDiscard)"
-        )
-
-        for bufferHandle in bufferHandles {
+        if stopCompleted {
             try check(
-                api.DSRevokeBuffer(streamHandle, bufferHandle, nil, nil),
-                operation: "DSRevokeBuffer"
+                api.DSFlushQueue(streamHandle, Constants.queueAllDiscard),
+                operation: "DSFlushQueue(AllDiscard)"
             )
-            stateLock.lock()
-            buffersByRawHandle.removeValue(forKey: UInt(bitPattern: bufferHandle))
-            stateLock.unlock()
+
+            for bufferHandle in bufferHandles {
+                try check(
+                    api.DSRevokeBuffer(streamHandle, bufferHandle, nil, nil),
+                    operation: "DSRevokeBuffer"
+                )
+                stateLock.lock()
+                buffersByRawHandle.removeValue(forKey: UInt(bitPattern: bufferHandle))
+                stateLock.unlock()
+            }
         }
 
+        // DSClose is the producer-owned terminal cleanup path. When Stop failed,
+        // the producer must release its remaining stream buffers as part of close.
         try check(api.DSClose(streamHandle), operation: "DSClose")
         stateLock.lock()
         self.streamHandle = nil
+        self.eventHandle = nil
+        buffersByRawHandle.removeAll()
+        isAcquiring = false
+        isStopping = false
         isClosed = true
         stateLock.unlock()
     }

@@ -306,16 +306,45 @@ public final class AmcamCameraSession: @unchecked Sendable {
         try stopIfNeeded()
     }
 
+    /// Permanently closes the native camera handle.
+    ///
+    /// Stop is a recoverable streaming transition and may fail after physical
+    /// disconnection. Close is terminal: the vendor's Amcam_Close operation
+    /// ends callback ownership even when Amcam_Stop cannot reach the camera.
+    /// Keep the callback context and pull buffer alive until Amcam_Close returns.
     public func close() throws {
         controlLock.lock()
         defer { controlLock.unlock() }
-        try stopIfNeeded()
 
         lock.lock()
-        guard let handle else { lock.unlock(); return }
-        self.handle = nil
+        guard let activeHandle = handle else {
+            lock.unlock()
+            return
+        }
+        let retainedContext = callbackContext
+        let retainedBuffer = buffer
+        streaming = false
+        stopping = true
         lock.unlock()
-        sdk.close(handle)
+
+        // Do not require Stop or the post-Stop cache flush here. Amcam_Close is
+        // the terminal SDK boundary and may itself wait for outstanding callbacks.
+        sdk.close(activeHandle)
+
+        lock.lock()
+        handle = nil
+        callbackContext = nil
+        frameHandler = nil
+        buffer = nil
+        bufferCapacity = 0
+        frameCacheFlushPending = false
+        stopping = false
+        lock.unlock()
+
+        if let retainedContext {
+            Unmanaged<AmcamCallbackContext>.fromOpaque(retainedContext).release()
+        }
+        retainedBuffer?.deallocate()
     }
 
     deinit {

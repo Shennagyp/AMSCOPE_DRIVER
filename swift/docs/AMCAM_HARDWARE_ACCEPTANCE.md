@@ -126,3 +126,10 @@ The macOS first-pass acceptance is successful only when:
 - the diagnostic probe independently validates frame metadata, payload layout, and cleanup.
 
 A successful CI job is not physical-camera acceptance. A successful probe alone is not full GUI acceptance.
+
+
+## Terminal-close regression — software evidence only (2026-11-21)
+
+The cleanup path now distinguishes a recoverable Stop failure from terminal Close. If the camera disappears and `Amcam_Stop` fails, the backend retains the callback context and pull buffer until the vendor's `Amcam_Close` returns. The GenTL consumer then uses `DSClose` as the terminal producer-owned resource cleanup path and does not try to flush/revoke buffers while the stream may still be active. Hosted regression tests cover the failed-Stop path and verify callback delivery has ended after native Close.
+
+This does **not** establish physical MU503 recovery. The next hardware acceptance must unplug the camera while streaming, allow discovery to observe removal, reconnect it, and verify the app releases the old session, rediscovers the camera, and enables Start. Record any cleanup error verbatim if this sequence still fails.

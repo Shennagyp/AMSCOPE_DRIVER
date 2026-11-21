@@ -37,6 +37,7 @@ static uint32_t concurrent_sdk_call_count;
 static uint32_t pull_delay_milliseconds;
 static uint32_t control_delay_milliseconds;
 static uint32_t stop_count;
+static int stop_failure_enabled;
 static uint32_t frame_cache_flush_count;
 static uint32_t frame_cache_flush_failures_remaining;
 static int frame_cache_flush_required;
@@ -324,6 +325,7 @@ void MockAmcam_SetV4FrameFlags(uint32_t flags) { mock_v4_frame_flags = flags; }
 int32_t Amcam_Stop(void *handle) {
     if (!handle) return -1;
     stop_count++;
+    if (stop_failure_enabled) return -1;
     frame_cache_flush_required = 1;
     mock_stop_callback_worker();
     return 0;
@@ -465,6 +467,7 @@ void MockAmcam_Reset(void) {
     __atomic_store_n(&pull_delay_milliseconds, 0, __ATOMIC_SEQ_CST);
     __atomic_store_n(&control_delay_milliseconds, 0, __ATOMIC_SEQ_CST);
     stop_count = 0;
+    stop_failure_enabled = 0;
     frame_cache_flush_count = 0;
     frame_cache_flush_failures_remaining = 0;
     frame_cache_flush_required = 0;
@@ -485,6 +488,9 @@ void MockAmcam_Reset(void) {
 }
 void MockAmcam_SetIgnoreExposureWrite(int32_t enabled) {
     ignore_exposure_write = enabled != 0;
+}
+void MockAmcam_SetStopFailure(int32_t enabled) {
+    stop_failure_enabled = enabled != 0;
 }
 uint32_t MockAmcam_CloseCount(void) { return close_count; }
 uint32_t MockAmcam_StopCount(void) { return stop_count; }

@@ -229,3 +229,11 @@ CI verifies compilation and mock/runtime contracts; the user-confirmed result ve
 - Neither proves that a physical camera works.
 - Every implementation increment must add or update tests first, run the focused test, then run the full affected package suite and hosted matrix.
 - If local Xcode is unavailable, use hosted macOS CI and report the exact jobs that passed. Never describe unexecuted local tests as passed.
+
+
+### Phase C — terminal cleanup after device removal
+
+- [x] Keep ordinary Stop strict and retryable while making native Close terminal: call `Amcam_Close` even when `Amcam_Stop` or the post-stop flush fails, retaining callback context and pull memory until native Close returns.
+- [x] When GenTL `DSStopAcquisition` fails, continue terminal teardown through event unregistration and `DSClose`; leave queue flush and explicit buffer revocation to the Producer's terminal close path.
+- [x] Add regressions for GenTL close after failed Stop and Amcam callback-worker shutdown through terminal native Close.
+- [ ] Verify physical MU503 disconnect during acquisition, reconnect, rediscovery, and successful Start without restarting the app.

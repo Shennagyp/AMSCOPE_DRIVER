@@ -26,6 +26,7 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private let failSystemOpen: Bool
     private let failLibraryClose: Bool
     private let failDeviceClose: Bool
+    private let failAcquisitionStop: Bool
 
     private let systemToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
     private let interfaceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
@@ -49,11 +50,13 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     init(
         failSystemOpen: Bool = false,
         failLibraryClose: Bool = false,
-        failDeviceClose: Bool = false
+        failDeviceClose: Bool = false,
+        failAcquisitionStop: Bool = false
     ) {
         self.failSystemOpen = failSystemOpen
         self.failLibraryClose = failLibraryClose
         self.failDeviceClose = failDeviceClose
+        self.failAcquisitionStop = failAcquisitionStop
     }
 
     deinit {
@@ -554,6 +557,9 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         guard hDataStream == streamToken, iStopFlags == 0 else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
         }
+        if failAcquisitionStop {
+            return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_ERROR)
+        }
         lock.lock()
         streamIsGrabbing = false
         lock.unlock()
@@ -842,6 +848,30 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         )
         XCTAssertEqual(api.snapshot().bufferRevoke, 1)
         XCTAssertEqual(api.snapshot().dataStreamClose, 1)
+        try device.close()
+    }
+
+    func testAcquisitionCloseUsesDataStreamCloseWhenStopFails() throws {
+        let api = RecordingGenTLAPI(failAcquisitionStop: true)
+        let router = GenTLRouter()
+        try router.register(backendID: "terminal-close-after-stop-failure") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        try acquisition.start()
+
+        // Stop fails and leaves the stream active. Close must still ask the
+        // Producer to perform its terminal cleanup rather than revoke buffers.
+        XCTAssertThrowsError(try acquisition.stop())
+        try acquisition.close()
+
+        XCTAssertEqual(api.snapshot().acquisitionStop, 2, "Explicit Stop and terminal Close each attempt orderly Stop.")
+        XCTAssertEqual(api.snapshot().bufferRevoke, 0, "DSClose owns buffer cleanup after Stop failure.")
+        XCTAssertEqual(api.snapshot().dataStreamClose, 1)
+        XCTAssertEqual(api.flushOperations(), [
+            GenTLQueueOperation.allToInput.rawValue
+        ], "The possibly active stream must not be flushed/revoked as though it had stopped.")
+
         try device.close()
     }
 

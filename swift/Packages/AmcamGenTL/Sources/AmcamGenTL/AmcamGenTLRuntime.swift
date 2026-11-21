@@ -528,7 +528,14 @@ final class AmcamDataStreamRecord: @unchecked Sendable {
         }
         condition.unlock()
 
-        try session.stopIfNeeded()
+        do {
+            try session.stopIfNeeded()
+        } catch {
+            // Stop is not a prerequisite for terminal DataStreamClose. If the
+            // camera was removed (or its post-stop flush failed), close the
+            // native session now; Amcam_Close synchronizes callback ownership.
+            try session.close()
+        }
 
         condition.lock()
         defer { condition.unlock() }
