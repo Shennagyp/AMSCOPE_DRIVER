@@ -192,13 +192,14 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
     func testModelProfilePinsPullImageV2WhenNewerSymbolsAreExported() throws {
         let libraryURL = try buildMockSDK()
-        let registry = AmcamCameraProfileRegistry(profiles: [
-            AmcamCameraModelProfile(
-                modelCode: "Mock AmScope Camera",
-                allowedFeatures: [],
-                pullImageAPIPolicy: .v2
-            )
-        ])
+        let registry = AmcamCameraProfileRegistry(
+            acquisitionProfiles: [
+                AmcamCameraAcquisitionProfile(
+                    modelCode: "Mock AmScope Camera",
+                    pullImageAPIPolicy: .v2
+                )
+            ]
+        )
         let driver = try AmcamCameraDriver(
             libraryURL: libraryURL,
             profileRegistry: registry
