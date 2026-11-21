@@ -857,6 +857,27 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         // for it and must still complete the GenTL acquisition lifecycle.
         try stream.stop()
         XCTAssertEqual(try stream.info(command: 8), .bool8(false))
+
+        // Reuse the same GenTL stream, event and announced buffers after stop.
+        // StartPullModeWithCallback emits a synchronous first image event, so
+        // this also verifies that a completed stop released the prior callback.
+        try stream.flush(operation: 2)
+        try stream.start(numberToAcquire: 1)
+        let restartedEventData = try stream.nextEventData(
+            event,
+            timeoutMilliseconds: 2_000
+        )
+        XCTAssertEqual(restartedEventData.count, 2 * MemoryLayout<UInt>.size)
+        let restartedBufferHandle = restartedEventData.withUnsafeBytes {
+            $0.loadUnaligned(as: UInt.self)
+        }
+        XCTAssertTrue(
+            restartedBufferHandle == firstBufferHandle.rawValue ||
+            restartedBufferHandle == secondBufferHandle.rawValue
+        )
+        try stream.stop()
+        XCTAssertEqual(try stream.info(command: 8), .bool8(false))
+
         try stream.close()
         try session.close()
         cleanupCompleted = true
