@@ -200,18 +200,19 @@ public final class AmcamCameraSession: @unchecked Sendable {
         lock.unlock()
 
         // The callback now only enqueues, so StartPull can share the SDK-call
-        // lock safely. This also prevents the queued PullImage from entering the
-        // handle before StartPull has returned, including a synchronous callback.
+        // lock safely. The handler never holds the state lock while waiting for
+        // this lock, allowing the start result to be published without inversion.
         sdkCallLock.lock()
         let result = sdk.startPull(activeHandle, callback: Self.callback, context: retained)
-        sdkCallLock.unlock()
-
-        lock.lock()
-        starting = false
         if result < 0 {
+            lock.lock()
+            starting = false
             streaming = false
             lock.unlock()
+        }
+        sdkCallLock.unlock()
 
+        if result < 0 {
             // StartPull may have synchronously emitted an event before reporting
             // failure. Drain it before releasing the callback context or buffer.
             callbackQueue.sync {}
@@ -226,6 +227,9 @@ public final class AmcamCameraSession: @unchecked Sendable {
             Unmanaged<AmcamCallbackContext>.fromOpaque(retained).release()
             throw AmcamCameraError.streamStartFailed(result)
         }
+
+        lock.lock()
+        starting = false
         lock.unlock()
     }
 
@@ -905,50 +909,103 @@ public final class AmcamCameraSession: @unchecked Sendable {
 
     private func handle(event: UInt32) {
         lock.lock()
-        guard streaming, let handle, let buffer, let handler = frameHandler else {
+        guard streaming,
+              let activeHandle = handle,
+              let activeBuffer = buffer,
+              let handler = frameHandler else {
             lock.unlock()
             return
         }
+        lock.unlock()
 
         if event == AmcamSDK.imageEvent {
+            // Do not hold the state lock while waiting for the SDK lock. Stop and
+            // Close can first invalidate streaming, then serialize native teardown.
             sdkCallLock.lock()
+
+            lock.lock()
+            guard streaming,
+                  handle == activeHandle,
+                  buffer == activeBuffer,
+                  frameHandler != nil else {
+                lock.unlock()
+                sdkCallLock.unlock()
+                return
+            }
+            let expectedWidth = width
+            let expectedHeight = height
+            let expectedCapacity = bufferCapacity
+            lock.unlock()
+
             var info = AmcamFrameInfoV2()
             var frameMetadata: AmcamFrameMetadata?
             var pullOperationName: String?
             var tightlyPackedRows = false
-            let result = sdk.pullImage(handle, buffer: buffer, policy: pullImageAPIPolicy, frameInfo: &info, metadata: &frameMetadata, operationName: &pullOperationName, tightlyPackedRows: &tightlyPackedRows)
+            let result = sdk.pullImage(
+                activeHandle,
+                buffer: activeBuffer,
+                policy: pullImageAPIPolicy,
+                frameInfo: &info,
+                metadata: &frameMetadata,
+                operationName: &pullOperationName,
+                tightlyPackedRows: &tightlyPackedRows
+            )
             if result == AmcamSDK.pendingHRESULT {
                 // A callback can race the SDK's frame-ready transition. Keep pull mode
                 // alive and wait for the next image event instead of ending acquisition.
                 sdkCallLock.unlock()
-                lock.unlock()
                 return
             }
             guard result >= 0 else {
-                streaming = false
-                sdkCallLock.unlock()
+                lock.lock()
+                let shouldNotify = streaming && handle == activeHandle
+                if shouldNotify {
+                    streaming = false
+                }
                 lock.unlock()
-                handler(.failure(.cameraReadbackFailed(operation: pullOperationName ?? sdk.pullImageOperationName, code: result)))
+                sdkCallLock.unlock()
+                if shouldNotify {
+                    handler(.failure(
+                        .cameraReadbackFailed(
+                            operation: pullOperationName ?? sdk.pullImageOperationName,
+                            code: result
+                        )
+                    ))
+                }
                 return
             }
+
             let frameWidth = Int(info.width)
             let frameHeight = Int(info.height)
-            guard let layout = AmcamRGB24Layout(width: frameWidth, height: frameHeight, tightlyPackedRows: tightlyPackedRows),
-                  frameWidth == width,
-                  frameHeight == height,
-                  layout.payloadSize <= bufferCapacity else {
-                streaming = false
-                sdkCallLock.unlock()
+            guard let layout = AmcamRGB24Layout(
+                width: frameWidth,
+                height: frameHeight,
+                tightlyPackedRows: tightlyPackedRows
+            ),
+            frameWidth == expectedWidth,
+            frameHeight == expectedHeight,
+            layout.payloadSize <= expectedCapacity else {
+                lock.lock()
+                let shouldNotify = streaming && handle == activeHandle
+                if shouldNotify {
+                    streaming = false
+                }
                 lock.unlock()
-                handler(.failure(.invalidFrameDimensions))
+                sdkCallLock.unlock()
+                if shouldNotify {
+                    handler(.failure(.invalidFrameDimensions))
+                }
                 return
             }
+
+            // The bytes must be owned before PullImage's reusable SDK buffer is
+            // touched by the next frame event.
             let frame = AmcamFrame(
                 width: frameWidth,
                 height: frameHeight,
                 bytesPerRow: layout.bytesPerRow,
                 pixelFormat: .rgb24,
-                bytes: Data(bytes: buffer, count: layout.payloadSize),
+                bytes: Data(bytes: activeBuffer, count: layout.payloadSize),
                 sequence: (info.flag & AmcamSDK.frameSequenceFlag) != 0 ? info.seq : nil,
                 deviceTimestampMicroseconds: (info.flag & AmcamSDK.frameTimestampFlag) != 0 && info.timestamp >= 0
                     ? UInt64(info.timestamp)
@@ -956,25 +1013,34 @@ public final class AmcamCameraSession: @unchecked Sendable {
                 metadata: frameMetadata
             )
             sdkCallLock.unlock()
-            lock.unlock()
             handler(.success(frame))
             return
         }
 
         if event == AmcamSDK.disconnectedEvent {
-            streaming = false
+            lock.lock()
+            let shouldNotify = streaming && handle == activeHandle
+            if shouldNotify {
+                streaming = false
+            }
             lock.unlock()
-            handler(.failure(.cameraDisconnected))
+            if shouldNotify {
+                handler(.failure(.cameraDisconnected))
+            }
             return
         }
         if event == AmcamSDK.errorEvent ||
            event == AmcamSDK.noFrameTimeoutEvent ||
            event == AmcamSDK.noPacketTimeoutEvent {
-            streaming = false
+            lock.lock()
+            let shouldNotify = streaming && handle == activeHandle
+            if shouldNotify {
+                streaming = false
+            }
             lock.unlock()
-            handler(.failure(.cameraEventFailure(event)))
+            if shouldNotify {
+                handler(.failure(.cameraEventFailure(event)))
+            }
             return
         }
-        lock.unlock()
-    }
-}
+    }}
