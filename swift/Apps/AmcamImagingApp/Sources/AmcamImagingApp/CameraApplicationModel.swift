@@ -24,6 +24,8 @@ final class CameraApplicationModel: ObservableObject {
     private let cameraLifecycle = CameraSessionLifecycle()
     private var frameConsumerTask: Task<Void, Never>?
     private var lifecycleEventTask: Task<Void, Never>?
+    private var deviceMonitorTask: Task<Void, Never>?
+    private var sessionNeedsRecreation = false
     private var featureDescriptors: [CameraFeatureDescriptor] = []
     private var hasInitialized = false
     private var cameraSelectionGeneration: UInt64 = 0
@@ -69,7 +71,10 @@ final class CameraApplicationModel: ObservableObject {
         Task { await refreshDevicesOwned(operation: operation) }
     }
 
-    private func refreshDevicesOwned(operation: UInt64) async {
+    private func refreshDevicesOwned(
+        operation: UInt64,
+        backgroundMonitor: Bool = false
+    ) async {
         guard isCurrentCameraSelectionOperation(operation) else { return }
         guard let cameraProvider else {
             status = "AmScope camera provider is unavailable"
@@ -81,11 +86,23 @@ final class CameraApplicationModel: ObservableObject {
         let discoveredCandidates = Dictionary(
             uniqueKeysWithValues: report.devices.map { ($0.id, $0) }
         )
+        let previousDeviceIDs = Set(devices.map(\.identifier))
+        let discoveredDeviceIDs = Set(discoveredDevices.map(\.identifier))
+        let topologyChanged = previousDeviceIDs != discoveredDeviceIDs
+        let selectedDeviceIsPresent = discoveredDevices.contains {
+            $0.identifier == selectedDeviceID
+        }
 
         devices = discoveredDevices
         candidatesByID = discoveredCandidates
 
-        if !discoveredDevices.contains(where: { $0.identifier == selectedDeviceID }) {
+        // The same SDK identifier can return after a USB reconnect. A previous
+        // callback failure or an observed removal invalidates the old session
+        // even when the identifier is present again.
+        if !selectedDeviceIsPresent {
+            sessionNeedsRecreation = true
+        }
+        if sessionNeedsRecreation {
             guard await closeSession(expectedGeneration: operation),
                   isCurrentCameraSelectionOperation(operation) else {
                 if isCurrentCameraSelectionOperation(operation) {
@@ -93,24 +110,31 @@ final class CameraApplicationModel: ObservableObject {
                 }
                 return
             }
-            selectedDeviceID = discoveredDevices.first?.identifier ?? ""
-            latestFrame = nil
+            sessionNeedsRecreation = false
+            if !selectedDeviceIsPresent {
+                selectedDeviceID = discoveredDevices.first?.identifier ?? ""
+                latestFrame = nil
+            }
         }
 
         if discoveredDevices.isEmpty {
-            status = report.failures.isEmpty
-                ? "No AmScope cameras detected"
-                : "GenTL camera discovery failed"
-            errorMessage = report.failures
-                .map { "\($0.backendID): \($0.message)" }
-                .joined(separator: "\n")
+            if !backgroundMonitor || topologyChanged {
+                status = report.failures.isEmpty
+                    ? "No AmScope cameras detected"
+                    : "GenTL camera discovery failed"
+                errorMessage = report.failures
+                    .map { "\($0.backendID): \($0.message)" }
+                    .joined(separator: "\n")
+            }
             return
         }
 
-        status = "\(discoveredDevices.count) camera(s) detected through the AmScope camera provider"
-        errorMessage = report.failures.isEmpty
-            ? nil
-            : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
+        if !backgroundMonitor || topologyChanged {
+            status = "\(discoveredDevices.count) camera(s) detected through the AmScope camera provider"
+            errorMessage = report.failures.isEmpty
+                ? nil
+                : report.failures.map { "\($0.backendID): \($0.message)" }.joined(separator: "\n")
+        }
 
         if !(await cameraLifecycle.snapshot()).hasSession,
            isCurrentCameraSelectionOperation(operation),
@@ -130,6 +154,7 @@ final class CameraApplicationModel: ObservableObject {
               await closeSession(expectedGeneration: operation),
               isCurrentCameraSelectionOperation(operation) else { return }
         selectedDeviceID = identifier
+        sessionNeedsRecreation = false
         latestFrame = nil
         cameraCapabilities = nil
         controls = nil
@@ -228,6 +253,7 @@ final class CameraApplicationModel: ObservableObject {
         case .failure(let message):
             status = "Camera stopped — acquisition error"
             errorMessage = message
+            sessionNeedsRecreation = true
         case .closed:
             isStreaming = false
         }
@@ -261,7 +287,23 @@ final class CameraApplicationModel: ObservableObject {
 
     func shutdown() async -> Bool {
         let operation = beginCameraSelectionOperation()
-        return await closeSession(expectedGeneration: operation)
+
+        if let monitor = deviceMonitorTask {
+            monitor.cancel()
+            await monitor.value
+        }
+        deviceMonitorTask = nil
+
+        guard await closeSession(expectedGeneration: operation) else { return false }
+        guard let provider = cameraProvider else { return true }
+
+        let failures = await provider.shutdown()
+        guard isCurrentCameraSelectionOperation(operation) else { return false }
+        cameraProvider = nil
+        candidatesByID.removeAll()
+        devices.removeAll()
+        selectedDeviceID = ""
+        return failures.isEmpty
     }
 
     func refreshControls() {
@@ -414,13 +456,37 @@ final class CameraApplicationModel: ObservableObject {
 
         do {
             cameraProvider = try AmcamCameraProvider(profileRegistry: profileRegistry)
+            sessionNeedsRecreation = false
             await refreshDevicesOwned(operation: operation)
+            startDeviceMonitoring()
         } catch {
             status = "AmScope camera provider is unavailable"
             errorMessage = error.localizedDescription
         }
     }
 
+
+    /// Low-frequency polling provides hot-plug discovery on SDKs that do not
+    /// expose a portable device-change notification. Stable topology does not
+    /// overwrite the current user-visible status.
+    private func startDeviceMonitoring() {
+        deviceMonitorTask?.cancel()
+        deviceMonitorTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(2))
+                } catch {
+                    return
+                }
+                guard let self, self.cameraProvider != nil else { return }
+                let operation = self.cameraSelectionGeneration
+                await self.refreshDevicesOwned(
+                    operation: operation,
+                    backgroundMonitor: true
+                )
+            }
+        }
+    }
 
     private func beginCameraSelectionOperation() -> UInt64 {
         cameraSelectionGeneration &+= 1
