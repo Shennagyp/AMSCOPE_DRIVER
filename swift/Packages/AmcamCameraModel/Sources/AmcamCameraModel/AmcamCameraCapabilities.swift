@@ -85,6 +85,18 @@ public enum AmcamPullImageAPIPolicy: String, Codable, Sendable {
     case v2
 }
 
+/// Acquisition policy is deliberately separate from feature allow/deny profiles:
+/// choosing a native pull API must not implicitly change camera-control availability.
+public struct AmcamCameraAcquisitionProfile: Codable, Equatable, Sendable {
+    public let modelCode: String
+    public let pullImageAPIPolicy: AmcamPullImageAPIPolicy
+
+    public init(modelCode: String, pullImageAPIPolicy: AmcamPullImageAPIPolicy) {
+        self.modelCode = modelCode
+        self.pullImageAPIPolicy = pullImageAPIPolicy
+    }
+}
+
 public enum AmcamFeatureEvidence: String, Codable, Sendable {
     case modelFlag, runtimeProbe, sdkSymbol, modelProfile, implementation
 }
@@ -115,7 +127,6 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
     public let displayName: String?
     public let allowedFeaturesByGroup: [String: Set<AmcamCameraFeature>]
     public let deniedFeatures: Set<AmcamCameraFeature>
-    public let pullImageAPIPolicy: AmcamPullImageAPIPolicy?
 
     public var allowedFeatures: Set<AmcamCameraFeature> {
         allowedFeaturesByGroup.reduce(into: Set<AmcamCameraFeature>()) { result, entry in
@@ -126,11 +137,9 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeatures: Set<AmcamCameraFeature>,
-                deniedFeatures: Set<AmcamCameraFeature> = [],
-                pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
+                deniedFeatures: Set<AmcamCameraFeature> = []) {
         self.modelCode = modelCode
         self.displayName = displayName
-        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.allowedFeaturesByGroup = Dictionary(grouping: allowedFeatures, by: \.group)
             .mapValues(Set.init)
             .reduce(into: [String: Set<AmcamCameraFeature>]()) { result, item in
@@ -145,7 +154,6 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
                 pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
         self.modelCode = modelCode
         self.displayName = displayName
-        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.allowedFeaturesByGroup = Dictionary(
             uniqueKeysWithValues: allowedFeaturesByGroup.map { ($0.key.rawValue, $0.value) }
         )
@@ -195,10 +203,20 @@ public struct AmcamCameraCapabilities: Equatable, Sendable {
 public struct AmcamCameraProfileRegistry: Sendable {
     public typealias ProbeResults = [AmcamCameraFeature: Bool]
     private let profiles: [String: AmcamCameraModelProfile]
+    private let acquisitionProfiles: [String: AmcamCameraAcquisitionProfile]
 
-    public init(profiles: [AmcamCameraModelProfile] = []) {
+    public init(
+        profiles: [AmcamCameraModelProfile] = [],
+        acquisitionProfiles: [AmcamCameraAcquisitionProfile] = []
+    ) {
         self.profiles = Dictionary(
             profiles.map { ($0.modelCode.trimmingCharacters(in: .whitespacesAndNewlines), $0) },
+            uniquingKeysWith: { _, newest in newest }
+        )
+        self.acquisitionProfiles = Dictionary(
+            acquisitionProfiles.map {
+                ($0.modelCode.trimmingCharacters(in: .whitespacesAndNewlines), $0)
+            },
             uniquingKeysWith: { _, newest in newest }
         )
     }
@@ -207,13 +225,15 @@ public struct AmcamCameraProfileRegistry: Sendable {
         profiles[modelCode.trimmingCharacters(in: .whitespacesAndNewlines)]
     }
 
-    /// Returns the exact model's pull-API policy. Unknown models remain on the
-    /// SDK's automatic compatibility path; no model-name heuristics are used.
+    /// Returns the exact model's acquisition policy. Unknown models remain on
+    /// the SDK's automatic compatibility path; no model-name heuristics are used.
     public func pullImageAPIPolicy(for modelCode: String) -> AmcamPullImageAPIPolicy {
-        profile(for: modelCode)?.pullImageAPIPolicy ?? .automatic
+        acquisitionProfiles[
+            modelCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        ]?.pullImageAPIPolicy ?? .automatic
     }
 
-    public func resolve(
+        public func resolve(
         modelCode: String, modelFlags: UInt64, maximumSpeedLevel: Int?,
         probes: ProbeResults, implemented: Set<AmcamCameraFeature>
     ) -> AmcamCameraCapabilities {
