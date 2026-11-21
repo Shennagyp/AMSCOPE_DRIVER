@@ -28,7 +28,9 @@ final class AmcamImagingAppDelegate: NSObject, NSApplicationDelegate {
         _ sender: NSApplication,
         hasVisibleWindows: Bool
     ) -> Bool {
-        if !hasVisibleWindows {
+        // A Settings window can remain open after the main camera window closes.
+        // Reopen based on the camera window itself, not any visible app window.
+        if window == nil || window?.isVisible != true {
             presentMainWindow()
         }
         return true
