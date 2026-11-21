@@ -33,6 +33,9 @@ private func makeButton(_ title: String, target: AnyObject, action: Selector) ->
 final class CameraMainViewController: NSViewController {
     private let model: CameraApplicationModel
     private var observation: AnyCancellable?
+    private var frameObservation: AnyCancellable?
+    private var pendingFrameUpdate: FramePresentationUpdate?
+    private var frameRenderScheduled = false
     private let preview = NSImageView()
     private let titleLabel = makeLabel("No camera selected", size: 14)
     private let detailLabel = makeLabel("Select an AmScope camera", size: 11, color: .secondaryLabelColor)
@@ -43,7 +46,6 @@ final class CameraMainViewController: NSViewController {
     private let startButton = NSButton(title: "Start", target: nil, action: nil)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
     private var settingsWindow: NSWindow?
-    private var displayedFrameRevision: UInt64?
 
     init(model: CameraApplicationModel) {
         self.model = model
@@ -120,7 +122,29 @@ final class CameraMainViewController: NSViewController {
         observation = model.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.render() }
         }
+        frameObservation = model.framePresentationPublisher.sink { [weak self] update in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.pendingFrameUpdate = update
+                guard !self.frameRenderScheduled else { return }
+                self.frameRenderScheduled = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.renderPendingFrame()
+                }
+            }
+        }
         render()
+    }
+
+    private func renderPendingFrame() {
+        frameRenderScheduled = false
+        guard let update = pendingFrameUpdate else { return }
+        pendingFrameUpdate = nil
+
+        preview.image = update.frame.flatMap { makePreviewImage(from: $0) }
+        liveLabel.stringValue = model.isStreaming
+            ? String(format: "● LIVE   %.1f FPS", update.framesPerSecond)
+            : ""
     }
 
     private func render() {
@@ -131,16 +155,6 @@ final class CameraMainViewController: NSViewController {
         liveLabel.stringValue = model.isStreaming
             ? String(format: "● LIVE   %.1f FPS", model.framesPerSecond)
             : ""
-        if let frame = model.latestFrame {
-            if model.frameRevision != displayedFrameRevision {
-                preview.image = makePreviewImage(from: frame)
-                displayedFrameRevision = model.frameRevision
-            }
-        } else {
-            preview.image = nil
-            displayedFrameRevision = nil
-        }
-
         let selectedID = model.selectedDeviceID
         cameraPicker.removeAllItems()
         if model.devices.isEmpty {
