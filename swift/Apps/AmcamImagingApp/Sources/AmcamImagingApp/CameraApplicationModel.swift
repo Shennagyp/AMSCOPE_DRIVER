@@ -11,6 +11,9 @@ final class CameraApplicationModel: ObservableObject {
     @Published private(set) var devices: [AmcamDevice] = []
     @Published var selectedDeviceID = ""
     @Published private(set) var latestFrame: RGB8Frame?
+    /// Monotonic application-side identity for each accepted frame arrival.
+    /// Device sequence metadata is not guaranteed to be a unique UI invalidation key.
+    @Published private(set) var frameRevision: UInt64 = 0
     @Published private(set) var isStreaming = false
     @Published private(set) var cameraCapabilities: AmcamCameraCapabilities?
     @Published private(set) var controls: AmcamControlSnapshot?
@@ -669,7 +672,7 @@ final class CameraApplicationModel: ObservableObject {
 
     private func accept(_ frame: CameraFramePayload) {
         do {
-            latestFrame = try RGB8Frame.decode(
+            let decodedFrame = try RGB8Frame.decode(
                 width: frame.width,
                 height: frame.height,
                 pixelFormat: frame.pixelFormat,
@@ -680,6 +683,8 @@ final class CameraApplicationModel: ObservableObject {
                 sequence: frame.sequence,
                 bytes: frame.bytes
             )
+            latestFrame = decodedFrame
+            frameRevision &+= 1
         } catch let error as RGB8FrameError {
             switch error {
             case .unsupportedPixelFormat(let namespace, let format):
