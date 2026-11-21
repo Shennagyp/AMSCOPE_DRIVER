@@ -201,15 +201,20 @@ private actor FakeDevice: CameraRuntimeDevice {
 }
 
 private actor FakeSession: CameraRuntimeSession {
-    private let acquisition: FakeAcquisition
+    private let acquisitions: [FakeAcquisition]
     private var closeFailuresRemaining: Int
     private let featureReadGate: AsyncGate?
 
     private(set) var acquisitionRequests = 0
     private(set) var closeAttempts = 0
 
-    init(acquisition: FakeAcquisition, closeFailures: Int = 0, featureReadGate: AsyncGate? = nil) {
-        self.acquisition = acquisition
+    init(
+        acquisition: FakeAcquisition,
+        additionalAcquisitions: [FakeAcquisition] = [],
+        closeFailures: Int = 0,
+        featureReadGate: AsyncGate? = nil
+    ) {
+        acquisitions = [acquisition] + additionalAcquisitions
         closeFailuresRemaining = closeFailures
         self.featureReadGate = featureReadGate
     }
@@ -226,8 +231,9 @@ private actor FakeSession: CameraRuntimeSession {
     func writeFeature(_ value: CameraFeatureValue, named name: String) async throws {}
 
     func makeAcquisition() async throws -> any CameraRuntimeAcquisition {
+        let index = min(acquisitionRequests, acquisitions.count - 1)
         acquisitionRequests += 1
-        return acquisition
+        return acquisitions[index]
     }
 
     func close() async throws {
@@ -414,6 +420,45 @@ final class CameraSessionLifecycleTests: XCTestCase {
         XCTAssertTrue(snapshot.hasSession)
         XCTAssertTrue(snapshot.hasAcquisition)
         XCTAssertEqual(stopAttempts, 1)
+    }
+
+    func testStopThenStartCreatesFreshAcquisitionOnExistingDeviceSession() async throws {
+        let firstAcquisition = FakeAcquisition()
+        let secondAcquisition = FakeAcquisition()
+        let session = FakeSession(
+            acquisition: firstAcquisition,
+            additionalAcquisitions: [secondAcquisition]
+        )
+        let lifecycle = CameraSessionLifecycle()
+
+        try await lifecycle.open(FakeDevice(session: session))
+        try await lifecycle.start()
+        try await lifecycle.stop()
+
+        let stoppedSnapshot = await lifecycle.snapshot()
+        XCTAssertFalse(stoppedSnapshot.isStreaming)
+        XCTAssertTrue(stoppedSnapshot.hasSession)
+        XCTAssertTrue(stoppedSnapshot.hasAcquisition)
+
+        // Starting again must close the old GenTL acquisition and ask the still-open
+        // camera session for a fresh acquisition object.
+        try await lifecycle.start()
+
+        let restartedSnapshot = await lifecycle.snapshot()
+        let acquisitionRequests = await session.acquisitionRequests
+        XCTAssertTrue(restartedSnapshot.isStreaming)
+        XCTAssertTrue(restartedSnapshot.hasSession)
+        XCTAssertTrue(restartedSnapshot.hasAcquisition)
+        XCTAssertEqual(acquisitionRequests, 2)
+        XCTAssertEqual(firstAcquisition.closeAttempts, 1)
+        XCTAssertEqual(secondAcquisition.startAttempts, 1)
+
+        try await lifecycle.stop()
+        try await lifecycle.close()
+
+        let sessionCloseAttempts = await session.closeAttempts
+        XCTAssertEqual(secondAcquisition.closeAttempts, 1)
+        XCTAssertEqual(sessionCloseAttempts, 1)
     }
 
     func testFrameArrivingDuringCloseIsRejectedByGenerationGuard() async throws {
