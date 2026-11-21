@@ -6,21 +6,28 @@ import AmcamImagingState
 import Foundation
 import Combine
 
+struct FramePresentationUpdate: Sendable {
+    let frame: RGB8Frame?
+    let framesPerSecond: Double
+}
+
 @MainActor
 final class CameraApplicationModel: ObservableObject {
     @Published private(set) var devices: [AmcamDevice] = []
     @Published var selectedDeviceID = ""
-    @Published private(set) var latestFrame: RGB8Frame?
-    /// Monotonic application-side identity for each accepted frame arrival.
-    /// Device sequence metadata is not guaranteed to be a unique UI invalidation key.
-    @Published private(set) var frameRevision: UInt64 = 0
     @Published private(set) var isStreaming = false
     @Published private(set) var cameraCapabilities: AmcamCameraCapabilities?
     @Published private(set) var controls: AmcamControlSnapshot?
     @Published private(set) var status = "Select an AmScope camera"
     @Published var errorMessage: String?
     @Published var isSettingsPresented = false
-    @Published private(set) var framesPerSecond = 0.0
+    private(set) var framesPerSecond = 0.0
+
+    private let framePresentationSubject = PassthroughSubject<FramePresentationUpdate, Never>()
+
+    var framePresentationPublisher: AnyPublisher<FramePresentationUpdate, Never> {
+        framePresentationSubject.eraseToAnyPublisher()
+    }
 
     private var cameraProvider: AmcamCameraProvider?
     private var candidatesByID: [String: AmcamCameraCandidate] = [:]
@@ -135,7 +142,7 @@ final class CameraApplicationModel: ObservableObject {
                 return
             }
             sessionNeedsRecreation = false
-            latestFrame = nil
+            clearFramePresentation()
             if !selectedDeviceIsPresent {
                 selectedDeviceID = discoveredDevices.first?.identifier ?? ""
             }
@@ -186,7 +193,7 @@ final class CameraApplicationModel: ObservableObject {
               isCurrentCameraSelectionOperation(operation) else { return }
         selectedDeviceID = identifier
         sessionNeedsRecreation = false
-        latestFrame = nil
+        clearFramePresentation()
         cameraCapabilities = nil
         controls = nil
         featureDescriptors = []
@@ -247,9 +254,7 @@ final class CameraApplicationModel: ObservableObject {
             }
         }
 
-        latestFrame = nil
-        frameRateEstimator.reset()
-        framesPerSecond = 0
+        clearFramePresentation()
 
         do {
             try await cameraLifecycle.start()
@@ -683,8 +688,13 @@ final class CameraApplicationModel: ObservableObject {
                 sequence: frame.sequence,
                 bytes: frame.bytes
             )
-            latestFrame = decodedFrame
-            frameRevision &+= 1
+            let now = ProcessInfo.processInfo.systemUptime
+            if let estimate = frameRateEstimator.record(timestamp: now) {
+                framesPerSecond = estimate
+            }
+            framePresentationSubject.send(
+                FramePresentationUpdate(frame: decodedFrame, framesPerSecond: framesPerSecond)
+            )
         } catch let error as RGB8FrameError {
             switch error {
             case .unsupportedPixelFormat(let namespace, let format):
@@ -702,10 +712,14 @@ final class CameraApplicationModel: ObservableObject {
             return
         }
 
-        let now = ProcessInfo.processInfo.systemUptime
-        if let estimate = frameRateEstimator.record(timestamp: now) {
-            framesPerSecond = estimate
-        }
+    }
+
+    private func clearFramePresentation() {
+        frameRateEstimator.reset()
+        framesPerSecond = 0
+        framePresentationSubject.send(
+            FramePresentationUpdate(frame: nil, framesPerSecond: 0)
+        )
     }
 
     private func loadProfileConfiguration() {
