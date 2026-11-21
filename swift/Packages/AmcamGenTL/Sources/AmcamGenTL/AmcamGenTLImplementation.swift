@@ -1772,13 +1772,18 @@ extension AmcamGenTLImplementation: GenTLAPI {
         _ ppBuffer: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
         _ ppPrivate: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
     ) -> GenTLABI.GC_ERROR {
-        guard let ppBuffer, let ppPrivate else { return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER) }
+        // GenTL permits either output pointer to be NULL; NULL means the
+        // caller does not request that particular returned value.
         do {
             let stream = try typedHandle(hDataStream, as: DSModule.self)
             guard let buffer = validBuffer(hBuffer, in: stream) else { try fail(.invalidBuffer) }
             let revoked = try DSRevokeBuffer(stream, buffer: buffer)
-            ppBuffer.pointee = revoked.baseAddress
-            ppPrivate.pointee = revoked.privateData
+            if let ppBuffer {
+                ppBuffer.pointee = revoked.baseAddress
+            }
+            if let ppPrivate {
+                ppPrivate.pointee = revoked.privateData
+            }
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
         } catch { return rawError(error) }
     }
