@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 import GenTLABI
@@ -622,6 +623,124 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
 }
 
 final class GenTLRouterLifecycleTests: XCTestCase {
+    private func buildMockAmcamSDK() throws -> URL {
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let fixtureRoot = packageRoot.appendingPathComponent("../AmcamGenTL")
+        let source = fixtureRoot
+            .appendingPathComponent("Tests/AmcamGenTLTests/Fixtures/MockAmcamSDK.c")
+            .standardizedFileURL
+        let includeDirectory = fixtureRoot
+            .appendingPathComponent("Sources/AmcamABI/include")
+            .standardizedFileURL
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("libMockAmcam-Routed-\(UUID().uuidString).dylib")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/clang")
+        process.arguments = [
+            "-dynamiclib",
+            "-fPIC",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I", includeDirectory.path,
+            source.path,
+            "-o", output.path
+        ]
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        try process.run()
+        process.waitUntilExit()
+        let diagnostics = String(
+            data: errorPipe.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        XCTAssertEqual(process.terminationStatus, 0, "Mock Amcam SDK compilation failed:\n\(diagnostics)")
+        return output
+    }
+
+    func testRoutedAmcamCloseAfterDisconnectAndStopFailure() throws {
+        let libraryURL = try buildMockAmcamSDK()
+        defer { try? FileManager.default.removeItem(at: libraryURL) }
+
+        let router = GenTLRouter()
+        try router.registerAmcam(
+            backendID: "routed-amcam-terminal-close",
+            sdkLibraryURL: libraryURL
+        )
+        let report = router.discover()
+        XCTAssertTrue(report.failures.isEmpty)
+        let candidate = try XCTUnwrap(report.devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        var deviceClosed = false
+        defer {
+            if !deviceClosed {
+                try? acquisition.close()
+                try? device.close()
+            }
+            _ = router.shutdown()
+        }
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        guard let fixtureHandle else { return }
+        defer { dlclose(fixtureHandle) }
+
+        guard let emitSymbol = dlsym(fixtureHandle, "MockAmcam_EmitEvent"),
+              let setStopFailureSymbol = dlsym(fixtureHandle, "MockAmcam_SetStopFailure"),
+              let closeCountSymbol = dlsym(fixtureHandle, "MockAmcam_CloseCount"),
+              let stopCountSymbol = dlsym(fixtureHandle, "MockAmcam_StopCount") else {
+            XCTFail("Mock Amcam SDK is missing routed terminal-close hooks")
+            return
+        }
+
+        let emitEvent = unsafeBitCast(
+            emitSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+        let setStopFailure = unsafeBitCast(
+            setStopFailureSymbol,
+            to: (@convention(c) (Int32) -> Void).self
+        )
+        let closeCount = unsafeBitCast(
+            closeCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+        let stopCount = unsafeBitCast(
+            stopCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+
+        try acquisition.start()
+        let firstFrame = try acquisition.nextFrame(timeoutMilliseconds: 1_000)
+        XCTAssertEqual(firstFrame.bytes.first, 0x5a)
+
+        // The vendor callback reports a physical disconnect and stops delivering
+        // New Buffer events. The next frame read observes the Producer's stopped
+        // state, matching the runtime's disconnect path.
+        emitEvent(0x0081)
+        XCTAssertThrowsError(try acquisition.nextFrame(timeoutMilliseconds: 20)) { error in
+            XCTAssertEqual(
+                error as? GenTLAcquisitionError,
+                .acquisitionStopped
+            )
+        }
+
+        // Model the vendor rejecting Stop once the physical device is gone.
+        // The real GenTL consumer must still close the stream and owning device.
+        setStopFailure(1)
+        try acquisition.close()
+        try device.close()
+        deviceClosed = true
+
+        XCTAssertEqual(stopCount(), 2, "The consumer and Producer each attempt orderly Stop before terminal close.")
+        XCTAssertEqual(closeCount(), 1, "The native Amcam handle must be closed exactly once.")
+        XCTAssertTrue(router.shutdown().isEmpty, "The provider hierarchy must close after the device session.")
+    }
     func testDeviceSessionForwardsTypedFeatureAccessToItsOwningBackend() throws {
         let api = RecordingGenTLAPI()
         let router = GenTLRouter()
