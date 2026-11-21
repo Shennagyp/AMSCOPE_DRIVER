@@ -67,12 +67,8 @@ public struct AmcamExposureControl: Equatable, Sendable {
 
 public struct AmcamCameraImageControls: Equatable, Sendable {
     public let colorMatrixEnabled: Bool?
-    /// Current Amcam vendor sensor-format selector (not the delivered PFNC frame format).
     public let pixelFormatCode: Int32?
-    /// Values returned by Amcam_get_PixelFormatSupport; these are not PFNC identifiers.
     public let supportedPixelFormats: [Int32]
-    public var sensorPixelFormatCode: Int32? { pixelFormatCode }
-    public var supportedSensorPixelFormats: [Int32] { supportedPixelFormats }
 
     public init(colorMatrixEnabled: Bool?, pixelFormatCode: Int32?, supportedPixelFormats: [Int32]) {
         self.colorMatrixEnabled = colorMatrixEnabled
@@ -81,11 +77,7 @@ public struct AmcamCameraImageControls: Equatable, Sendable {
     }
 }
 
-/// Vendor-defined pixel-format selector queried through Amcam_get_PixelFormatSupport
-/// and applied with AMCAM_OPTION_PIXEL_FORMAT (0x1a). These values are not PFNC
-/// identifiers. Selecting one does not itself enable raw acquisition; raw/processed
-/// mode is a separate SDK option.
-public enum AmcamSensorPixelFormatCode: Int32, CaseIterable, Sendable, Identifiable {
+public enum AmcamPixelFormatCode: Int32, CaseIterable, Sendable, Identifiable {
     case raw8 = 0
     case raw10 = 1
     case raw12 = 2
@@ -129,11 +121,6 @@ public enum AmcamSensorPixelFormatCode: Int32, CaseIterable, Sendable, Identifia
         }
     }
 }
-
-
-/// Source-compatible name retained for existing clients. Prefer
-/// AmcamSensorPixelFormatCode to distinguish this SDK selector from delivered PFNC data.
-public typealias AmcamPixelFormatCode = AmcamSensorPixelFormatCode
 
 public struct AmcamWhiteBalanceControl: Equatable, Sendable {
     public let temperature: Int32?

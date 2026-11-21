@@ -934,8 +934,6 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(controls.image?.colorMatrixEnabled, true)
         XCTAssertEqual(controls.image?.pixelFormatCode, 8)
         XCTAssertEqual(controls.image?.supportedPixelFormats, [0, 8])
-        XCTAssertEqual(controls.image?.sensorPixelFormatCode, 8)
-        XCTAssertEqual(controls.image?.supportedSensorPixelFormats, [0, 8])
         controls = try session.setColorMatrixEnabled(false)
         XCTAssertEqual(controls.image?.colorMatrixEnabled, false)
         controls = try session.setPixelFormat(code: 0)
@@ -1888,12 +1886,8 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         // GenTL allows either output pointer to be NULL. This is the exact
         // raw-ABI call issued by GenTLAcquisitionSession.close().
-        let rawStream = try XCTUnwrap(
-            UnsafeMutableRawPointer(bitPattern: openedStream.rawValue)
-        )
-        let rawBuffer = try XCTUnwrap(
-            UnsafeMutableRawPointer(bitPattern: buffer.rawValue)
-        )
+        let rawStream = UnsafeMutableRawPointer(bitPattern: openedStream.rawValue)
+        let rawBuffer = UnsafeMutableRawPointer(bitPattern: buffer.rawValue)
         let revokeStatus = implementation.DSRevokeBuffer(
             rawStream,
             rawBuffer,
@@ -1951,7 +1945,6 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertTrue(colorMatrix.isWritable)
 
         XCTAssertEqual(pixelFormat.kind, .enumeration)
-        XCTAssertEqual(pixelFormat.displayName, "Amcam Sensor Format")
         XCTAssertEqual(pixelFormat.enumerationValues, ["0", "8"])
         XCTAssertTrue(pixelFormat.isAvailable)
         XCTAssertTrue(pixelFormat.isWritable)

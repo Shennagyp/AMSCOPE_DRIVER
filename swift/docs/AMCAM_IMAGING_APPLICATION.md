@@ -149,14 +149,14 @@ The routed application currently provides:
 - a bounded announced-buffer pool, copy-before-requeue semantics, and ordered stop/flush/revoke/close cleanup;
 - RGB8 (PFNC format 0x02180014, namespace 4) display with row-padding and payload-size validation;
 - ExposureAuto (Off, Once, Continuous), ExposureTime (microseconds), and AmcamAnalogGainPercent (percentage);
-- AmcamColorMatrixEnabled (boolean) and AmcamPixelFormat (legacy GenTL feature identifier for the Amcam vendor sensor-format enumeration; it is not the delivered PFNC frame format);
+- AmcamColorMatrixEnabled (boolean) and AmcamPixelFormat (enumeration from the camera's SDK-reported supported-format list);
 - AmcamWhiteBalanceTemperature (K), AmcamWhiteBalanceTint, and AmcamWhiteBalanceRGBGain (three-element integer vector);
 - AmcamFixedFrameRate (floating-point FPS with 0.1 FPS increments) and AmcamFrameSpeedLevel (integer discrete level);
 - AmcamResolutionIndex, whose enumeration values preserve the SDK's exact resolution index and dimensions;
 - model-specific availability and dynamic access state derived from model flags, non-mutating SDK probes and the selected model profile;
 - SDK setter range checks and readback verification for writable controls, with writes denied when the active model profile disallows the feature.
 
-Feature descriptors are generated for the opened camera. A feature is not considered usable merely because the SDK exports a function: model capability, runtime probe, implementation coverage and model-profile policy must all agree. Features that are unsupported by the specific camera are reported unavailable. The Amcam sensor-format selector and resolution are writable only while acquisition is stopped. The UI labels the vendor selector "Sensor format"; selecting a RAW-named vendor code does not enable raw acquisition or alter the delivered GenTL PFNC format. RGB white-balance uses a fixed three-element vector; the SDK wrapper verifies the complete vector by readback, but the SDK does not provide a numeric range for those three channel values, so no invented range is advertised.
+Feature descriptors are generated for the opened camera. A feature is not considered usable merely because the SDK exports a function: model capability, runtime probe, implementation coverage and model-profile policy must all agree. Features that are unsupported by the specific camera are reported unavailable. Pixel format and resolution are writable only while acquisition is stopped. RGB white-balance uses a fixed three-element vector; the SDK wrapper verifies the complete vector by readback, but the SDK does not provide a numeric range for those three channel values, so no invented range is advertised.
 
 The display decoder currently accepts RGB8 only. Mono, Bayer, packed RAW, YUV and other PFNC formats require format-specific decoders. The app currently registers the Amcam backend; native CTI Producer selection in the UI is not yet implemented. Native CTI feature access still requires a verified GenApi XML/port path. No synthetic register map or fake GenApi XML is used.
 
@@ -223,7 +223,7 @@ This is a user-confirmed physical recovery result. It does not by itself establi
 The later `DSRevokeBuffer` `-1009` cleanup failure was traced to the Producer requiring non-NULL output pointers even though GenTL permits either output to be omitted. The raw ABI adapter now honors optional outputs, and the user confirmed that the MU503 disconnect/reconnect recovery worked after this correction. The observed cleanup failure is closed; the broader sustained-stream, settings and diagnostic-probe checks remain separate.
 ### First physical-camera test
 
-Use the app first without changing the camera sensor format:
+Use the app first without changing the camera pixel format:
 
 1. Confirm discovery and exclusive open of the MU503.
 2. Start live acquisition and confirm a stable RGB image and a nonzero FPS display.
@@ -232,7 +232,7 @@ Use the app first without changing the camera sensor format:
 5. Change analog gain and confirm its readback. Gain is represented as a percentage, not dB.
 6. With the app still running, disconnect and reconnect the MU503; verify discovery/session recovery and that Start becomes enabled without restarting the app. Also run `make run` while an app instance is already open and verify the old process exits before the new build launches.
 
-The application display path currently decodes RGB8 only. Do not use RAW, Bayer, YUV or other sensor formats as an acceptance test yet. Keep the default format for the first test. Record any error text and whether it occurred during discovery, open, start, streaming, stop or close.
+The application display path currently decodes RGB8 only. Do not use RAW, Bayer, YUV or other pixel formats as an acceptance test yet. Keep the default format for the first test. Record any error text and whether it occurred during discovery, open, start, streaming, stop or close.
 
 The camera probe can exercise the backend without the GUI if the app reports discovery or acquisition errors. Add `--json` to `make run-probe` to emit a schema-versioned JSON report containing backend/SDK identity, camera model descriptor, stream payload, pixel-format identifier, dimensions, row stride, acquisition counters/timestamps, failure stage and cleanup errors. The JSON document is the only stdout output in this mode; SwiftPM build diagnostics remain on stderr. During cleanup, the probe stops acquisition, unregisters stream events, uses `ACQ_QUEUE_ALL_DISCARD`, revokes every announced buffer, then closes parent modules in dependency order. A cleanup failure is retained in `cleanup_errors` and prevents later parent teardown. The probe still exits nonzero when the report status is `failure`, while preserving the structured report on stdout.
 

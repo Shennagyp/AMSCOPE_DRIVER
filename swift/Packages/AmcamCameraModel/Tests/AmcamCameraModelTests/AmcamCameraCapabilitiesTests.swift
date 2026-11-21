@@ -8,13 +8,6 @@ final class AmcamCameraCapabilitiesTests: XCTestCase {
     ]
 
 
-    func testAmcamSensorPixelFormatCodeIsVendorSpecificAndLegacyNameRemainsCompatible() {
-        XCTAssertEqual(AmcamSensorPixelFormatCode(rawValue: 0), .raw8)
-        XCTAssertEqual(AmcamSensorPixelFormatCode(rawValue: 8), .rgb888)
-        XCTAssertEqual(AmcamPixelFormatCode(rawValue: 8), .rgb888)
-        XCTAssertNil(AmcamSensorPixelFormatCode(rawValue: 99))
-    }
-
     func testRuntimeResolutionUsesFeatureAvailabilityAndStreamEvidence() {
         let registry = AmcamCameraProfileRegistry()
         let device = AmcamDevice(
