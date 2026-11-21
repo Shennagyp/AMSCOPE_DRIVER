@@ -37,6 +37,8 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
     private var eventDelivered = false
     private var queuedBufferCount = 0
     private var flushCountValue = 0
+    private var flushOperationsValue: [Int32] = []
+    private var failAllDiscardFlush = false
     private var failBufferRevoke = false
     private var queueBufferFailuresRemaining = 0
     private var forceEventTimeout = false
@@ -265,6 +267,18 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
             guard let base = source.baseAddress else { return }
             bufferMemory.copyMemory(from: base, byteCount: source.count)
         }
+    }
+
+    func setFailAllDiscardFlush(_ value: Bool) {
+        lock.lock()
+        failAllDiscardFlush = value
+        lock.unlock()
+    }
+
+    func flushOperations() -> [Int32] {
+        lock.lock()
+        defer { lock.unlock() }
+        return flushOperationsValue
     }
 
     func setFailBufferRevoke(_ value: Bool) {
@@ -550,13 +564,17 @@ private final class RecordingGenTLAPI: GenTLAPI, @unchecked Sendable {
         _ hDataStream: GenTLABI.DS_HANDLE,
         _ iOperation: GenTLABI.ACQ_QUEUE_TYPE
     ) -> GenTLABI.GC_ERROR {
-        guard hDataStream == streamToken, iOperation == 2 else {
+        guard hDataStream == streamToken, (iOperation == 2 || iOperation == 4) else {
             return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_INVALID_PARAMETER)
         }
         lock.lock()
         flushCountValue += 1
+        flushOperationsValue.append(iOperation)
+        let shouldFail = iOperation == 4 && failAllDiscardFlush
         lock.unlock()
-        return GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS)
+        return GenTLABI.GenTLABI_ErrorFromCode(
+            shouldFail ? GenTLABI.GC_ERR_RESOURCE_IN_USE : GenTLABI.GC_ERR_SUCCESS
+        )
     }
 
     func DSRevokeBuffer(
@@ -798,6 +816,56 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         }
 
         XCTAssertEqual(api.snapshot().acquisitionStop, 1)
+        XCTAssertEqual(api.snapshot().bufferRevoke, 1)
+        XCTAssertEqual(api.snapshot().dataStreamClose, 1)
+        try device.close()
+    }
+
+    func testAcquisitionCloseDiscardsBothQueuesBeforeRevokingBuffers() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "close-all-discard") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        try acquisition.start()
+
+        try acquisition.close()
+
+        XCTAssertEqual(
+            api.flushOperations(),
+            [
+                GenTLQueueOperation.allToInput.rawValue, // before start
+                GenTLQueueOperation.allToInput.rawValue, // after stop
+                GenTLQueueOperation.allDiscard.rawValue  // release both queue pools
+            ]
+        )
+        XCTAssertEqual(api.snapshot().bufferRevoke, 1)
+        XCTAssertEqual(api.snapshot().dataStreamClose, 1)
+        try device.close()
+    }
+
+    func testAllDiscardFailureRetainsBuffersAndStreamForCloseRetry() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "close-all-discard-retry") { api }
+        let candidate = try XCTUnwrap(router.discover().devices.first)
+        let device = try candidate.open(access: .exclusive)
+        let acquisition = try GenTLAcquisitionSession(device: device, bufferCount: 1)
+        try acquisition.start()
+        api.setFailAllDiscardFlush(true)
+
+        XCTAssertThrowsError(try acquisition.close()) { error in
+            guard case GenTLAcquisitionError.genTLCallFailed(let operation, _) = error else {
+                return XCTFail("Expected all-discard flush failure, received \(error)")
+            }
+            XCTAssertEqual(operation, "DSFlushQueue(AllDiscard)")
+        }
+        XCTAssertEqual(api.snapshot().bufferRevoke, 0)
+        XCTAssertEqual(api.snapshot().dataStreamClose, 0)
+
+        api.setFailAllDiscardFlush(false)
+        try acquisition.close()
         XCTAssertEqual(api.snapshot().bufferRevoke, 1)
         XCTAssertEqual(api.snapshot().dataStreamClose, 1)
         try device.close()
