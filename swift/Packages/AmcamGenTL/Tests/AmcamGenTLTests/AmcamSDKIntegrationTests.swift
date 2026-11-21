@@ -54,6 +54,15 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             AmcamResolution(index: 2, width: 640, height: 480)
         ])
 
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer { if let fixtureHandle { dlclose(fixtureHandle) } }
+        guard let flushCountSymbol = dlsym(fixtureHandle, "MockAmcam_FlushCount") else {
+            XCTFail("Mock SDK is missing MockAmcam_FlushCount")
+            return
+        }
+        let flushCount = unsafeBitCast(flushCountSymbol, to: (@convention(c) () -> UInt32).self)
+
         let session = try driver.open(deviceIdentifier: devices[0].identifier)
         XCTAssertEqual(session.currentDimensions().width, 640)
         XCTAssertEqual(session.currentDimensions().height, 480)
@@ -97,6 +106,11 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             XCTAssertEqual(frame.metadata?.gps?.satelliteCount, 8)
 
             try session.stop()
+            XCTAssertEqual(
+                flushCount(),
+                expectedSequence,
+                "Each successful Amcam_Stop must flush the camera and SDK frame caches before another Start."
+            )
         }
 
         // A fatal disconnect event must notify the consumer but retain the SDK
@@ -118,6 +132,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         emitEvent(0x0081)
         wait(for: [disconnected], timeout: 2)
         try session.stop()
+        XCTAssertEqual(flushCount(), 4, "Stopping after a disconnect must also flush retained SDK frame caches.")
         try session.close()
     }
 

@@ -24,6 +24,8 @@ static const uint32_t resolution_widths[] = {2560, 1280, 640, 641};
 static const uint32_t resolution_heights[] = {1922, 960, 480, 480};
 static uint32_t close_count;
 static uint32_t stop_count;
+static uint32_t frame_cache_flush_count;
+static int frame_cache_flush_required;
 static uint32_t pull_count;
 static uint32_t pull_api_version;
 static uint32_t unsupported_pull_api_mask;
@@ -93,6 +95,8 @@ int32_t Amcam_get_eSize(void *handle, uint32_t *index) {
 
 int32_t Amcam_StartPullModeWithCallback(void *handle, AmcamEventCallback callback, void *context) {
     if (!handle || !callback || !context) return -1;
+    /* Model the vendor's retained DDR/DLL frame queue after Amcam_Stop. */
+    if (frame_cache_flush_required) return (int32_t)UINT32_C(0x80004005);
     active_callback = callback;
     active_context = context;
     callback(0x0004, context); /* Deliberately synchronous: validates start reentrancy. */
@@ -205,6 +209,7 @@ void MockAmcam_SetV4FrameFlags(uint32_t flags) { mock_v4_frame_flags = flags; }
 int32_t Amcam_Stop(void *handle) {
     if (!handle) return -1;
     stop_count++;
+    frame_cache_flush_required = 1;
     active_callback = 0;
     active_context = 0;
     return 0;
@@ -312,6 +317,11 @@ int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
 }
 int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
     if (!handle) return -1;
+    if (option == 0x3d && value == 3) {
+        frame_cache_flush_required = 0;
+        frame_cache_flush_count++;
+        return 0;
+    }
     if (option == 0x0d && (value == 0 || value == 1)) {
         color_matrix_enabled = value;
         return 0;
@@ -330,6 +340,8 @@ int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
 void MockAmcam_Reset(void) {
     close_count = 0;
     stop_count = 0;
+    frame_cache_flush_count = 0;
+    frame_cache_flush_required = 0;
     pull_count = 0;
     pull_api_version = 0;
     unsupported_pull_api_mask = 0;
@@ -349,6 +361,7 @@ void MockAmcam_SetIgnoreExposureWrite(int32_t enabled) {
 }
 uint32_t MockAmcam_CloseCount(void) { return close_count; }
 uint32_t MockAmcam_StopCount(void) { return stop_count; }
+uint32_t MockAmcam_FlushCount(void) { return frame_cache_flush_count; }
 uint32_t MockAmcam_PullCount(void) { return pull_count; }
 void MockAmcam_EmitEvent(uint32_t event) {
     if (active_callback) active_callback(event, active_context);
