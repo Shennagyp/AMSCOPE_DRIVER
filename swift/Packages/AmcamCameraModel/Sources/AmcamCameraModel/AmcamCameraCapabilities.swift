@@ -77,6 +77,14 @@ public enum AmcamCameraFeatureGroup: String, CaseIterable, Codable, Hashable, Se
     }
 }
 
+/// Selects the native image-pull API for a camera model. `automatic` preserves
+/// SDK-generation preference and E_NOTIMPL fallback. `v2` pins the legacy
+/// PullImageV2 contract for models whose vendor-supported path requires it.
+public enum AmcamPullImageAPIPolicy: String, Codable, Sendable {
+    case automatic
+    case v2
+}
+
 public enum AmcamFeatureEvidence: String, Codable, Sendable {
     case modelFlag, runtimeProbe, sdkSymbol, modelProfile, implementation
 }
@@ -107,6 +115,7 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
     public let displayName: String?
     public let allowedFeaturesByGroup: [String: Set<AmcamCameraFeature>]
     public let deniedFeatures: Set<AmcamCameraFeature>
+    public let pullImageAPIPolicy: AmcamPullImageAPIPolicy?
 
     public var allowedFeatures: Set<AmcamCameraFeature> {
         allowedFeaturesByGroup.reduce(into: Set<AmcamCameraFeature>()) { result, entry in
@@ -117,9 +126,11 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeatures: Set<AmcamCameraFeature>,
-                deniedFeatures: Set<AmcamCameraFeature> = []) {
+                deniedFeatures: Set<AmcamCameraFeature> = [],
+                pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
         self.modelCode = modelCode
         self.displayName = displayName
+        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.allowedFeaturesByGroup = Dictionary(grouping: allowedFeatures, by: \.group)
             .mapValues(Set.init)
             .reduce(into: [String: Set<AmcamCameraFeature>]()) { result, item in
@@ -130,9 +141,11 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeaturesByGroup: [AmcamCameraFeatureGroup: Set<AmcamCameraFeature>],
-                deniedFeatures: Set<AmcamCameraFeature> = []) {
+                deniedFeatures: Set<AmcamCameraFeature> = [],
+                pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
         self.modelCode = modelCode
         self.displayName = displayName
+        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.allowedFeaturesByGroup = Dictionary(
             uniqueKeysWithValues: allowedFeaturesByGroup.map { ($0.key.rawValue, $0.value) }
         )
@@ -141,9 +154,11 @@ public struct AmcamCameraModelProfile: Codable, Equatable, Sendable {
 
     public init(modelCode: String, displayName: String? = nil,
                 allowedFeaturesByGroup: [String: Set<AmcamCameraFeature>],
-                deniedFeatures: Set<AmcamCameraFeature> = []) {
+                deniedFeatures: Set<AmcamCameraFeature> = [],
+                pullImageAPIPolicy: AmcamPullImageAPIPolicy? = nil) {
         self.modelCode = modelCode
         self.displayName = displayName
+        self.pullImageAPIPolicy = pullImageAPIPolicy
         self.allowedFeaturesByGroup = allowedFeaturesByGroup
         self.deniedFeatures = deniedFeatures
     }
@@ -190,6 +205,12 @@ public struct AmcamCameraProfileRegistry: Sendable {
 
     public func profile(for modelCode: String) -> AmcamCameraModelProfile? {
         profiles[modelCode.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
+    /// Returns the exact model's pull-API policy. Unknown models remain on the
+    /// SDK's automatic compatibility path; no model-name heuristics are used.
+    public func pullImageAPIPolicy(for modelCode: String) -> AmcamPullImageAPIPolicy {
+        profile(for: modelCode)?.pullImageAPIPolicy ?? .automatic
     }
 
     public func resolve(
