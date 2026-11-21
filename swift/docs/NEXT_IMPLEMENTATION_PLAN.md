@@ -235,5 +235,6 @@ CI verifies compilation and mock/runtime contracts; the user-confirmed result ve
 
 - [x] Keep ordinary Stop strict and retryable while making native Close terminal: call `Amcam_Close` even when `Amcam_Stop` or the post-stop flush fails, retaining callback context and pull memory until native Close returns.
 - [x] When GenTL `DSStopAcquisition` fails, continue terminal teardown through event unregistration and `DSClose`; leave queue flush and explicit buffer revocation to the Producer's terminal close path.
+- [x] Honor GenTL 1.6 `DSRevokeBuffer` optional output pointers independently; add a raw-ABI regression for `ppBuffer == NULL` and `ppPrivate == NULL`.
 - [x] Add regressions for GenTL close after failed Stop and Amcam callback-worker shutdown through terminal native Close.
 - [ ] Verify physical MU503 disconnect during acquisition, reconnect, rediscovery, and successful Start without restarting the app.
