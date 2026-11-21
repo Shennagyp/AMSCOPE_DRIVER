@@ -304,8 +304,9 @@ struct AmcamCameraProbe {
             context.report.cleanupErrors.append(contentsOf: cleanupFailures)
         }
 
-        context.currentStage = .libraryInitialization
-        try backend.swiftGCInitLib()
+        do {
+            context.currentStage = .libraryInitialization
+            try backend.swiftGCInitLib()
         initialized = true
         context.currentStage = .sdkVersionRead
         let sdkVersion = try readString(backend.GCGetInfo(command: GenTLInfoCommand.TransportLayer.version.rawValue))
@@ -382,6 +383,7 @@ struct AmcamCameraProbe {
         let streamID = try backend.DevGetDataStreamID(deviceHandle, index: 0)
         let streamHandle = try backend.DevOpenDataStream(deviceHandle, dataStreamID: streamID)
         stream = streamHandle
+        context.report.stream = AmcamProbeStreamInfo(identifier: streamID)
 
         context.currentStage = .bufferPreparation
         let payloadSize = try readSize(
@@ -396,7 +398,7 @@ struct AmcamCameraProbe {
             )
         }
 
-        context.report.stream = AmcamProbeStreamInfo(identifier: streamID, payloadSize: payloadSize)
+        context.report.stream?.payloadSize = payloadSize
         context.currentStage = .bufferPreparation
         let eventHandle = try backend.GCRegisterEvent(
             .dataStream(streamHandle),
@@ -658,7 +660,18 @@ struct AmcamCameraProbe {
             emit("Camera timestamp rate: unavailable", options: options)
         }
         if incompleteFrames > 0 {
+            context.currentStage = .frameValidation
             throw ProbeError.incompleteFrame
+        }
+        } catch {
+            if context.report.failure == nil {
+                let stage = (error as? ProbeError)?.diagnosticStage ?? context.currentStage
+                context.report.failure = AmcamProbeFailure(
+                    stage: stage,
+                    message: error.localizedDescription
+                )
+            }
+            throw error
         }
     }
 
