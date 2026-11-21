@@ -59,7 +59,9 @@ quit_existing_app() {
   exit 1
 }
 
-quit_existing_app
+if [[ "${BUILD_ONLY:-0}" != "1" ]]; then
+  quit_existing_app
+fi
 
 # Build every repository package explicitly. The two backend implementations
 # are intentionally not linked into the app package; building them here keeps
