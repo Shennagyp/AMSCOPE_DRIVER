@@ -142,6 +142,21 @@ public final class AmcamCameraSession: @unchecked Sendable {
             lock.unlock()
             throw AmcamCameraError.alreadyStreaming
         }
+        let flushPending = frameCacheFlushPending
+        lock.unlock()
+
+        // Also enforce the cache-clean invariant at the entry point. This covers
+        // callers that retry Start directly after a previous post-Stop flush failed.
+        if flushPending {
+            try flushStoppedFrameCaches(using: activeHandle)
+        }
+
+        lock.lock()
+        guard handle == activeHandle, callbackContext == nil,
+              !streaming, !starting, !stopping else {
+            lock.unlock()
+            throw AmcamCameraError.transitionInProgress
+        }
 
         guard let layout = AmcamRGB24Layout(width: width, height: height),
               layout.payloadSize <= 512 * 1024 * 1024 else {
@@ -266,7 +281,7 @@ public final class AmcamCameraSession: @unchecked Sendable {
         defer { controlLock.unlock() }
 
         lock.lock()
-        let hasPullMode = streaming || callbackContext != nil
+        let hasPullMode = streaming || callbackContext != nil || frameCacheFlushPending
         lock.unlock()
         guard hasPullMode else { throw AmcamCameraError.notStreaming }
         try stopIfNeeded()
