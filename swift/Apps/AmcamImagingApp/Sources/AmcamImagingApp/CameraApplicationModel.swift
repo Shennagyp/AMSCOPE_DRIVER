@@ -155,9 +155,9 @@ final class CameraApplicationModel: ObservableObject {
         } else if !lifecycleSnapshot.isStreaming,
                   cameraCapabilities?.availability(of: .liveCapture).isUsable != true {
             // A device can enumerate before its data stream is ready (notably
-            // during USB re-enumeration). Re-query the attached session instead
-            // of leaving a stale negative capability that keeps Start disabled.
-            await refreshControlsOwned(expectedGeneration: operation)
+            // during USB re-enumeration). Recheck only stream availability;
+            // full feature/control readbacks are not needed for this transition.
+            await refreshLiveCaptureAvailabilityOwned(expectedGeneration: operation)
         }
     }
 
@@ -326,6 +326,20 @@ final class CameraApplicationModel: ObservableObject {
 
     func refreshControls() {
         Task { await refreshControlsOwned() }
+    }
+
+    private func refreshLiveCaptureAvailabilityOwned(expectedGeneration operation: UInt64) async {
+        guard isCurrentCameraSelectionOperation(operation),
+              (await cameraLifecycle.snapshot()).hasSession,
+              isCurrentCameraSelectionOperation(operation) else { return }
+
+        let hasDataStream = await cameraLifecycle.supportsAcquisition()
+        guard isCurrentCameraSelectionOperation(operation) else { return }
+        cameraCapabilities = stateResolver.capabilities(
+            for: selectedDevice,
+            descriptors: featureDescriptors,
+            hasDataStream: hasDataStream
+        )
     }
 
     private func refreshControlsOwned(expectedGeneration: UInt64? = nil) async {
