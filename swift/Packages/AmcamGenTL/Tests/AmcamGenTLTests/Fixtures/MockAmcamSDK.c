@@ -42,7 +42,26 @@ static uint32_t frame_cache_flush_count;
 static uint32_t frame_cache_flush_failures_remaining;
 static int frame_cache_flush_required;
 static uint32_t pull_count;
+static uint32_t pull_inside_callback_count;
+static __thread int inside_mock_callback;
 static uint32_t pull_api_version;
+
+static void mock_invoke_callback(
+    AmcamEventCallback callback,
+    uint32_t event,
+    void *context
+) {
+    if (!callback) return;
+    inside_mock_callback = 1;
+    callback(event, context);
+    inside_mock_callback = 0;
+}
+
+static void mock_record_pull_callback_context(void) {
+    if (inside_mock_callback) {
+        __atomic_add_fetch(&pull_inside_callback_count, 1, __ATOMIC_SEQ_CST);
+    }
+}
 static uint32_t unsupported_pull_api_mask;
 static int32_t pull_api_failure;
 static uint32_t pending_pull_count;
@@ -104,7 +123,7 @@ static void *mock_callback_worker_main(void *unused) {
         pthread_mutex_unlock(&callback_mutex);
 
         if (should_stop || !callback) break;
-        callback(0x0004, context);
+        mock_invoke_callback(callback, 0x0004, context);
         __atomic_add_fetch(&asynchronous_callback_count, 1, __ATOMIC_SEQ_CST);
     }
     return NULL;
@@ -188,7 +207,11 @@ int32_t Amcam_StartPullModeWithCallback(void *handle, AmcamEventCallback callbac
     active_context = context;
     pthread_mutex_unlock(&callback_mutex);
 
-    callback(0x0004, context); /* Deliberately synchronous: validates start reentrancy. */
+    mock_invoke_callback(
+        callback,
+        0x0004,
+        context
+    ); /* Deliberately synchronous: validates start reentrancy. */
 
     uint32_t interval = __atomic_load_n(
         &automatic_frame_interval_milliseconds,
@@ -216,6 +239,7 @@ int32_t Amcam_StartPullModeWithCallback(void *handle, AmcamEventCallback callbac
 }
 
 int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameInfoV2 *info) {
+    mock_record_pull_callback_context();
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 1)) != 0) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || bits != 24) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
@@ -235,6 +259,7 @@ int32_t Amcam_PullImageV2(void *handle, void *buffer, int32_t bits, AmcamFrameIn
 
 #if !defined(MOCK_DISABLE_ROW_PITCH_V2)
 int32_t Amcam_PullImageWithRowPitchV2(void *handle, void *buffer, int32_t bits, int32_t row_pitch, AmcamFrameInfoV2 *info) {
+    mock_record_pull_callback_context();
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 2)) != 0) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
@@ -252,6 +277,7 @@ int32_t Amcam_PullImageWithRowPitchV2(void *handle, void *buffer, int32_t bits, 
 
 #if !defined(MOCK_DISABLE_V3)
 int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV3 *info) {
+    mock_record_pull_callback_context();
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 3)) != 0) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != -1) return -1;
     const uint32_t width = resolution_widths[current_resolution_index];
@@ -274,6 +300,7 @@ int32_t Amcam_PullImageV3(void *handle, void *buffer, int32_t still, int32_t bit
 
 #if !defined(MOCK_DISABLE_V4)
 int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bits, int32_t row_pitch, AmcamFrameInfoV4 *info) {
+    mock_record_pull_callback_context();
     if (pull_api_failure != 0) return pull_api_failure;
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 4)) != 0) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != 0) return -1;
@@ -472,6 +499,7 @@ void MockAmcam_Reset(void) {
     frame_cache_flush_failures_remaining = 0;
     frame_cache_flush_required = 0;
     pull_count = 0;
+    __atomic_store_n(&pull_inside_callback_count, 0, __ATOMIC_SEQ_CST);
     pull_api_version = 0;
     unsupported_pull_api_mask = 0;
     pull_api_failure = 0;
@@ -497,6 +525,9 @@ uint32_t MockAmcam_StopCount(void) { return stop_count; }
 uint32_t MockAmcam_FlushCount(void) { return frame_cache_flush_count; }
 void MockAmcam_SetFlushFailures(uint32_t count) { frame_cache_flush_failures_remaining = count; }
 uint32_t MockAmcam_PullCount(void) { return pull_count; }
+uint32_t MockAmcam_PullInsideCallbackCount(void) {
+    return __atomic_load_n(&pull_inside_callback_count, __ATOMIC_SEQ_CST);
+}
 void MockAmcam_SetCallDelays(uint32_t pullMilliseconds, uint32_t controlMilliseconds) {
     __atomic_store_n(&pull_delay_milliseconds, pullMilliseconds, __ATOMIC_SEQ_CST);
     __atomic_store_n(&control_delay_milliseconds, controlMilliseconds, __ATOMIC_SEQ_CST);
@@ -512,7 +543,7 @@ void MockAmcam_EmitEvent(uint32_t event) {
     AmcamEventCallback callback = active_callback;
     void *context = active_context;
     pthread_mutex_unlock(&callback_mutex);
-    if (callback) callback(event, context);
+    mock_invoke_callback(callback, event, context);
 }
 void MockAmcam_SetAutomaticFrameInterval(uint32_t milliseconds) {
     __atomic_store_n(&automatic_frame_interval_milliseconds, milliseconds, __ATOMIC_SEQ_CST);
