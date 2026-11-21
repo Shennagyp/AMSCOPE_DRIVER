@@ -10,15 +10,25 @@ private final class AmcamCallbackContext {
 public final class AmcamCameraSession: @unchecked Sendable {
     private static let callback: AmcamEventCallback = { event, context in
         guard let context else { return }
-        Unmanaged<AmcamCallbackContext>.fromOpaque(context).takeUnretainedValue().session?.handle(event: event)
+        let callbackContext = Unmanaged<AmcamCallbackContext>
+            .fromOpaque(context)
+            .takeUnretainedValue()
+        callbackContext.session?.enqueue(event: event)
     }
 
     private let sdk: AmcamSDK
     private let lock = NSLock()
     private let controlLock = NSRecursiveLock()
-    /// Serializes calls into one Amcam handle across callback pulls and feature I/O.
-    /// StartPull is intentionally excluded because it may synchronously invoke the callback;
-    /// Stop is excluded because the SDK may wait for that callback to return.
+    /// SDK callbacks only enqueue work. PullImage and event handling run away
+    /// from the vendor callback stack, following the vendor sample's deferred
+    /// image-event handling without depending on a UI event loop.
+    private let callbackQueue = DispatchQueue(
+        label: "com.amscope.amcam.camera-session-callback",
+        qos: .userInitiated
+    )
+    /// Serializes PullImage with feature I/O and terminal/streaming SDK calls.
+    /// StartPull/Stop may invoke or wait for callbacks, but callbacks never wait
+    /// for this lock: they only enqueue onto callbackQueue and return.
     private let sdkCallLock = NSRecursiveLock()
     private let modelCode: String
     private let pullImageAPIPolicy: AmcamPullImageAPIPolicy
@@ -189,14 +199,24 @@ public final class AmcamCameraSession: @unchecked Sendable {
         streaming = true
         lock.unlock()
 
-        // Do not hold the session lock while invoking the SDK: it may deliver a callback
-        // before Amcam_StartPullModeWithCallback returns.
+        // The callback now only enqueues, so StartPull can share the SDK-call
+        // lock safely. This also prevents the queued PullImage from entering the
+        // handle before StartPull has returned, including a synchronous callback.
+        sdkCallLock.lock()
         let result = sdk.startPull(activeHandle, callback: Self.callback, context: retained)
+        sdkCallLock.unlock()
 
         lock.lock()
         starting = false
         if result < 0 {
             streaming = false
+            lock.unlock()
+
+            // StartPull may have synchronously emitted an event before reporting
+            // failure. Drain it before releasing the callback context or buffer.
+            callbackQueue.sync {}
+
+            lock.lock()
             callbackContext = nil
             frameHandler = nil
             buffer?.deallocate()
@@ -243,9 +263,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
         stopping = true
         lock.unlock()
 
-        // Never hold the session lock across Amcam_Stop because the SDK may be
-        // waiting for an event callback to return.
+        // Callbacks return immediately after queueing, so Stop can serialize
+        // against an in-flight PullImage without waiting on a callback that is
+        // itself waiting for the SDK-call lock.
+        sdkCallLock.lock()
         let result = sdk.stop(activeHandle)
+        sdkCallLock.unlock()
 
         lock.lock()
         stopping = false
@@ -254,7 +277,13 @@ public final class AmcamCameraSession: @unchecked Sendable {
             lock.unlock()
             throw AmcamCameraError.streamStopFailed(result)
         }
+        lock.unlock()
 
+        // A successful SDK Stop ends callback production. Drain every callback
+        // already enqueued before releasing the SDK context and pull buffer.
+        callbackQueue.sync {}
+
+        lock.lock()
         let context = callbackContext
         callbackContext = nil
         frameHandler = nil
@@ -327,9 +356,16 @@ public final class AmcamCameraSession: @unchecked Sendable {
         stopping = true
         lock.unlock()
 
-        // Do not require Stop or the post-Stop cache flush here. Amcam_Close is
-        // the terminal SDK boundary and may itself wait for outstanding callbacks.
+        // Close is terminal, but an already-running deferred PullImage must not
+        // race the handle destruction. Callbacks only enqueue, so Close can be
+        // serialized with SDK work without blocking the vendor callback stack.
+        sdkCallLock.lock()
         sdk.close(activeHandle)
+        sdkCallLock.unlock()
+
+        // Amcam_Close ends callback production. Drain queued no-op/error events
+        // before freeing callback context or the SDK pull buffer.
+        callbackQueue.sync {}
 
         lock.lock()
         handle = nil
@@ -859,6 +895,12 @@ public final class AmcamCameraSession: @unchecked Sendable {
             deviceTotalFrameCount: recentRate?.totalFrameCount
         )
         return AmcamControlSnapshot(exposure: exposure, gain: gain, whiteBalance: whiteBalance, image: imageControls, frameRate: frameRate)
+    }
+
+    private func enqueue(event: UInt32) {
+        callbackQueue.async { [weak self] in
+            self?.handle(event: event)
+        }
     }
 
     private func handle(event: UInt32) {
