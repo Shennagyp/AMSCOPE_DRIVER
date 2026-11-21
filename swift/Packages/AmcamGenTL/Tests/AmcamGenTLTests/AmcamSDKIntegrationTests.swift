@@ -1894,13 +1894,11 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             operation: GenTLQueueOperation.allDiscard.rawValue
         )
 
-        // GenTL allows either output pointer to be NULL. This is the exact
-        // raw-ABI call issued by GenTLAcquisitionSession.close().
-        let rawStream = UnsafeMutableRawPointer(bitPattern: openedStream.rawValue)
-        let rawBuffer = UnsafeMutableRawPointer(bitPattern: buffer.rawValue)
+        // GenTL allows either output pointer to be NULL. Exercise the public
+        // typed-handle adapter with both optional ABI output pointers omitted.
         let revokeStatus = implementation.DSRevokeBuffer(
-            rawStream,
-            rawBuffer,
+            openedStream,
+            buffer,
             nil,
             nil
         )
