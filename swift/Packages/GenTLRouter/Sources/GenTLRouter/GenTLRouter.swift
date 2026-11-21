@@ -14,6 +14,7 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
     case genTLCallFailed(Int32)
     case featureAccessUnavailable(String)
     case deviceSessionClosed(String)
+    case routerShutdown
 
     public var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ public enum GenTLRouterError: Error, LocalizedError, Sendable {
             return "Backend '\(id)' does not expose typed feature access."
         case .deviceSessionClosed(let id):
             return "The device session for backend '\(id)' is closed."
+        case .routerShutdown:
+            return "The GenTL router has been shut down and cannot be used again."
         }
     }
 }
@@ -209,6 +212,7 @@ private final class GenTLProviderContext: @unchecked Sendable {
     private var interfaceHandles: [UnsafeMutableRawPointer] = []
     private var interfaceHandlesByID: [String: UnsafeMutableRawPointer] = [:]
     private var closed = false
+    private var cleanupSucceeded = false
 
     init(
         backendID: String,
@@ -346,20 +350,23 @@ private final class GenTLProviderContext: @unchecked Sendable {
         defer { lock.unlock() }
         guard !closed else { return }
         closed = true
+        cleanupSucceeded = false
         GenTLProviderRetainer.shared.retain(api)
     }
 
-    func close() {
+    @discardableResult
+    func close() -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !closed else { return }
+        guard !closed else { return cleanupSucceeded }
 
         for handle in interfaceHandles.reversed() {
             let status = api.IFClose(handle)
             guard status == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
                 closed = true
+                cleanupSucceeded = false
                 GenTLProviderRetainer.shared.retain(api)
-                return
+                return false
             }
         }
         interfaceHandles.removeAll()
@@ -367,17 +374,25 @@ private final class GenTLProviderContext: @unchecked Sendable {
 
         guard api.TLClose(systemHandle) == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
             closed = true
+            cleanupSucceeded = false
             GenTLProviderRetainer.shared.retain(api)
-            return
+            return false
         }
 
         guard api.GCCloseLib() == GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS) else {
             closed = true
+            cleanupSucceeded = false
             GenTLProviderRetainer.shared.retain(api)
-            return
+            return false
         }
 
         closed = true
+        cleanupSucceeded = true
+        return true
+    }
+
+    deinit {
+        _ = close()
     }
 
     deinit {
@@ -478,8 +493,32 @@ public final class GenTLRouter: @unchecked Sendable {
     /// never be initialized again in this process.
     private var unavailableBackendIDs: Set<String> = []
     private var backendResourceOwners: [String: String] = [:]
+    private var isShutdown = false
+    private var shutdownFailures: [String] = []
 
     public init() {}
+
+    /// Closes every opened Interface, System and Producer library in ownership
+    /// order. Shutdown is terminal; stale candidates cannot reopen this router.
+    @discardableResult
+    public func shutdown() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isShutdown else { return shutdownFailures }
+
+        isShutdown = true
+        let contexts = providerContexts
+        providerContexts.removeAll()
+        shutdownFailures = contexts.keys.sorted().filter {
+            contexts[$0]?.close() != true
+        }
+        unavailableBackendIDs.formUnion(contexts.keys)
+        return shutdownFailures
+    }
+
+    deinit {
+        _ = shutdown()
+    }
 
     public var backendIDs: [String] {
         lock.lock()
@@ -498,6 +537,7 @@ public final class GenTLRouter: @unchecked Sendable {
 
         lock.lock()
         defer { lock.unlock() }
+        guard !isShutdown else { throw GenTLRouterError.routerShutdown }
         guard registrations[backendID] == nil else {
             throw GenTLRouterError.duplicateBackendID(backendID)
         }
@@ -519,6 +559,7 @@ public final class GenTLRouter: @unchecked Sendable {
 
         lock.lock()
         defer { lock.unlock() }
+        guard !isShutdown else { throw GenTLRouterError.routerShutdown }
         guard registrations[backendID] == nil else {
             throw GenTLRouterError.duplicateBackendID(backendID)
         }
@@ -649,6 +690,7 @@ public final class GenTLRouter: @unchecked Sendable {
     ) throws -> GenTLProviderContext {
         lock.lock()
         defer { lock.unlock() }
+        guard !isShutdown else { throw GenTLRouterError.routerShutdown }
 
         guard !unavailableBackendIDs.contains(registration.identifier) else {
             throw GenTLRouterError.providerContextUnavailable(registration.identifier)
