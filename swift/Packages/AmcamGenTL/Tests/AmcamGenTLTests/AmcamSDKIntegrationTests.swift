@@ -1869,9 +1869,22 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             openedStream,
             operation: GenTLQueueOperation.allDiscard.rawValue
         )
-        let revoked = try implementation.DSRevokeBuffer(openedStream, buffer: buffer)
-        XCTAssertNil(revoked.baseAddress, "Producer-allocated buffer memory is released by the backend.")
-        XCTAssertNil(revoked.privateData)
+
+        // GenTL allows either output pointer to be NULL. This is the exact
+        // raw-ABI call issued by GenTLAcquisitionSession.close().
+        let rawStream = UnsafeMutableRawPointer(bitPattern: openedStream.rawValue)
+        let rawBuffer = UnsafeMutableRawPointer(bitPattern: buffer.rawValue)
+        let revokeStatus = implementation.DSRevokeBuffer(
+            rawStream,
+            rawBuffer,
+            nil,
+            nil
+        )
+        XCTAssertEqual(
+            revokeStatus,
+            GenTLABI.GenTLABI_ErrorFromCode(GenTLABI.GC_ERR_SUCCESS),
+            "DSRevokeBuffer must accept NULL ppBuffer and ppPrivate outputs."
+        )
 
         try implementation.DSClose(openedStream)
         stream = nil
