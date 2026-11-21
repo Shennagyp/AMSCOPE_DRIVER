@@ -85,7 +85,17 @@ final class CameraApplicationModel: ObservableObject {
         // An incomplete enumeration is not evidence that every camera has
         // disappeared. Keep the current session and retry on the next poll.
         guard report.failures.isEmpty else {
-            if !backgroundMonitor {
+            if backgroundMonitor {
+                // Keep the current session alive while enumeration is
+                // inconclusive. If it is idle, however, a disconnect/reconnect
+                // may have occurred during this gap; rebuild it only after a
+                // later complete scan confirms the current device topology.
+                let snapshot = await cameraLifecycle.snapshot()
+                guard isCurrentCameraSelectionOperation(operation) else { return }
+                if snapshot.hasSession && !snapshot.isStreaming {
+                    sessionNeedsRecreation = true
+                }
+            } else {
                 status = "GenTL camera discovery failed"
                 errorMessage = report.failures
                     .map { "\($0.backendID): \($0.message)" }
