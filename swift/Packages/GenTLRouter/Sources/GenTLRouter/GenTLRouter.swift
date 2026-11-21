@@ -394,10 +394,6 @@ private final class GenTLProviderContext: @unchecked Sendable {
     deinit {
         _ = close()
     }
-
-    deinit {
-        close()
-    }
 }
 
 /// Owns one opened device module and retains the provider context until closed.
