@@ -19,7 +19,7 @@ From the repository root on a Mac running macOS 13 or later with Apple's Swift t
 make run
 ```
 
-`make run` builds every Swift library package in this repository, then builds the app executable through Swift Package Manager, assembles a local `Amcam Imaging.app` bundle, ad-hoc signs it and launches it. It does not download binaries, use GitHub Releases, require GitHub CLI authentication, or depend on a hosted Actions artifact.
+`make run` builds every Swift library package in this repository, then builds the app executable through Swift Package Manager, assembles a local `Amcam Imaging.app` bundle, ad-hoc signs it and launches it. It does not download binaries, use GitHub Releases, require GitHub CLI authentication, or depend on a hosted Actions artifact. Before launch, the script detects an existing `amcam-imaging` process, requests an orderly quit through macOS, and waits for that process to exit. If the old process does not exit, the script stops rather than force-killing it or launching a competing camera owner. `make build-local` remains build-only and does not close an already-running app.
 
 The full Xcode application is not required. The application UI uses AppKit rather than SwiftUI, avoiding the SwiftUI macro plug-in that is missing from some Command Line Tools installations. Apple's Swift compiler, AppKit SDK and macOS SDK are required. If `swift` is unavailable, install Apple's Command Line Tools with `xcode-select --install`, then verify with `swift --version`. Vendor SDKs are placed under `vendor/<vendor>/<platform>/` and copied into `Contents/Frameworks/Vendors/<vendor>/` by the build script. The AmScope SDK uses `vendor/amcam/macos/libamcam.dylib`; the backend resolves the bundled copy first, then standard per-user and machine-wide installation paths. The build checks binary architectures and signs the bundled copy before signing the app. `AMCAM_SDK_SOURCE` can specify a build-time source path, and `REQUIRE_AMCAM_SDK=1` makes packaging fail if it is missing. No SDK file picker is exposed in the UI. Proprietary SDK binaries are not committed unless redistribution is explicitly permitted.
 
@@ -29,7 +29,7 @@ Other targets:
 - `make run-probe` — compile and run the camera diagnostic from source; pass optional arguments with `PROBE_ARGS='--help'`.
 - `make test-local` — run all Swift package test suites locally.
 
-See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for package boundaries, acceptance criteria and the implementation sequence.
+See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for package boundaries, acceptance criteria and the implementation sequence. The `macos-version-0.3` baseline and its [release notes](swift/docs/MACOS_VERSION_0.3_RELEASE_NOTES.md), [application lifecycle guide](swift/docs/AMCAM_IMAGING_APPLICATION.md), and [physical MU503 acceptance record](swift/docs/AMCAM_HARDWARE_ACCEPTANCE.md) document process relaunch and USB reconnect recovery.
 
 ## Packages
 
