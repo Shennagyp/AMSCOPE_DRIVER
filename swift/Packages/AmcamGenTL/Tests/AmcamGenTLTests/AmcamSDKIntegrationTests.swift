@@ -176,14 +176,18 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         XCTAssertEqual(flushCount(), 0)
 
         let restartedFrameReceived = expectation(description: "frame after pending flush retry")
-        XCTAssertNoThrow(
+        do {
             try session.start { result in
-                if case .success = result {
+                switch result {
+                case .success:
                     restartedFrameReceived.fulfill()
+                case .failure(let error):
+                    XCTFail("Restarted pull mode delivered an unexpected frame error: \(error)")
                 }
-            },
-            "Start must retry the outstanding cache flush before registering a new callback."
-        )
+            }
+        } catch {
+            XCTFail("Start must retry the outstanding cache flush before registering a new callback: \(error)")
+        }
         wait(for: [restartedFrameReceived], timeout: 2)
         XCTAssertEqual(flushCount(), 1)
 

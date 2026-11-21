@@ -5,7 +5,7 @@
 - Branch: `macos-version-0.3`
 - Source baseline: `macos-version-0.2` commit `4f4a8ca022274eba5fe49dc2489f9e7fa766dd64`
 - Source baseline CI: [GitHub Actions run 44860717992](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44860717992) — all six jobs passed.
-- Scope of this branch increment: record the user-verified process-relaunch and idle USB reconnect behavior; add deterministic sustained-buffer and repeated acquisition lifecycle regressions; and add a versioned JSON diagnostic report to `amcam-camera-probe`. The AppKit application and camera-session runtime behavior are inherited from the green source baseline; the probe executable and its supporting report target have additional code in 0.3.
+- Scope of this branch increment: record the user-verified process-relaunch and idle USB reconnect behavior; add deterministic sustained-buffer and repeated acquisition lifecycle regressions; add a versioned JSON diagnostic report; and correct Amcam pull-mode restart by flushing both SDK frame caches after Stop. The generic runtime architecture is inherited from the green source baseline; the Amcam backend and probe targets have additional code in 0.3.
 
 ## Acquisition regression coverage added in 0.3
 
@@ -15,7 +15,7 @@ The branch adds deterministic, hardware-independent coverage without changing ca
 - A lifecycle test uses one open device session with four distinct acquisitions. It performs three stop/restart transitions and verifies exactly one start, one stop and one close per acquisition.
 - The existing regression set continues to cover timeout recovery, stop/close races, frame-copy immutability and the rule that a failed `DSQueueBuffer` call is surfaced once and is not retried on the same handle.
 
-These mock/contract tests do not establish five-minute physical streaming or physical-camera start/stop behavior. The lifecycle test commit passed all six CI jobs in [run 44862950222](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44862950222).
+These mock/contract tests establish the expected SDK stop/flush/restart contract, but do not establish five-minute physical streaming or confirm that the MU503 physically restarts correctly. The lifecycle test commit passed all six CI jobs in [run 44862950222](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44862950222).
 
 ## Structured camera-probe report
 
@@ -32,7 +32,21 @@ The command retains a nonzero process exit status on failure while still emittin
 
 The real MU503 probe execution remains part of the outstanding hardware acceptance; a passing schema test or probe build is not physical-camera evidence.
 
-## GenTL buffer release invariant\n\nThe shared `GenTLAcquisitionSession.close()` and the standalone probe now use `ACQ_QUEUE_ALL_DISCARD` after acquisition stop and event unregistration, before revoking announced buffers. `ACQ_QUEUE_ALL_TO_INPUT` is not sufficient: it deliberately keeps buffers in the input pool, where GenTL 1.6 says they cannot be revoked. The Amcam backend integration test checks this distinction, then confirms that provider-allocated memory is released by successful revocation.\n\nThe probe applies fail-fast, child-before-parent cleanup. A failed stop, event unregister, queue discard, buffer revoke or child close is recorded in `cleanup_errors`; subsequent parent teardown is not attempted while a child resource may remain owned.\n\nReference: [EMVA GenTL 1.6, sections 5.2.8–5.2.10 and `ACQ_QUEUE_ALL_DISCARD`](https://www.emva.org/wp-content/uploads/GenICam_GenTL_1_6.pdf).\n\n## Runtime behavior carried into 0.3
+## GenTL buffer release invariant
+
+The shared `GenTLAcquisitionSession.close()` and the standalone probe now use `ACQ_QUEUE_ALL_DISCARD` after acquisition stop and event unregistration, before revoking announced buffers. `ACQ_QUEUE_ALL_TO_INPUT` is not sufficient: it deliberately keeps buffers in the input pool, where GenTL 1.6 says they cannot be revoked. The Amcam backend integration test checks this distinction, then confirms that provider-allocated memory is released by successful revocation.
+
+The probe applies fail-fast, child-before-parent cleanup. A failed stop, event unregister, queue discard, buffer revoke or child close is recorded in `cleanup_errors`; subsequent parent teardown is not attempted while a child resource may remain owned.
+
+Reference: [EMVA GenTL 1.6, sections 5.2.8–5.2.10 and `ACQ_QUEUE_ALL_DISCARD`](https://www.emva.org/wp-content/uploads/GenICam_GenTL_1_6.pdf).
+
+## Amcam pull-mode restart invariant
+
+After `Amcam_Stop` succeeds, `AmcamCameraSession` now flushes both the camera DDR and the Amcam SDK DLL frame queue through `AMCAM_OPTION_FLUSH` (`0x3d`, value `3`). A subsequent pull-mode start is not allowed while this flush is pending. If the flush fails, the callback context and image buffer are released only after Stop has succeeded, the pending flush state is retained, and later Stop/Close/Start retries it.
+
+The Amcam mock deliberately refuses the next `Amcam_StartPullModeWithCallback` until both caches have been flushed. Its integration test failed on the second start before the implementation was added; another test injects a failed flush and checks that Start retries the pending operation. This is a deterministic SDK-boundary regression, not yet proof of the MU503's physical behavior.
+
+## Runtime behavior carried into 0.3
 
 ### Relaunch from source
 
@@ -89,7 +103,7 @@ The user's confirmation did not include the SDK version, exact model descriptor,
 The reconnect result is a partial physical acceptance, not full MU503 qualification. The following remain separate acceptance items:
 
 - Five minutes of sustained live RGB8 acquisition.
-- Repeated start/stop cycles.
+- Repeated start/stop cycles without USB disconnect; 0.3 now flushes both SDK frame caches after Stop and gates restart on that flush.
 - Disconnect while acquisition is actively streaming and exact error/recovery behavior.
 - Setter/readback verification for each exposed camera control.
 - Independent camera-probe validation of frame metadata, payload layout and cleanup.

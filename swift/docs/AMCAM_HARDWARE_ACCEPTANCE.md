@@ -39,6 +39,7 @@ Record the SDK version, macOS version, exact model descriptor, device identifier
 3. Leave acquisition running for at least five minutes.
 4. Press Stop and verify the image stream stops without an error.
 5. Start again and verify acquisition resumes.
+6. Repeat Stop→Start at least three times without disconnecting the USB cable. Every Start must return a new live frame; do not use a USB unplug/replug as a substitute for this check.
 6. Disconnect the camera while streaming, record the reported error, reconnect, refresh, and start again.
 
 Do not run the diagnostic probe and GUI application against the same camera at the same time. Only one process should own the camera handle.
@@ -86,7 +87,7 @@ Record:
 - Exposure mode transitions and requested/read-back exposure values.
 - Gain and frame-rate values, when offered.
 - Resolution, white balance, color matrix, and pixel-format results, when offered.
-- Stop/restart, disconnect/reconnect, and cleanup results.
+- Stop/restart results with no USB replug between cycles, disconnect/reconnect, and cleanup results.
 - Full probe terminal output or JSON report and PPM file.
 
 ### E. Relaunch and USB hot-plug recovery

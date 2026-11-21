@@ -181,6 +181,12 @@ Other commands:
 
 The vendor SDK is proprietary and is not bundled. For physical AmScope camera access, place a compatible arm64 `libamcam.dylib` under `vendor/amcam/macos/libamcam.dylib`, or install it in one of the backend's standard per-user/system locations. The build script copies a local vendor SDK into the app bundle; `AMCAM_SDK_SOURCE=/absolute/path/to/libamcam.dylib` can specify a source file at build time. The backend resolves the bundled SDK first. There is no SDK file picker in the UI. Without a compatible SDK, the app can launch but the AmScope provider is unavailable. The app is ad-hoc signed for local testing, not notarized.
 
+## Pull-mode stop and restart
+
+`Amcam_Stop` ends callback delivery, but the SDK can still retain frames in camera DDR and in its own DLL queue. After every successful stop, `AmcamCameraSession` therefore issues `Amcam_put_Option` with `AMCAM_OPTION_FLUSH` (`0x3d`) and value `3` to clear both caches before another pull-mode start. A stop is not reported as reusable until that flush succeeds.
+
+The flush is part of the session lifecycle, not a UI delay or a USB reconnect workaround. If the SDK rejects it, the session retains a pending cleanup obligation; a later Stop, Close, or Start retries the flush. Start is blocked from registering a new callback until the pending flush succeeds. This preserves the device session and callback ownership while preventing a stale SDK frame queue from contaminating the next acquisition.
+
 ## Process relaunch and USB reconnect recovery
 
 `make run` is a process restart, not just a rebuild followed by Launch Services reopening an existing app instance. Before the build/launch sequence, `scripts/build-and-run-macos.sh` checks for an existing `amcam-imaging` process and asks the running `com.amscope.imaging` application to quit normally. It waits for the process to exit before continuing. If the quit request fails or the process remains alive, the script exits with an error; it never force-kills the application or starts a second process that could contend for the camera. The `BUILD_ONLY=1` path used by `make build-local` and CI skips this shutdown behavior.
@@ -218,7 +224,7 @@ The camera probe can exercise the backend without the GUI if the app reports dis
 
 ## TDD assessment
 
-The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close.
+The routed acquisition increment was developed test-first against a fake GenTL Producer. Regression coverage verifies New Buffer event decoding, metadata and payload copying, buffer requeue, and queue flush ordering around start/stop/close. Amcam SDK integration coverage also requires a post-`Amcam_Stop` flush before a new pull-mode callback can start, and injects a failed flush to verify that the pending operation is retried before restart.
 
 Typed feature access is tested at three layers:
 - GenTLAPI value kinds, numeric ranges, descriptor access state and integer-vector metadata;

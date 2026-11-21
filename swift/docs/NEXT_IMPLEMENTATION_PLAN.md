@@ -114,6 +114,8 @@ Acceptance: all steps pass on physical hardware. Hosted mock tests are not a sub
 - [x] Preserve the existing parent/child cleanup and retry semantics.
 - [x] Add a 64-frame GenTL regression over one reused announced buffer; assert increasing frame sequence, changing pixel contents and exactly one buffer return per delivered frame.
 - [x] Extend lifecycle coverage to four distinct acquisitions on one open device session (three stop/restart transitions), asserting one start, one stop and one close per acquisition.
+- [x] Flush both Amcam camera-DDR and SDK-DLL frame caches (`AMCAM_OPTION_FLUSH`, option `0x3d`, value `3`) after successful `Amcam_Stop`; a later pull-mode start is gated until the flush succeeds.
+- [x] Add a mock SDK regression that rejects pull-mode restart without the post-stop flush, plus an injected flush-failure test proving the pending flush is retried before the next Start.
 - [x] Retain regressions for timeout recovery, stop/close races, copied-frame immutability and failed `DSQueueBuffer` not being retried with the same handle. The Producer may have accepted the first call despite its error status.
 - [x] Add a versioned JSON report schema and `amcam-camera-probe --json`, including backend, SDK version/path, interface, model/display descriptor, stream payload, pixel-format code/namespace, image dimensions/stride, acquisition counters/timestamps, failure stage and cleanup errors.
 - [x] Apply the GenTL 1.6 `ACQ_QUEUE_ALL_DISCARD` operation after stop/event unregistration and before `DSRevokeBuffer`; `ALL_TO_INPUT` leaves buffers in the input pool and is not a revocation-safe flush.
@@ -121,7 +123,7 @@ Acceptance: all steps pass on physical hardware. Hosted mock tests are not a sub
 - [ ] Run the JSON probe against the physical MU503 and verify discovery, open, acquisition and cleanup diagnostics with the proprietary SDK.
 - [x] Keep hardware-specific facts explicitly distinguished from unsupported or unverified features.
 
-Automated acceptance: GenTL close-order/retry tests, Amcam provider-buffer revocation integration, lifecycle regressions and probe report/cleanup tests must pass in hosted CI. Physical probe execution remains part of Phase B hardware acceptance; mock tests do not certify the camera. See the [GenTL 1.6 specification](https://www.emva.org/wp-content/uploads/GenICam_GenTL_1_6.pdf), sections 5.2.8–5.2.10.
+Automated acceptance: GenTL close-order/retry tests, Amcam provider-buffer revocation integration, Amcam post-stop cache-flush and retry regressions, lifecycle regressions and probe report/cleanup tests must pass in hosted CI. Physical probe execution remains part of Phase B hardware acceptance; mock tests do not certify the camera. See the [GenTL 1.6 specification](https://www.emva.org/wp-content/uploads/GenICam_GenTL_1_6.pdf), sections 5.2.8–5.2.10.
 
 ### Phase D — Pixel-format implementation
 
