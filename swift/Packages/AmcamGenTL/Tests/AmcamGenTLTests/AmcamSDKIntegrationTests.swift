@@ -1,4 +1,5 @@
 import AmcamABI
+import AmcamCameraModel
 import Darwin
 import Foundation
 import XCTest
@@ -187,6 +188,55 @@ final class AmcamSDKIntegrationTests: XCTestCase {
         }
         let reportedVersion = unsafeBitCast(versionSymbol, to: (@convention(c) () -> UInt32).self)
         XCTAssertEqual(reportedVersion(), 4, "The SDK must actually dispatch through PullImageV4.")
+    }
+
+    func testModelProfilePinsPullImageV2WhenNewerSymbolsAreExported() throws {
+        let libraryURL = try buildMockSDK()
+        let registry = AmcamCameraProfileRegistry(profiles: [
+            AmcamCameraModelProfile(
+                modelCode: "Mock AmScope Camera",
+                allowedFeatures: [],
+                pullImageAPIPolicy: .v2
+            )
+        ])
+        let driver = try AmcamCameraDriver(
+            libraryURL: libraryURL,
+            profileRegistry: registry
+        )
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+        defer { try? session.close() }
+
+        let frameReceived = expectation(description: "V2 frame delivered")
+        let receivedFrame = FrameCapture()
+        try session.start { result in
+            if case .success(let frame) = result {
+                receivedFrame.store(frame)
+                frameReceived.fulfill()
+            } else if case .failure(let error) = result {
+                XCTFail("Unexpected V2 frame failure: \\(error)")
+            }
+        }
+
+        wait(for: [frameReceived], timeout: 2)
+        let frame = try XCTUnwrap(receivedFrame.load())
+        XCTAssertEqual(frame.width, 640)
+        XCTAssertEqual(frame.height, 480)
+        XCTAssertEqual(frame.bytesPerRow, 1920)
+        XCTAssertEqual(frame.bytes.first, 0x5a)
+        XCTAssertEqual(frame.metadata?.apiVersion, .v2)
+
+        let mockLibrary = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(mockLibrary)
+        defer { if let mockLibrary { dlclose(mockLibrary) } }
+        guard let versionSymbol = dlsym(mockLibrary, "MockAmcam_PullAPIVersion") else {
+            XCTFail("Mock SDK is missing MockAmcam_PullAPIVersion")
+            return
+        }
+        let reportedVersion = unsafeBitCast(versionSymbol, to: (@convention(c) () -> UInt32).self)
+        XCTAssertEqual(reportedVersion(), 1, "The model profile must select PullImageV2 despite newer exported symbols.")
+
+        try session.stop()
     }
 
     func testV4MetadataDoesNotExposeValuesWithoutValidityFlags() throws {
