@@ -43,7 +43,7 @@ final class CameraMainViewController: NSViewController {
     private let startButton = NSButton(title: "Start", target: nil, action: nil)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
     private var settingsWindow: NSWindow?
-    private var displayedFrameSequence: UInt64?
+    private var displayedFrameRevision: UInt64?
 
     init(model: CameraApplicationModel) {
         self.model = model
@@ -132,13 +132,13 @@ final class CameraMainViewController: NSViewController {
             ? String(format: "● LIVE   %.1f FPS", model.framesPerSecond)
             : ""
         if let frame = model.latestFrame {
-            if frame.sequence != displayedFrameSequence {
+            if model.frameRevision != displayedFrameRevision {
                 preview.image = makePreviewImage(from: frame)
-                displayedFrameSequence = frame.sequence
+                displayedFrameRevision = model.frameRevision
             }
         } else {
             preview.image = nil
-            displayedFrameSequence = nil
+            displayedFrameRevision = nil
         }
 
         let selectedID = model.selectedDeviceID
