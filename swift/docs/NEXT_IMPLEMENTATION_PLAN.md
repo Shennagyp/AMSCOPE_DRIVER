@@ -14,7 +14,8 @@ The library packages are not standalone applications and must not acquire artifi
 The repository-level Makefile is the supported command interface:
 
 - `make run`: request an orderly quit of any existing `amcam-imaging` process, build every Swift library package, build the imaging app, assemble and ad-hoc sign its `.app` bundle, then launch it locally. If the previous process does not exit, abort rather than force-killing it or launching a competing camera owner. Build-only invocations do not request app shutdown.
-- `make run-probe`: build and run the Amcam camera diagnostic locally.
+- `make build-probe`: compile the Amcam camera diagnostic without running it; build output is sent to stderr.
+- `make run-probe`: build and run the diagnostic; `--json` reserves stdout for a single versioned JSON report.
 - `make build-local`: build every Swift library and the imaging app without launching it.
 - `make run-local`: alias for `make run`.
 - `make test-local`: run `swift test` across all ten Swift packages locally.
@@ -48,8 +49,9 @@ AmcamImagingGenTLAdapter
         └── GenTLAPI + GenTLABI
 
 amcam-camera-probe
-  └── AmcamGenTL
-        └── GenTLAPI + GenTLABI
+  ├── AmcamGenTL
+  │     └── GenTLAPI + GenTLABI
+  └── AmcamCameraProbeSupport (versioned diagnostic report schema)
 ```
 
 Library-owned camera lifecycle and discovery boundary:
@@ -83,7 +85,7 @@ Rules:
 - [x] Build the app from source with Swift Package Manager; do not download release binaries or Actions artifacts.
 - [x] Replace the SwiftUI application shell with AppKit so Command Line Tools builds do not require the SwiftUI macro plug-in.
 - [x] Assemble and ad-hoc sign a local `Amcam Imaging.app` bundle.
-- [x] Hosted macOS package matrix and fixture-SDK app build/package/sign validation passed on source baseline commit `4f4a8ca` ([Actions run 44860717992](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44860717992)); documentation-only commits on `macos-version-0.3` receive a fresh workflow run.
+- [x] Hosted macOS package matrix and fixture-SDK app build/package/sign validation passed on source baseline commit `4f4a8ca` ([Actions run 44860717992](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44860717992)); `macos-version-0.3` additionally validates lifecycle regressions and the structured probe-report target.
 - [x] Remove SDK file selection from the AppKit UI; the GenTL backend resolves the AmScope SDK from its managed vendor directory.
 - [x] Copy vendor SDK files into the app bundle and sign packaged dylibs before signing the application.
 - [ ] Validate the packaged AmScope dylib and all transitive dependencies on the target Mac; hosted CI cannot validate the proprietary local binary.
@@ -109,13 +111,15 @@ Acceptance: all steps pass on physical hardware. Hosted mock tests are not a sub
 
 ### Phase C — Acquisition correctness and diagnostics
 
-- Preserve the existing parent/child cleanup and retry semantics.
-- Add sustained-stream tests for frame sequence, buffer reuse, timeout recovery and stop/close races.
-- Verify a failed `DSQueueBuffer` return is surfaced once and never retried with the same handle; the Producer may have accepted the first call despite its error status.
-- Make probe output structured and include backend, SDK version, model descriptor, pixel format, dimensions, stride, payload size and failure stage.
-- Keep hardware-specific facts explicitly distinguished from unsupported or unverified features.
+- [x] Preserve the existing parent/child cleanup and retry semantics.
+- [x] Add a 64-frame GenTL regression over one reused announced buffer; assert increasing frame sequence, changing pixel contents and exactly one buffer return per delivered frame.
+- [x] Extend lifecycle coverage to four distinct acquisitions on one open device session (three stop/restart transitions), asserting one start, one stop and one close per acquisition.
+- [x] Retain regressions for timeout recovery, stop/close races, copied-frame immutability and failed `DSQueueBuffer` not being retried with the same handle. The Producer may have accepted the first call despite its error status.
+- [x] Add a versioned JSON report schema and `amcam-camera-probe --json`, including backend, SDK version/path, interface, model/display descriptor, stream payload, pixel-format code/namespace, image dimensions/stride, acquisition counters/timestamps, failure stage and cleanup errors.
+- [ ] Run the JSON probe against the physical MU503 and verify discovery, open, acquisition and cleanup diagnostics with the proprietary SDK.
+- [x] Keep hardware-specific facts explicitly distinguished from unsupported or unverified features.
 
-Acceptance: deterministic mock tests pass and physical probe output can diagnose discovery, open, acquisition and cleanup independently.
+Automated acceptance: the GenTL and lifecycle regressions plus report schema tests pass in hosted CI. Physical probe execution remains part of Phase B hardware acceptance; mock tests do not certify the camera.
 
 ### Phase D — Pixel-format implementation
 

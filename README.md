@@ -26,7 +26,8 @@ The full Xcode application is not required. The application UI uses AppKit rathe
 Other targets:
 
 - `make build-local` — build all libraries and the app executable without launching the UI.
-- `make run-probe` — compile and run the camera diagnostic from source; pass optional arguments with `PROBE_ARGS='--help'`.
+- `make build-probe` — compile the camera diagnostic without running it.
+- `make run-probe` — build and run the diagnostic; pass optional arguments with `PROBE_ARGS='--help'`. Add `--json` to emit a versioned machine-readable report on stdout.
 - `make test-local` — run all Swift package test suites locally.
 
 See [the next implementation plan](swift/docs/NEXT_IMPLEMENTATION_PLAN.md) for package boundaries, acceptance criteria and the implementation sequence. The `macos-version-0.3` baseline and its [release notes](swift/docs/MACOS_VERSION_0.3_RELEASE_NOTES.md), [application lifecycle guide](swift/docs/AMCAM_IMAGING_APPLICATION.md), and [physical MU503 acceptance record](swift/docs/AMCAM_HARDWARE_ACCEPTANCE.md) document process relaunch and USB reconnect recovery.

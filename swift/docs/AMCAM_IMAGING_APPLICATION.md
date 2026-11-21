@@ -214,7 +214,7 @@ Use the app first without changing the camera pixel format:
 
 The application display path currently decodes RGB8 only. Do not use RAW, Bayer, YUV or other pixel formats as an acceptance test yet. Keep the default format for the first test. Record any error text and whether it occurred during discovery, open, start, streaming, stop or close.
 
-The camera probe can exercise the backend without the GUI if the app reports discovery or acquisition errors.
+The camera probe can exercise the backend without the GUI if the app reports discovery or acquisition errors. Add `--json` to `make run-probe` to emit a schema-versioned JSON report containing backend/SDK identity, camera model descriptor, stream payload, pixel-format identifier, dimensions, row stride, acquisition counters/timestamps, failure stage and cleanup errors. The JSON document is the only stdout output in this mode; SwiftPM build diagnostics remain on stderr. The probe still exits nonzero when the report status is `failure`, while preserving the structured report on stdout.
 
 ## TDD assessment
 

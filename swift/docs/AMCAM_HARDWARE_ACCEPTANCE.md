@@ -63,10 +63,14 @@ Do not force an unsupported setting or infer a range from another camera model.
 Run the probe after closing the imaging application. From the repository root:
 
 ```sh
+# Human-readable terminal report and PPM image
 make run-probe PROBE_ARGS='--sdk "/absolute/path/to/libamcam.dylib" --frames 10 --output "$HOME/Desktop/mu503-test.ppm"'
+
+# Machine-readable JSON report (build diagnostics remain on stderr)
+make run-probe PROBE_ARGS='--sdk "/absolute/path/to/libamcam.dylib" --frames 10 --output "$HOME/Desktop/mu503-test.ppm" --json' > "$HOME/Desktop/mu503-probe.json"
 ```
 
-Preserve the full terminal output and the generated PPM image. Do not use `sudo`.
+Preserve the terminal output or JSON report and the generated PPM image. Do not use `sudo`. The versioned JSON schema reports `failure.stage` and a separate `cleanup_errors` array on failure; the command still returns a nonzero exit status.
 
 If the probe reports an SDK load, version, enumeration, open, event, buffer, format, or cleanup error, preserve the exact error rather than retrying with guessed SDK arguments.
 
@@ -83,7 +87,7 @@ Record:
 - Gain and frame-rate values, when offered.
 - Resolution, white balance, color matrix, and pixel-format results, when offered.
 - Stop/restart, disconnect/reconnect, and cleanup results.
-- Full probe terminal output and PPM file.
+- Full probe terminal output or JSON report and PPM file.
 
 ### E. Relaunch and USB hot-plug recovery
 
