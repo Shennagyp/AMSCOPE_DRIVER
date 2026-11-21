@@ -27,6 +27,7 @@ final class CameraApplicationModel: ObservableObject {
     private var featureDescriptors: [CameraFeatureDescriptor] = []
     private var hasInitialized = false
     private var cameraSelectionGeneration: UInt64 = 0
+    private var profileRegistry = AmcamCameraProfileRegistry()
     private var stateResolver = AmcamCameraStateResolver()
     private var frameRateEstimator = FrameRateEstimator()
 
@@ -412,7 +413,7 @@ final class CameraApplicationModel: ObservableObject {
         selectedDeviceID = ""
 
         do {
-            cameraProvider = try AmcamCameraProvider()
+            cameraProvider = try AmcamCameraProvider(profileRegistry: profileRegistry)
             await refreshDevicesOwned(operation: operation)
         } catch {
             status = "AmScope camera provider is unavailable"
@@ -607,7 +608,8 @@ final class CameraApplicationModel: ObservableObject {
                 [AmcamCameraModelProfile].self,
                 from: Data(contentsOf: file)
             )
-            stateResolver = AmcamCameraStateResolver(profileRegistry: AmcamCameraProfileRegistry(profiles: profiles))
+            profileRegistry = AmcamCameraProfileRegistry(profiles: profiles)
+            stateResolver = AmcamCameraStateResolver(profileRegistry: profileRegistry)
         } catch {
             errorMessage = "Camera profile configuration could not be loaded: \(error.localizedDescription)"
         }
