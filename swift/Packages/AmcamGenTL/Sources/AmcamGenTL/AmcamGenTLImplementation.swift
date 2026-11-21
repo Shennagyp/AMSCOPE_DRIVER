@@ -24,6 +24,7 @@ private final class AmcamOpenDeviceRecord: @unchecked Sendable {
 @_spi(BackendFactory)
 public final class AmcamGenTLImplementation: @unchecked Sendable {
     private let sdkLibraryURL: URL
+    private let profileRegistry: AmcamCameraProfileRegistry
     private let lock = NSRecursiveLock()
 
     private var driver: AmcamCameraDriver?
@@ -55,10 +56,14 @@ public final class AmcamGenTLImplementation: @unchecked Sendable {
     private let systemHandle: TL_HANDLE
     private let interfaceHandle: IF_HANDLE
 
-    public init(sdkLibraryURL: URL) {
+    public init(
+        sdkLibraryURL: URL,
+        profileRegistry: AmcamCameraProfileRegistry = AmcamCameraProfileRegistry()
+    ) {
         let systemToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
         let interfaceToken = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
         self.sdkLibraryURL = sdkLibraryURL.standardizedFileURL
+        self.profileRegistry = profileRegistry
         self.systemToken = systemToken
         self.interfaceToken = interfaceToken
         self.systemHandle = TL_HANDLE(rawValue: UInt(bitPattern: systemToken))
@@ -104,7 +109,7 @@ public final class AmcamGenTLImplementation: @unchecked Sendable {
         }
 
         do {
-            driver = try AmcamCameraDriver(libraryURL: sdkLibraryURL)
+            driver = try AmcamCameraDriver(libraryURL: sdkLibraryURL, profileRegistry: profileRegistry)
             initialized = true
             setLastError(.success, message: "No Error")
         } catch {
