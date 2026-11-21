@@ -958,6 +958,45 @@ final class GenTLRouterLifecycleTests: XCTestCase {
         XCTAssertEqual(finalCounts.tlClose, 1)
         XCTAssertEqual(finalCounts.gcClose, 1)
     }
+
+    func testRouterShutdownClosesInterfaceSystemAndLibraryExactlyOnce() throws {
+        let api = RecordingGenTLAPI()
+        let router = GenTLRouter()
+        try router.register(backendID: "shutdown-backend") { api }
+
+        let report = router.discover()
+        XCTAssertTrue(report.failures.isEmpty)
+        XCTAssertEqual(report.devices.count, 1)
+
+        XCTAssertEqual(router.shutdown(), [])
+        XCTAssertEqual(router.shutdown(), [])
+
+        let calls = api.snapshot()
+        XCTAssertEqual(calls.interfaceClose, 1)
+        XCTAssertEqual(calls.tlClose, 1)
+        XCTAssertEqual(calls.gcClose, 1)
+
+        let afterShutdown = router.discover()
+        XCTAssertTrue(afterShutdown.devices.isEmpty)
+        XCTAssertEqual(afterShutdown.failures.count, 1)
+        XCTAssertEqual(
+            api.snapshot().gcInit,
+            1,
+            "A shut down router must not initialize the vendor library again."
+        )
+    }
+
+    func testRouterShutdownFailureQuarantinesTheBackend() throws {
+        let api = RecordingGenTLAPI(failLibraryClose: true)
+        let router = GenTLRouter()
+        try router.register(backendID: "shutdown-failure") { api }
+
+        XCTAssertTrue(router.discover().failures.isEmpty)
+        XCTAssertEqual(router.shutdown(), ["shutdown-failure"])
+        XCTAssertEqual(router.discover().devices.count, 0)
+        XCTAssertEqual(api.snapshot().gcInit, 1)
+        XCTAssertEqual(api.snapshot().gcClose, 1)
+    }
 }
 
 
