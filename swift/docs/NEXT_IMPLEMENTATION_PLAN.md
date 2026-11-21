@@ -132,15 +132,25 @@ Automated acceptance: GenTL close-order/retry tests, Amcam provider-buffer revoc
 
 ### Phase D — Pixel-format implementation
 
-Do not conflate the Amcam SDK's vendor-specific pixel-format selection codes with the PFNC identity of the delivered GenTL frame. `AmcamPixelFormatCode` is an SDK control enumeration. The current pull path requests 24-bit RGB output, creates an `.rgb24` frame, and the Amcam GenTL Producer reports that delivered payload as PFNC RGB8. A vendor enumeration integer must never be copied directly into `BUFFER_INFO_PIXELFORMAT` or treated as a PFNC identifier.
+Do not conflate the Amcam SDK's vendor-specific pixel-format selection codes with the PFNC identity of the delivered GenTL frame. `AmcamPixelFormatCode` is an SDK control enumeration queried through `Amcam_get_PixelFormatSupport` and selected through `AMCAM_OPTION_PIXEL_FORMAT` (`0x1a`). It is not a PFNC identifier and must never be copied directly into `BUFFER_INFO_PIXELFORMAT`.
 
-Any new output format must establish the complete chain: camera/SDK mode, raw-versus-processed mode, pull API output bits, returned dimensions, row stride, payload size, component order, packing and exact PFNC frame identity. Do not change the frame's PFNC metadata merely because a camera feature value changed.
+The checked-in vendor wrapper (`amcam.py`, SDK version `58.28273.20250415`) documents distinct acquisition axes:
+- `AMCAM_OPTION_RAW` (`0x04`): RGB/processed mode (`0`) or raw sensor mode (`1`); it must be selected while the camera is stopped.
+- `AMCAM_OPTION_BITDEPTH` (`0x06`): 8-bit (`0`) or 16-bit (`1`) mode.
+- `AMCAM_OPTION_RGB` (`0x0c`): RGB24, RGB48, RGB32, Grey8, Grey16 or RGB64 output selection in processed mode.
+- `AMCAM_OPTION_PIXEL_FORMAT` (`0x1a`): the vendor-specific sensor format enumeration.
+
+For `PullImageV4`, the `bits` argument chooses RGB/gray output in processed mode but is ignored in raw mode. The wrapper documents raw row stride as `width` bytes in 8-bit mode and `width * 2` bytes in 10/12/14/16-bit mode. Consequently, adding a vendor pixel-format code to the current frame decoder is not sufficient: the raw/processed selection, bit-depth mode, payload layout and GenTL PFNC identity must change together. The current Swift path requests 24-bit RGB output, creates an `.rgb24` frame and reports that delivered payload as PFNC RGB8. It does not yet implement the raw-mode/bit-depth acquisition configuration.
+
+Any new output format must establish the complete chain: camera/SDK mode, raw-versus-processed mode, bit-depth and RGB output settings, pull API parameters, returned dimensions, row stride, payload size, component order, packing and exact PFNC frame identity. Do not change the frame's PFNC metadata merely because a camera feature value changed.
 
 Implemented on `macos-version-0.4`:
 - [x] Add a format identity containing both PFNC namespace and numeric code.
 - [x] Add an immutable PFNC registry with only the exact RGB8 identifier registered to the existing RGB8 decoder.
 - [x] Resolve `RGB8Frame.decode` through the registry; unknown codes and namespace mismatches remain rejected.
 - [x] Add tests for exact identity, advertised-format intersection, duplicate identifiers and invalid names.
+- [x] Centralize the GenTL Producer's current RGB8 PFNC identity and verify BUFFER_INFO and BUFFER_PART_INFO report the same code and namespace.
+- [x] Add an RGB8 decoder regression for a matching code carried in the wrong PFNC namespace.
 
 Remaining:
 - Map camera-advertised/vendor pixel-format modes to actual pull-output PFNC formats only after their SDK semantics are verified.
