@@ -137,6 +137,61 @@ final class AmcamSDKIntegrationTests: XCTestCase {
     }
 
 
+    func testFailedPostStopFlushIsRetriedBeforePullModeRestart() throws {
+        let libraryURL = try buildMockSDK()
+        let driver = try AmcamCameraDriver(libraryURL: libraryURL)
+        let device = try XCTUnwrap(driver.discover().first)
+        let session = try driver.open(deviceIdentifier: device.identifier)
+
+        let fixtureHandle = dlopen(libraryURL.path, RTLD_NOW | RTLD_LOCAL)
+        XCTAssertNotNil(fixtureHandle)
+        defer {
+            if let fixtureHandle { dlclose(fixtureHandle) }
+            try? session.close()
+        }
+        guard let failureSymbol = dlsym(fixtureHandle, "MockAmcam_SetFlushFailures"),
+              let flushCountSymbol = dlsym(fixtureHandle, "MockAmcam_FlushCount") else {
+            XCTFail("Mock SDK is missing frame-cache flush test hooks")
+            return
+        }
+        let setFlushFailures = unsafeBitCast(
+            failureSymbol,
+            to: (@convention(c) (UInt32) -> Void).self
+        )
+        let flushCount = unsafeBitCast(
+            flushCountSymbol,
+            to: (@convention(c) () -> UInt32).self
+        )
+
+        let firstFrameReceived = expectation(description: "first acquisition frame")
+        try session.start { result in
+            if case .success = result {
+                firstFrameReceived.fulfill()
+            }
+        }
+        wait(for: [firstFrameReceived], timeout: 2)
+
+        setFlushFailures(1)
+        XCTAssertThrowsError(try session.stop(), "A failed cache flush must not report a reusable stopped session.")
+        XCTAssertEqual(flushCount(), 0)
+
+        let restartedFrameReceived = expectation(description: "frame after pending flush retry")
+        XCTAssertNoThrow(
+            try session.start { result in
+                if case .success = result {
+                    restartedFrameReceived.fulfill()
+                }
+            },
+            "Start must retry the outstanding cache flush before registering a new callback."
+        )
+        wait(for: [restartedFrameReceived], timeout: 2)
+        XCTAssertEqual(flushCount(), 1)
+
+        try session.stop()
+        XCTAssertEqual(flushCount(), 2)
+        try session.close()
+    }
+
     func testAcquisitionPrefersV4AndPreservesAllValidFrameMetadata() throws {
         let libraryURL = try buildMockSDK()
         let sdk = try AmcamSDK(libraryURL: libraryURL)

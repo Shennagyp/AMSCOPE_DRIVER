@@ -25,6 +25,7 @@ static const uint32_t resolution_heights[] = {1922, 960, 480, 480};
 static uint32_t close_count;
 static uint32_t stop_count;
 static uint32_t frame_cache_flush_count;
+static uint32_t frame_cache_flush_failures_remaining;
 static int frame_cache_flush_required;
 static uint32_t pull_count;
 static uint32_t pull_api_version;
@@ -318,6 +319,10 @@ int32_t Amcam_get_Option(void *handle, uint32_t option, int32_t *value) {
 int32_t Amcam_put_Option(void *handle, uint32_t option, int32_t value) {
     if (!handle) return -1;
     if (option == 0x3d && value == 3) {
+        if (frame_cache_flush_failures_remaining > 0) {
+            frame_cache_flush_failures_remaining--;
+            return -1;
+        }
         frame_cache_flush_required = 0;
         frame_cache_flush_count++;
         return 0;
@@ -341,6 +346,7 @@ void MockAmcam_Reset(void) {
     close_count = 0;
     stop_count = 0;
     frame_cache_flush_count = 0;
+    frame_cache_flush_failures_remaining = 0;
     frame_cache_flush_required = 0;
     pull_count = 0;
     pull_api_version = 0;
@@ -362,6 +368,7 @@ void MockAmcam_SetIgnoreExposureWrite(int32_t enabled) {
 uint32_t MockAmcam_CloseCount(void) { return close_count; }
 uint32_t MockAmcam_StopCount(void) { return stop_count; }
 uint32_t MockAmcam_FlushCount(void) { return frame_cache_flush_count; }
+void MockAmcam_SetFlushFailures(uint32_t count) { frame_cache_flush_failures_remaining = count; }
 uint32_t MockAmcam_PullCount(void) { return pull_count; }
 void MockAmcam_EmitEvent(uint32_t event) {
     if (active_callback) active_callback(event, active_context);
