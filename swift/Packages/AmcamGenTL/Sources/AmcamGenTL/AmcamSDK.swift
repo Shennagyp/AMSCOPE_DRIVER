@@ -68,6 +68,8 @@ final class AmcamSDK: @unchecked Sendable {
     static let frameMechanicalShutterFlag: UInt32 = 0x0200
     static let frameConversionGainFlag: UInt32 = 0x0001_0000
     static let notImplementedHRESULT = Int32(bitPattern: 0x8000_4001)
+    // HRESULT E_PENDING: the image event arrived before a frame was ready to pull.
+    static let pendingHRESULT = Int32(bitPattern: 0x8000_000a)
     static let requestedPullBits: Int32 = 24
     static let preciseFrameRateFlag: UInt64 = 0x0000004000000000
     static let optionMaximumPreciseFrameRate: UInt32 = 0x2c
