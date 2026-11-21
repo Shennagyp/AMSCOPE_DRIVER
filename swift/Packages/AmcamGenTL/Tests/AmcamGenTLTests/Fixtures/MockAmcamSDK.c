@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 
 typedef void (*AmcamEventCallback)(uint32_t event, void *context);
 
@@ -21,6 +22,12 @@ static AmcamModelV2 model = {
 
 static AmcamEventCallback active_callback;
 static void *active_context;
+static pthread_mutex_t callback_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t callback_worker;
+static int callback_worker_started;
+static int callback_worker_stop;
+static uint32_t automatic_frame_interval_milliseconds;
+static uint32_t asynchronous_callback_count;
 static uint32_t current_resolution_index = 2;
 static const uint32_t resolution_widths[] = {2560, 1280, 640, 641};
 static const uint32_t resolution_heights[] = {1922, 960, 480, 480};
@@ -73,6 +80,52 @@ static void mock_delay(uint32_t milliseconds) {
     (void)nanosleep(&delay, NULL);
 }
 
+static void *mock_callback_worker_main(void *unused) {
+    (void)unused;
+    for (;;) {
+        pthread_mutex_lock(&callback_mutex);
+        int should_stop = callback_worker_stop;
+        AmcamEventCallback callback = active_callback;
+        void *context = active_context;
+        uint32_t interval = __atomic_load_n(
+            &automatic_frame_interval_milliseconds,
+            __ATOMIC_SEQ_CST
+        );
+        pthread_mutex_unlock(&callback_mutex);
+
+        if (should_stop || !callback || interval == 0) break;
+        mock_delay(interval);
+
+        pthread_mutex_lock(&callback_mutex);
+        should_stop = callback_worker_stop;
+        callback = active_callback;
+        context = active_context;
+        pthread_mutex_unlock(&callback_mutex);
+
+        if (should_stop || !callback) break;
+        callback(0x0004, context);
+        __atomic_add_fetch(&asynchronous_callback_count, 1, __ATOMIC_SEQ_CST);
+    }
+    return NULL;
+}
+
+static void mock_stop_callback_worker(void) {
+    pthread_mutex_lock(&callback_mutex);
+    int join_worker = callback_worker_started;
+    callback_worker_stop = 1;
+    pthread_mutex_unlock(&callback_mutex);
+
+    if (join_worker && !pthread_equal(pthread_self(), callback_worker)) {
+        (void)pthread_join(callback_worker, NULL);
+    }
+
+    pthread_mutex_lock(&callback_mutex);
+    callback_worker_started = 0;
+    active_callback = NULL;
+    active_context = NULL;
+    pthread_mutex_unlock(&callback_mutex);
+}
+
 void MockAmcam_EnableOddResolution(void) {
     model.preview = 4;
     model.res[3].width = 641;
@@ -97,8 +150,7 @@ void *Amcam_Open(const char *identifier) {
 
 void Amcam_Close(void *handle) {
     if (handle) close_count++;
-    active_callback = 0;
-    active_context = 0;
+    mock_stop_callback_worker();
 }
 
 int32_t Amcam_get_Size(void *handle, int32_t *width, int32_t *height) {
@@ -124,9 +176,41 @@ int32_t Amcam_StartPullModeWithCallback(void *handle, AmcamEventCallback callbac
     if (!handle || !callback || !context) return -1;
     /* Model the vendor's retained DDR/DLL frame queue after Amcam_Stop. */
     if (frame_cache_flush_required) return (int32_t)UINT32_C(0x80004005);
+
+    pthread_mutex_lock(&callback_mutex);
+    if (callback_worker_started) {
+        pthread_mutex_unlock(&callback_mutex);
+        return -1;
+    }
+    callback_worker_stop = 0;
     active_callback = callback;
     active_context = context;
+    pthread_mutex_unlock(&callback_mutex);
+
     callback(0x0004, context); /* Deliberately synchronous: validates start reentrancy. */
+
+    uint32_t interval = __atomic_load_n(
+        &automatic_frame_interval_milliseconds,
+        __ATOMIC_SEQ_CST
+    );
+    if (interval > 0) {
+        pthread_mutex_lock(&callback_mutex);
+        int create_result = pthread_create(
+            &callback_worker,
+            NULL,
+            mock_callback_worker_main,
+            NULL
+        );
+        if (create_result == 0) {
+            callback_worker_started = 1;
+        } else {
+            active_callback = NULL;
+            active_context = NULL;
+            callback_worker_stop = 1;
+        }
+        pthread_mutex_unlock(&callback_mutex);
+        if (create_result != 0) return -1;
+    }
     return 0;
 }
 
@@ -241,8 +325,7 @@ int32_t Amcam_Stop(void *handle) {
     if (!handle) return -1;
     stop_count++;
     frame_cache_flush_required = 1;
-    active_callback = 0;
-    active_context = 0;
+    mock_stop_callback_worker();
     return 0;
 }
 
@@ -392,8 +475,9 @@ void MockAmcam_Reset(void) {
     pending_pull_count = 0;
     mock_v4_frame_flags = UINT32_C(0x000103ff);
     current_resolution_index = 2;
-    active_callback = 0;
-    active_context = 0;
+    mock_stop_callback_worker();
+    __atomic_store_n(&automatic_frame_interval_milliseconds, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&asynchronous_callback_count, 0, __ATOMIC_SEQ_CST);
     auto_exposure = 1;
     exposure_time = 10000;
     ignore_exposure_write = 0;
@@ -418,5 +502,15 @@ uint32_t MockAmcam_ConcurrentSDKCallCount(void) {
     return __atomic_load_n(&concurrent_sdk_call_count, __ATOMIC_SEQ_CST);
 }
 void MockAmcam_EmitEvent(uint32_t event) {
-    if (active_callback) active_callback(event, active_context);
+    pthread_mutex_lock(&callback_mutex);
+    AmcamEventCallback callback = active_callback;
+    void *context = active_context;
+    pthread_mutex_unlock(&callback_mutex);
+    if (callback) callback(event, context);
+}
+void MockAmcam_SetAutomaticFrameInterval(uint32_t milliseconds) {
+    __atomic_store_n(&automatic_frame_interval_milliseconds, milliseconds, __ATOMIC_SEQ_CST);
+}
+uint32_t MockAmcam_AsynchronousCallbackCount(void) {
+    return __atomic_load_n(&asynchronous_callback_count, __ATOMIC_SEQ_CST);
 }
