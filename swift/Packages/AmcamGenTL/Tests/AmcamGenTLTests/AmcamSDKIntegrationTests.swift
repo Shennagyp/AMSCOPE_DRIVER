@@ -254,7 +254,7 @@ final class AmcamSDKIntegrationTests: XCTestCase {
             callbackCountSymbol,
             to: (@convention(c) () -> UInt32).self
         )
-        setInterval(15)
+        setInterval(40)
 
         try stream.start(numberToAcquire: GenTLConstants.infiniteCount)
 
