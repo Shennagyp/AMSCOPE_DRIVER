@@ -13,7 +13,7 @@ The library packages are not standalone applications and must not acquire artifi
 
 The repository-level Makefile is the supported command interface:
 
-- `make run`: build every Swift library package, build the imaging app, assemble and ad-hoc sign its `.app` bundle, then launch it locally.
+- `make run`: request an orderly quit of any existing `amcam-imaging` process, build every Swift library package, build the imaging app, assemble and ad-hoc sign its `.app` bundle, then launch it locally. If the previous process does not exit, abort rather than force-killing it or launching a competing camera owner. Build-only invocations do not request app shutdown.
 - `make run-probe`: build and run the Amcam camera diagnostic locally.
 - `make build-local`: build every Swift library and the imaging app without launching it.
 - `make run-local`: alias for `make run`.
@@ -83,11 +83,11 @@ Rules:
 - [x] Build the app from source with Swift Package Manager; do not download release binaries or Actions artifacts.
 - [x] Replace the SwiftUI application shell with AppKit so Command Line Tools builds do not require the SwiftUI macro plug-in.
 - [x] Assemble and ad-hoc sign a local `Amcam Imaging.app` bundle.
-- [ ] Pass the hosted macOS app-build job on the latest branch commit.
+- [x] Hosted macOS package matrix and fixture-SDK app build/package/sign validation passed on source baseline commit `4f4a8ca` ([Actions run 44860717992](https://github.com/Shennagyp/AMSCOPE_DRIVER/actions/runs/44860717992)); documentation-only commits on `macos-version-0.3` receive a fresh workflow run.
 - [x] Remove SDK file selection from the AppKit UI; the GenTL backend resolves the AmScope SDK from its managed vendor directory.
 - [x] Copy vendor SDK files into the app bundle and sign packaged dylibs before signing the application.
 - [ ] Validate the packaged AmScope dylib and all transitive dependencies on the target Mac; hosted CI cannot validate the proprietary local binary.
-- [ ] Run `make run` on the target Mac and verify the app opens.
+- [x] Run `make run` on the target Mac and verify the app opens; the existing-process relaunch path was also exercised successfully on 2026-11-21.
 
 Acceptance: a clean macOS 13+ checkout with Apple's Swift compiler, macOS SDK and AppKit can build and launch with `make run`. Full Xcode, GitHub CLI authentication and downloaded binaries are not required. Actual AmScope camera access additionally requires the licensed SDK at `vendor/amcam/macos/libamcam.dylib` with its sibling runtime dependencies, or a supported machine-wide installation. `AMCAM_SDK_SOURCE` can select a build-time source path; `REQUIRE_AMCAM_SDK=1` makes the build fail if no SDK is found.
 
@@ -104,6 +104,8 @@ Run on the target Mac with the vendor SDK installed:
 7. Record SDK version, model descriptor, camera firmware, macOS version, app commit and exact failure stage.
 
 Acceptance: all steps pass on physical hardware. Hosted mock tests are not a substitute.
+
+**Partial physical result (2026-11-21):** the user confirmed that `make run` exits an already-running app cleanly and launches the replacement, and that disconnecting/reconnecting the MU503 while the replacement app remains open recovers the camera session and re-enables Start. This closes only the process-relaunch and idle USB-reconnect checks. It does not close Phase B: sustained five-minute streaming, repeated start/stop, active-stream disconnect, feature setter/readback, and independent probe validation remain unverified. See [the hardware acceptance record](AMCAM_HARDWARE_ACCEPTANCE.md).
 
 ### Phase C — Acquisition correctness and diagnostics
 
@@ -186,6 +188,26 @@ The current executable and camera backends are macOS-specific. AppKit is only th
 - [ ] Add another frontend only after its backend path is proven on that OS.
 
 Do not describe the current application as cross-platform: the AppKit executable and native camera integrations remain macOS-specific, and the existing UI model still uses Combine. AmcamImagingCore and AmcamImagingRuntime are Foundation-only portable packages. AmcamImagingGenTLAdapter binds the runtime contract to the macOS GenTLRouter backend. The AppKit model delegates camera discovery to AmcamCameraProvider and device opening, acquisition, frame reading, feature discovery, typed feature reads/writes and resource cleanup to the runtime lifecycle. Backend session handles do not escape the lifecycle actor; backend operations wait on its FIFO ownership gate rather than failing merely because another UI command is in flight. Feature operations are asynchronous; the GenTL adapter runs blocking provider calls away from the UI executor and translates GenTL-specific feature types/errors into runtime contracts. AmcamCameraModel owns AmScope capability/profile policy, while AmcamImagingState derives control snapshots from typed runtime readbacks. The AppKit model is limited to presentation, user commands and view-facing state. This is a portable data/lifecycle/feature-contract foundation, not a portable camera driver. UI separation is progress toward portability, not proof of portable camera access.
+### Phase H — Process relaunch and USB hot-plug recovery
+
+**Purpose:** ensure a source rebuild starts a new application process with fresh provider/session ownership, and recover the selected camera after USB removal/re-enumeration without requiring an application restart.
+
+Implementation delivered:
+- [x] Before `make run` builds/launches, detect an existing app process, request normal termination through macOS, and wait for that process to exit.
+- [x] Fail closed when the old process cannot be confirmed exited; do not force-kill it or launch a second camera owner.
+- [x] Keep `make build-local` and CI fixture packaging side-effect-free with respect to an already-running app.
+- [x] Poll camera discovery at low frequency for SDKs without a portable device-change notification.
+- [x] Treat an incomplete enumeration as inconclusive: retain the current session during the failed scan, then recreate an idle session after a later complete scan, including when the camera returns with the same SDK identifier.
+- [x] Recheck only live-stream capability while an idle session reports no usable data stream, allowing Start state to recover without re-reading every feature/control.
+- [x] Preserve ordered acquisition/device/provider cleanup and retain native callback ownership until SDK stop succeeds.
+
+Verification:
+- [x] Hosted baseline run 44860717992 passed all six jobs; this includes compile/package tests, runtime/model/state tests, dependency-boundary checks, camera-probe build, and fixture-SDK app packaging/signing.
+- [x] User-confirmed physical MU503 test: `make run` while an earlier process was open, followed by USB disconnect/reconnect while the new app remained open; the session recovered and Start became enabled.
+- [ ] Test physical disconnect while actively streaming and verify the exact callback error and recovery sequence.
+- [ ] Complete the remaining sustained-stream, repeated start/stop, feature readback and independent camera-probe checks from Phase B.
+
+CI verifies compilation and mock/runtime contracts; the user-confirmed result verifies only the reported physical recovery sequence. There is no claim that the entire Phase B hardware checklist is complete.
 
 ## 4. Verification policy
 
