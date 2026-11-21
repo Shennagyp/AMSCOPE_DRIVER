@@ -33,10 +33,14 @@ The vendor sample demonstrates V4; it does not establish that V2 is unsupported.
 A V2 override should therefore be used only when the exact camera/model behavior
 has been verified to require it.
 
-## Explicit model policy
+## Optional compatibility override
 
-An exact model descriptor can pin the legacy pull API without changing camera
-feature availability:
+The MU503 sample demonstrates V4, so leave this file empty (or configure the
+MU503 entry as `automatic`) unless hardware evidence proves another API is
+required. Do not carry forward a V2 override based only on symbol availability.
+
+For a different model whose verified working path is plain V2, an exact model
+descriptor can pin that API without changing camera feature availability:
 
 ```json
 [
@@ -62,6 +66,12 @@ Supported values:
 Plain `PullImageV2` uses the existing DWORD-aligned RGB24 row layout. The
 profile changes API selection only; it does not change pixel format, row pitch,
 buffer capacity, or camera-control availability.
+
+A pull result of `E_PENDING` (`0x8000000A`) means no image is ready yet. It is
+not treated as a fatal stream error; the session waits for a subsequent image
+event. Other negative pull results remain failures. This is consistent with the
+related ToupTek camera API contract and is covered by a mock regression test;
+confirm the exact behavior on the MU503 hardware.
 
 After editing the file, restart the application so the profile registry is
 reloaded. A successful mock/CI test validates policy dispatch, not physical
