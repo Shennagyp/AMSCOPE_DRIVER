@@ -500,14 +500,14 @@ public final class AmcamCameraSession: @unchecked Sendable {
         controlLock.lock()
         defer { controlLock.unlock() }
         let activeHandle = try controlHandle()
-        sdkCallLock.lock()
-        defer { sdkCallLock.unlock() }
         lock.lock()
         let running = starting || streaming || stopping
         lock.unlock()
         guard !running else {
             throw AmcamCameraError.unsupportedControl("Pixel format can only be changed while acquisition is stopped.")
         }
+        sdkCallLock.lock()
+        defer { sdkCallLock.unlock() }
         let supported = try sdk.readSupportedPixelFormats(activeHandle)
         guard supported.contains(code) else {
             throw AmcamCameraError.unsupportedControl("Pixel format code \(code) is not supported by this camera.")
