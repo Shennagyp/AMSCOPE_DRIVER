@@ -161,6 +161,10 @@ int32_t Amcam_PullImageV4(void *handle, void *buffer, int32_t still, int32_t bit
     if (pull_api_failure != 0) return pull_api_failure;
     if ((unsupported_pull_api_mask & (UINT32_C(1) << 4)) != 0) return (int32_t)UINT32_C(0x80004001);
     if (!handle || !buffer || !info || still != 0 || bits != 24 || row_pitch != 0) return -1;
+    if (pending_pull_count > 0) {
+        pending_pull_count--;
+        return (int32_t)UINT32_C(0x8000000a);
+    }
     const uint32_t width = resolution_widths[current_resolution_index];
     const uint32_t height = resolution_heights[current_resolution_index];
     const size_t packed_row_bytes = (size_t)width * 3u;
