@@ -258,6 +258,17 @@ final class AmcamSDKIntegrationTests: XCTestCase {
 
         try stream.start(numberToAcquire: GenTLConstants.infiniteCount)
 
+        // Both GenTL buffer metadata surfaces must describe the delivered
+        // Amcam RGB24 payload as the same PFNC RGB8 identity.
+        let bufferPixelFormat = try stream.bufferInfo(bufferHandle, command: 20)
+        let bufferPixelNamespace = try stream.bufferInfo(bufferHandle, command: 21)
+        let partPixelFormat = try stream.bufferPartInfo(bufferHandle, command: 3)
+        let partPixelNamespace = try stream.bufferPartInfo(bufferHandle, command: 4)
+        XCTAssertEqual(bufferPixelFormat, .uint64(0x02180014))
+        XCTAssertEqual(partPixelFormat, bufferPixelFormat)
+        XCTAssertEqual(bufferPixelNamespace, .uint64(UInt64(GenTLPixelFormatNamespace.pfnc32Bit.rawValue)))
+        XCTAssertEqual(partPixelNamespace, bufferPixelNamespace)
+
         var deliveredSequences: [UInt64] = []
         for expected in UInt64(1)...UInt64(10) {
             let payload = try stream.nextEventData(event, timeoutMilliseconds: 2_000)
